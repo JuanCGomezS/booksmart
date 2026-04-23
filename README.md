@@ -313,11 +313,11 @@ export default defineConfig({
 ```
 
 #### 0.4 Firebase Console
-- [ ] Crear proyecto en [Firebase Console](https://console.firebase.google.com)
-- [ ] Habilitar **Authentication → Email/Password**
-- [ ] Habilitar **Firestore** (modo producción)
-- [ ] Habilitar **Storage** (para logos, imágenes de catálogo, productos)
-- [ ] Copiar config SDK → crear `.env`
+- [X] Crear proyecto en [Firebase Console](https://console.firebase.google.com)
+- [X] Habilitar **Authentication → Email/Password**
+- [X] Habilitar **Firestore** (modo producción)
+- [X] Habilitar **Storage** (para logos, imágenes de catálogo, productos)
+- [X] Copiar config SDK → crear `.env`
 
 ```env
 PUBLIC_FIREBASE_API_KEY=...
@@ -326,6 +326,7 @@ PUBLIC_FIREBASE_PROJECT_ID=...
 PUBLIC_FIREBASE_STORAGE_BUCKET=...
 PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
 PUBLIC_FIREBASE_APP_ID=...
+PUBLIC_FIREBASE_MEASUREMENT_ID=...
 ```
 
 #### 0.5 `src/lib/firebase.ts`
@@ -558,12 +559,12 @@ Los clientes que reservan no necesitan cuenta. Firestore Rules permiten escritur
 
 ## Checklist general de setup Firebase
 
-- [ ] Proyecto creado en Firebase Console
-- [ ] Authentication: Email/Password habilitado
-- [ ] Firestore: modo producción, reglas según modelo de datos
-- [ ] Storage: habilitado para logos, catálogo, productos
+- [X] Proyecto creado en Firebase Console
+- [X] Authentication: Email/Password habilitado
+- [X] Firestore: modo producción, reglas según modelo de datos
+- [X] Storage: habilitado para logos, catálogo, productos
 - [ ] Custom claims configurados para `superadmin` (script seed)
-- [ ] `.env` local con variables `PUBLIC_FIREBASE_*`
+- [X] `.env` local con variables `PUBLIC_FIREBASE_*`
 - [ ] Secrets en GitHub Actions configurados
 - [ ] `firebase.json` y `.firebaserc` presentes (solo para functions si se usan)
 - [ ] `service-account-key.json` en `.gitignore` (nunca commitear)
@@ -593,21 +594,21 @@ Referencia rápida para trackear el estado del proyecto. Marcar a medida que se 
 
 - [X] Repo `barberflow` creado en GitHub (público)
 - [X] GitHub Pages habilitado: Settings → Pages → Source: GitHub Actions
-- [ ] Proyecto Astro inicializado con template minimal + TypeScript strict
-- [ ] Integración React agregada (`@astrojs/react`)
-- [ ] Tailwind CSS 4.x instalado y configurado via `@tailwindcss/vite`
-- [ ] Firebase SDK instalado (`firebase`)
-- [ ] `astro.config.mjs` configurado con `site` y `base` correctos
-- [ ] Proyecto creado en Firebase Console
-- [ ] Firebase Authentication habilitado (Email/Password)
-- [ ] Firebase Firestore habilitado (modo producción)
-- [ ] Firebase Storage habilitado
-- [ ] Archivo `.env` creado con las 6 variables `PUBLIC_FIREBASE_*`
-- [ ] `.env` agregado al `.gitignore`
-- [ ] `service-account-key.json` agregado al `.gitignore`
-- [ ] `src/lib/firebase.ts` creado (init de db, auth, storage)
-- [ ] Workflow `.github/workflows/deploy.yml` creado
-- [ ] Los 6 secrets `PUBLIC_FIREBASE_*` cargados en GitHub Actions Secrets
+- [X] Proyecto Astro inicializado con template minimal + TypeScript strict
+- [X] Integración React agregada (`@astrojs/react`)
+- [X] Tailwind CSS 4.x instalado y configurado via `@tailwindcss/vite`
+- [X] Firebase SDK instalado (`firebase`)
+- [X] `astro.config.mjs` configurado con `site` y `base` correctos
+- [X] Proyecto creado en Firebase Console
+- [X] Firebase Authentication habilitado (Email/Password)
+- [X] Firebase Firestore habilitado (modo producción)
+- [X] Firebase Storage habilitado
+- [X] Archivo `.env` creado con variables `PUBLIC_FIREBASE_*` (incluye `PUBLIC_FIREBASE_MEASUREMENT_ID` opcional)
+- [X] `.env` agregado al `.gitignore`
+- [X] `service-account-key.json` agregado al `.gitignore`
+- [X] `src/lib/firebase.ts` creado (init de db, auth, storage)
+- [X] Workflow `.github/workflows/deploy.yml` creado
+- [X] Los 6 secrets `PUBLIC_FIREBASE_*` cargados en GitHub Actions Secrets
 - [ ] Primer deploy exitoso — sitio accesible en `https://<usuario>.github.io/barberflow/`
 - [ ] Firebase Usage alerts activadas en la consola
 
