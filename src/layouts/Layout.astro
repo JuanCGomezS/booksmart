@@ -1,0 +1,35 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'BarberFlow - SaaS de agendamiento para barberías' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <script is:inline>
+      (() => {
+        const savedTheme = localStorage.getItem('barberflow-theme');
+        const theme = savedTheme || 'gold-night';
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+    <title>{title} | BarberFlow</title>
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+  </head>
+  <body class="min-h-screen bg-[var(--bg)] text-[var(--text-primary)] transition-colors duration-300">
+    <slot />
+  </body>
+</html>
+
+

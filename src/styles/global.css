@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0b1020;
+  --surface: #141b2f;
+  --surface-soft: #1b243d;
+  --text-primary: #e7ebff;
+  --text-secondary: #aeb9d9;
+  --border: #2b3554;
+  --primary: #0f172a;
+  --secondary: #d4af37;
+  --on-secondary: #111111;
+  --accent: #f5bf77;
+  --success: #5ad19a;
+  --shadow: 0 18px 45px rgba(4, 8, 20, 0.45);
+}
+
+html[data-theme='gold-night'] {
+  --bg: #0a0d17;
+  --surface: #151923;
+  --surface-soft: #1d2331;
+  --text-primary: #f2f2f1;
+  --text-secondary: #c8c6be;
+  --border: #343127;
+  --primary: #121212;
+  --secondary: #c5a059;
+  --on-secondary: #111111;
+  --accent: #f0c676;
+  --success: #63c787;
+  --shadow: 0 20px 45px rgba(0, 0, 0, 0.5);
+}
+
+html[data-theme='teal-night'] {
+  --bg: #f5fbfb;
+  --surface: #ffffff;
+  --surface-soft: #e7f2f3;
+  --text-primary: #1a2b31;
+  --text-secondary: #5f7078;
+  --border: #c3d9dc;
+  --primary: #f3f8f7;
+  --secondary: #0e7c7b;
+  --on-secondary: #f5fbfb;
+  --accent: #72c3c7;
+  --success: #2ea772;
+  --shadow: 0 12px 30px rgba(7, 53, 62, 0.12);
+}
+
+html[data-theme='royal-night'] {
+  --bg: #0a1124;
+  --surface: #121c3a;
+  --surface-soft: #1a2750;
+  --text-primary: #e7ecff;
+  --text-secondary: #b1bddf;
+  --border: #2e3e73;
+  --primary: #0f172a;
+  --secondary: #d4af37;
+  --on-secondary: #111111;
+  --accent: #f7b267;
+  --success: #6bd198;
+  --shadow: 0 20px 45px rgba(3, 9, 24, 0.6);
+}
+
+html {
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+.section-shell {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 94%, var(--secondary) 6%), var(--bg));
+}
+
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.surface-soft {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+
+.text-main {
+  color: var(--text-primary);
+}
+
+.text-subtle {
+  color: var(--text-secondary);
+}
+
+.btn-primary {
+  background: var(--secondary);
+  color: var(--on-secondary);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.btn-outline:hover {
+  border-color: var(--secondary);
+  color: var(--secondary);
+}
+
+.badge-theme {
+  background: color-mix(in srgb, var(--secondary) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--secondary) 45%, var(--border));
+  color: var(--secondary);
+}

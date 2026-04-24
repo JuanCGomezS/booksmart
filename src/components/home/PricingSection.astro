@@ -1,0 +1,351 @@
+---
+const pricingData = [
+  {
+    id: 'standard',
+    title: 'ESTANDAR',
+    subtitle: 'Base operativa para barberias que quieren orden sin complejidad.',
+    intro: 'Estandar Tier',
+    introBody: 'Ideal para arrancar con agenda digital, horarios claros y gestion basica.',
+    highlightText: 'Ideal para tu primera estacion',
+    featureTitle: 'INCLUYE',
+    features: ['Agenda de citas online', 'Horarios y servicios base', 'Perfil del negocio', 'Operacion simple para barberia chica'],
+    policyTitle: 'CONDICIONES',
+    policy: ['Prueba gratis de 15 dias por barberia', 'Cambio de plan en cualquier mes', 'Upgrade inmediato', 'Sin perdida de datos al cambiar o vencer'],
+    durations: [
+      { id: 'month_1', label: 'Suscripcion de 1 mes', note: 'Pago mensual, cancelas cuando quieras.', total: 19, monthly: 19, badge: '' },
+      { id: 'month_3', label: 'Suscripcion de 3 meses', note: 'Pago trimestral con ahorro.', total: 51, monthly: 17, badge: 'AHORRA 11%' },
+      { id: 'month_12', label: 'Suscripcion de 12 meses', note: 'Mejor valor anual para operar tranquilo.', total: 168, monthly: 14, badge: 'AHORRA 26%' },
+    ],
+  },
+  {
+    id: 'plus',
+    title: 'PLUS',
+    subtitle: 'Escala ventas y fidelizacion con mas capacidad comercial.',
+    intro: 'Plus Tier',
+    introBody: 'Pensado para barberias en crecimiento que necesitan mas control y marketing.',
+    highlightText: 'Para crecer con ritmo constante',
+    featureTitle: 'INCLUYE',
+    features: ['Todo Estandar', 'Catalogo y productos', 'Recordatorios y reactivacion', 'Mas capacidad operativa y comercial'],
+    policyTitle: 'CONDICIONES',
+    policy: ['Cambio de plan en cualquier mes', 'Upgrade inmediato', 'Downgrade al siguiente ciclo', 'Sin perdida de datos al cambiar o vencer'],
+    durations: [
+      { id: 'month_1', label: 'Suscripcion de 1 mes', note: 'Pago mensual con upgrade inmediato.', total: 35, monthly: 35, badge: '' },
+      { id: 'month_3', label: 'Suscripcion de 3 meses', note: 'Facturacion trimestral con menor costo.', total: 96, monthly: 32, badge: 'AHORRA 9%' },
+      { id: 'month_12', label: 'Suscripcion de 12 meses', note: 'Plan anual para negocio estable.', total: 324, monthly: 27, badge: 'AHORRA 23%' },
+    ],
+  },
+  {
+    id: 'extra',
+    title: 'EXTRA',
+    subtitle: 'Control total, analitica y operacion sin techo para equipos exigentes.',
+    intro: 'Extra Tier',
+    introBody: 'Diseñado para dueños que gestionan multiples puestos y decisiones con datos.',
+    highlightText: 'Dominio completo del negocio',
+    featureTitle: 'INCLUYE',
+    features: ['Todo Plus', 'Metricas avanzadas', 'Historial completo de clientes', 'Roles y permisos por equipo'],
+    policyTitle: 'CONDICIONES',
+    policy: ['Cambio de plan en cualquier mes', 'Upgrade inmediato', 'Downgrade al siguiente ciclo', 'Sin perdida de datos al cambiar o vencer'],
+    durations: [
+      { id: 'month_1', label: 'Suscripcion de 1 mes', note: 'Maxima flexibilidad operativa.', total: 55, monthly: 55, badge: '' },
+      { id: 'month_3', label: 'Suscripcion de 3 meses', note: 'Ahorro trimestral para equipos grandes.', total: 153, monthly: 51, badge: 'AHORRA 7%' },
+      { id: 'month_12', label: 'Suscripcion de 12 meses', note: 'Costo mensual optimizado para alta demanda.', total: 516, monthly: 43, badge: 'AHORRA 22%' },
+    ],
+  },
+];
+
+const initialPlan = pricingData[0];
+const initialDuration = initialPlan.durations[2];
+---
+
+<section id="pricing" class="section-shell px-4 py-12 sm:px-6 lg:px-8 lg:py-10">
+  <div class="mx-auto max-w-7xl">
+    <div class="text-center">
+      <h2 class="text-3xl font-bold text-main sm:text-4xl">Planes para cada etapa de crecimiento</h2>
+      <p class="mx-auto mt-2 max-w-3xl text-base text-subtle">Elige el plan que mejor encaja hoy y cambia cuando quieras: upgrade inmediato, downgrade al siguiente ciclo.</p>
+    </div>
+
+    <div class="mt-8 space-y-4 lg:space-y-3">
+      <div class="grid gap-3 md:grid-cols-3" data-plan-tabs>
+        {
+          pricingData.map((plan, index) => (
+            <button
+              type="button"
+              data-plan-id={plan.id}
+              class:list={[
+                'group rounded-xl border px-4 py-4 text-left transition-all duration-300',
+                index === 0
+                  ? 'pricing-tab-active shadow-lg'
+                  : 'surface-card hover:-translate-y-1 hover:border-(--secondary)',
+              ]}
+              aria-pressed={index === 0 ? 'true' : 'false'}
+            >
+              <p class="text-3xl font-black tracking-tight">{plan.title}</p>
+              <p class:list={['mt-1 text-xs sm:text-sm', index === 0 ? 'text-white/80' : 'text-subtle']}>{plan.subtitle}</p>
+            </button>
+          ))
+        }
+      </div>
+
+      <div class="grid gap-4 lg:grid-cols-[1.35fr_0.85fr]">
+        <article class="surface-card rounded-2xl p-5 sm:p-6">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-(--border) pb-3">
+            <h3 data-plan-intro class="text-2xl font-semibold text-main">{initialPlan.intro}</h3>
+            <span class="badge-theme rounded-full px-3 py-1 text-xs font-semibold" data-highlight-text>{initialPlan.highlightText}</span>
+          </div>
+
+          <p class="mt-3 max-w-3xl text-base text-subtle" data-plan-intro-body>{initialPlan.introBody}</p>
+
+          <div class="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div>
+              <h4 class="text-xs font-bold tracking-[0.18em] text-subtle" data-feature-title>{initialPlan.featureTitle}</h4>
+              <ul class="mt-3 space-y-2" data-feature-list>
+                {
+                  initialPlan.features.map((feature) => (
+                    <li class="flex items-start gap-2 text-sm text-main">
+                      <span class="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-(--secondary) text-xs leading-none text-(--secondary)">✓</span>
+                      <span>{feature}</span>
+                    </li>
+                  ))
+                }
+              </ul>
+            </div>
+
+            <div class="surface-soft rounded-xl p-4">
+              <h4 class="text-sm font-semibold text-main" data-policy-title>{initialPlan.policyTitle}</h4>
+              <ul class="mt-3 space-y-2" data-policy-list>
+                {
+                  initialPlan.policy.map((item) => (
+                    <li class="flex items-start gap-2 text-xs text-subtle">
+                      <span class="mt-1 inline-block h-1.5 w-1.5 rounded-full bg-(--secondary)"></span>
+                      <span>{item}</span>
+                    </li>
+                  ))
+                }
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <aside class="surface-card rounded-2xl p-5 sm:p-6" data-duration-panel>
+          <h3 class="text-xl font-semibold text-main">Elige la suscripcion</h3>
+          <p class="mt-1 text-sm text-subtle">Puedes cambiar de plan en cualquier mes.</p>
+
+          <div class="mt-4 space-y-2" data-duration-options>
+            {
+              initialPlan.durations.map((duration, index) => (
+                <button
+                  type="button"
+                  data-duration-id={duration.id}
+                  class:list={[
+                    'duration-option w-full rounded-xl border p-3 text-left transition-all duration-200',
+                    index === 2
+                      ? 'is-selected border-(--secondary)'
+                      : 'border-(--border) hover:border-(--secondary)',
+                  ]}
+                >
+                  <div class="flex items-start gap-3">
+                    <span class="duration-dot mt-1 inline-flex h-5 w-5 rounded-full border-2 border-current"></span>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm font-semibold text-main">{duration.label}</p>
+                        <div class="text-right">
+                          <p class="text-xl font-bold text-main">${duration.monthly}</p>
+                          <p class="text-[11px] text-subtle">/mes</p>
+                        </div>
+                      </div>
+                      <p class="mt-1 line-clamp-1 text-[11px] text-subtle">{duration.note}</p>
+                      {duration.badge && <span class="mt-1.5 inline-block rounded-full bg-(--secondary) px-2 py-0.5 text-[10px] font-bold text-(--on-secondary)">{duration.badge}</span>}
+                    </div>
+                  </div>
+                </button>
+              ))
+            }
+          </div>
+
+          <button class="btn-primary mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition-transform duration-200 hover:scale-[1.01]" type="button" data-cta-button>
+            Suscribirme por ${initialDuration.total}
+          </button>
+
+          <p class="mt-2 text-center text-[11px] text-subtle" data-small-print>
+            Facturacion renovable. Cancelas cuando quieras.
+          </p>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script type="application/json" id="pricing-data" set:html={JSON.stringify(pricingData)}></script>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector('#pricing');
+    if (!root || root.getAttribute('data-pricing-ready') === 'true') return;
+
+    const dataScript = document.getElementById('pricing-data');
+    if (!dataScript || !dataScript.textContent) return;
+
+    root.setAttribute('data-pricing-ready', 'true');
+
+    let plans;
+    try {
+      plans = JSON.parse(dataScript.textContent);
+    } catch (error) {
+      console.error('Pricing data parse failed', error);
+      return;
+    }
+
+    if (!Array.isArray(plans) || plans.length === 0) return;
+    const ui = {
+      tabs: Array.from(root.querySelectorAll('[data-plan-id]')),
+      optionsWrap: root.querySelector('[data-duration-options]'),
+      intro: root.querySelector('[data-plan-intro]'),
+      introBody: root.querySelector('[data-plan-intro-body]'),
+      featureTitle: root.querySelector('[data-feature-title]'),
+      featureList: root.querySelector('[data-feature-list]'),
+      policyTitle: root.querySelector('[data-policy-title]'),
+      policyList: root.querySelector('[data-policy-list]'),
+      highlightText: root.querySelector('[data-highlight-text]'),
+      ctaButton: root.querySelector('[data-cta-button]'),
+      smallPrint: root.querySelector('[data-small-print]'),
+    };
+
+    const state = {
+      selectedPlanId: plans[0].id,
+      selectedDurationId: plans[0].durations[2].id,
+    };
+
+    const featureItemTemplate = (feature) =>
+      '<li class="flex items-start gap-2 text-sm text-main">' +
+      '<span class="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full border" style="border-color: var(--secondary); color: var(--secondary);">✓</span>' +
+      '<span>' + feature + '</span>' +
+      '</li>';
+
+    const policyItemTemplate = (item) =>
+      '<li class="flex items-start gap-2 text-xs text-subtle">' +
+      '<span class="mt-1 inline-block h-1.5 w-1.5 rounded-full" style="background-color: var(--secondary);"></span>' +
+      '<span>' + item + '</span>' +
+      '</li>';
+
+    const durationItemTemplate = (duration) => {
+      const isSelected = duration.id === state.selectedDurationId;
+      const borderStyle = isSelected ? 'border-color: var(--secondary);' : 'border-color: var(--border);';
+      const badge = duration.badge
+        ? '<span class="mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold" style="background-color: var(--secondary); color: var(--on-secondary);">' + duration.badge + '</span>'
+        : '';
+
+      return (
+        '<button type="button" data-duration-id="' + duration.id + '" class="duration-option w-full rounded-xl border p-3 text-left transition-all duration-200 ' + (isSelected ? 'is-selected' : '') + '" style="' + borderStyle + '">' +
+          '<div class="flex items-start gap-3">' +
+            '<span class="duration-dot mt-1 inline-flex h-5 w-5 rounded-full border-2 border-current"></span>' +
+            '<div class="min-w-0 flex-1">' +
+              '<div class="flex items-center justify-between gap-3">' +
+                '<p class="text-sm font-semibold text-main">' + duration.label + '</p>' +
+                '<div class="text-right">' +
+                  '<p class="text-xl font-bold text-main">$' + duration.monthly + '</p>' +
+                  '<p class="text-[11px] text-subtle">/mes</p>' +
+                '</div>' +
+              '</div>' +
+              '<p class="mt-1 line-clamp-1 text-[11px] text-subtle">' + duration.note + '</p>' +
+              badge +
+            '</div>' +
+          '</div>' +
+        '</button>'
+      );
+    };
+
+    const getSelectedPlan = () => plans.find((plan) => plan.id === state.selectedPlanId) || plans[0];
+
+    const syncDurationWithPlan = (plan) => {
+      const durationExists = plan.durations.some((duration) => duration.id === state.selectedDurationId);
+      if (!durationExists) state.selectedDurationId = plan.durations[0].id;
+    };
+
+    const renderTabs = () => {
+      ui.tabs.forEach((tab) => {
+        const isSelected = tab.getAttribute('data-plan-id') === state.selectedPlanId;
+        const subtitle = tab.querySelector('p:last-child');
+
+        tab.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        tab.classList.toggle('surface-card', !isSelected);
+        tab.classList.toggle('pricing-tab-active', isSelected);
+
+        if (subtitle) {
+          subtitle.className = isSelected ? 'mt-1 text-xs sm:text-sm text-white/80' : 'mt-1 text-xs sm:text-sm text-subtle';
+        }
+      });
+    };
+
+    const renderPlanDetails = (plan) => {
+      if (ui.intro) ui.intro.textContent = plan.intro;
+      if (ui.introBody) ui.introBody.textContent = plan.introBody;
+      if (ui.featureTitle) ui.featureTitle.textContent = plan.featureTitle;
+      if (ui.policyTitle) ui.policyTitle.textContent = plan.policyTitle;
+      if (ui.highlightText) ui.highlightText.textContent = plan.highlightText;
+
+      if (ui.featureList) ui.featureList.innerHTML = plan.features.map(featureItemTemplate).join('');
+      if (ui.policyList) ui.policyList.innerHTML = plan.policy.map(policyItemTemplate).join('');
+      if (ui.optionsWrap) ui.optionsWrap.innerHTML = plan.durations.map(durationItemTemplate).join('');
+    };
+
+    const renderCTA = (plan) => {
+      if (!ui.ctaButton || !ui.smallPrint) return;
+      const selectedDuration = plan.durations.find((duration) => duration.id === state.selectedDurationId) || plan.durations[0];
+      ui.ctaButton.textContent = 'Suscribirme por $' + selectedDuration.total;
+      ui.smallPrint.textContent = selectedDuration.note;
+    };
+
+    const render = () => {
+      const plan = getSelectedPlan();
+      syncDurationWithPlan(plan);
+      renderTabs();
+      renderPlanDetails(plan);
+      renderCTA(plan);
+    };
+
+    root.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const planButton = target.closest('[data-plan-id]');
+      if (planButton) {
+        const nextPlan = planButton.getAttribute('data-plan-id');
+        if (!nextPlan || nextPlan === state.selectedPlanId) return;
+        state.selectedPlanId = nextPlan;
+        render();
+        return;
+      }
+
+      const durationButton = target.closest('[data-duration-id]');
+      if (!durationButton) return;
+
+      const nextDuration = durationButton.getAttribute('data-duration-id');
+      if (!nextDuration || nextDuration === state.selectedDurationId) return;
+      state.selectedDurationId = nextDuration;
+      render();
+    });
+
+    render();
+  })();
+</script>
+
+<style>
+  .pricing-tab-active {
+    background: linear-gradient(155deg, color-mix(in srgb, var(--secondary) 68%, #131313), #131313);
+    color: #f8f8f8;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    border-color: transparent;
+  }
+
+  #pricing button {
+    cursor: pointer;
+  }
+
+  .duration-option.is-selected {
+    background: color-mix(in srgb, var(--secondary) 12%, var(--surface));
+  }
+
+  .duration-option.is-selected .duration-dot {
+    box-shadow: inset 0 0 0 4px var(--surface), inset 0 0 0 9px var(--secondary);
+  }
+</style>

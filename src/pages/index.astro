@@ -1,13 +1,20 @@
 ---
+import Layout from '../layouts/Layout.astro';
+import HeaderSection from '../components/home/HeaderSection.astro';
+import HeroSection from '../components/home/HeroSection.astro';
+import FeaturesSection from '../components/home/FeaturesSection.astro';
+import PricingSection from '../components/home/PricingSection.astro';
+import ThemesFeatureSection from '../components/home/ThemesFeatureSection.astro';
+import ContactSection from '../components/home/ContactSection.astro';
+import Footer from '../components/home/Footer.astro';
 ---
 
-<html lang="es">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <title>BarberFlow</title>
-  </head>
-  <body>
-  <p>hola</p>
-  </body>
-</html>
+<Layout title="Inicio">
+  <HeaderSection />
+  <HeroSection />
+  <FeaturesSection />
+  <ThemesFeatureSection />
+  <PricingSection />
+  <ContactSection />
+  <Footer />
+</Layout>

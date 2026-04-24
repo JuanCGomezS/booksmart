@@ -1,0 +1,43 @@
+---
+const heroDashboardImage = `${import.meta.env.BASE_URL}images/hero-dashboard.svg`;
+---
+
+<section id="inicio" class="section-shell relative min-h-[calc(100vh-4rem)] overflow-hidden scroll-mt-24 px-4 pb-10 pt-10 sm:px-6 lg:px-8 lg:pt-12">
+  <div class="mx-auto max-w-7xl">
+    <div class="grid items-center gap-8 lg:min-h-[calc(100vh-8rem)] lg:grid-cols-2 lg:gap-12">
+      <div>
+        <h1 class="mt-4 text-3xl font-bold leading-tight text-main sm:text-5xl lg:text-[3.4rem]">
+          <span class="block text-[var(--secondary)]">Agenda y controla tu negocio</span>
+        </h1>
+        <p class="mt-5 max-w-xl text-base leading-relaxed text-subtle sm:text-lg">
+          Muestra tus cortes, vende productos, gestiona turnos y sigue el rendimiento de tu negocio sin depender de herramientas separadas.
+        </p>
+        <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+          <a href="#pricing" class="btn-primary inline-flex items-center justify-center rounded-xl px-6 py-3 text-base font-bold">Probar 1 mes gratis</a>
+          <a href="#features" class="btn-outline inline-flex items-center justify-center rounded-xl px-6 py-3 text-base font-semibold">Ver lo que ofrecemos</a>
+        </div>
+
+        <div class="mt-10 grid grid-cols-2 gap-3 sm:max-w-lg">
+          <div class="surface-soft rounded-xl p-4">
+            <p class="text-2xl font-extrabold text-main">+35%</p>
+            <p class="text-sm text-subtle">más reservas online</p>
+          </div>
+          <div class="surface-soft rounded-xl p-4">
+            <p class="text-2xl font-extrabold text-main">-40%</p>
+            <p class="text-sm text-subtle">menos tiempo administrativo</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="surface-card overflow-hidden rounded-3xl p-3 sm:p-4">
+        <img
+          src={heroDashboardImage}
+          alt="Vista previa del panel de BarberFlow con métricas, reservas y directorio de barberías"
+          class="h-auto w-full rounded-2xl border"
+          style="border-color: var(--border);"
+          loading="eager"
+        />
+      </div>
+    </div>
+  </div>
+</section>

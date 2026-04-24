@@ -1,0 +1,92 @@
+---
+---
+
+<header class="sticky top-0 z-50 border-b backdrop-blur-xl" style="border-color: var(--border); background: color-mix(in srgb, var(--bg) 88%, transparent);">
+  <div class="mx-auto flex h-15 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+    <a href="#inicio" class="group inline-flex items-center gap-3">
+      <span class="inline-block h-10 w-10 rounded-xl" style="background: linear-gradient(140deg, var(--secondary), var(--accent));"></span>
+      <span class="text-2xl font-extrabold tracking-tight text-main">BarberFlow</span>
+    </a>
+
+    <div class="relative">
+      <button
+        id="menu-trigger"
+        type="button"
+        class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-2" style="border-color: color-mix(in srgb, var(--secondary) 75%, var(--border)); background: linear-gradient(120deg, var(--primary), var(--surface)); cursor: pointer;"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        aria-controls="header-dropdown"
+      >
+      <span class="text-sm font-bold" style="color: var(--secondary);">JC</span>
+        
+      </button>
+
+      <div
+        id="header-dropdown"
+        class="surface-card invisible absolute right-0 mt-3 w-[320px] origin-top-right rounded-2xl p-5 opacity-0 transition duration-200"
+        role="menu"
+        aria-label="Menu de usuario"
+      >
+        <div class="border-b pb-4" style="border-color: var(--border);">
+          <p class="text-sm text-subtle">BarberFlow</p>
+          <p class="text-lg font-bold text-main">SaaS para barberias</p>
+          <p class="text-sm text-subtle">Infraestructura 100% gratuita para iniciar</p>
+        </div>
+
+        <nav class="py-4" aria-label="Navegacion principal">
+          <ul class="space-y-2">
+            <li><a href="#inicio" class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Inicio</a></li>
+            <li><a href="#features" class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Lo que ofrecemos</a></li>
+            <li><a href="#pricing" class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Planes</a></li>
+            <li><a href="#contact" class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Contacto</a></li>
+          </ul>
+        </nav>
+
+        <div class="space-y-2 border-t pt-4" style="border-color: var(--border);">
+          <a href="#pricing" class="btn-primary block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Probar 1 mes gratis</a>
+          <a href="#contact" class="btn-outline block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Agendar demo</a>
+        </div>
+
+        <p class="mt-4 text-center text-sm text-subtle">Etapa 1: Landing publica</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<script is:inline>
+  (() => {
+    const trigger = document.getElementById('menu-trigger');
+    const menu = document.getElementById('header-dropdown');
+
+    if (!trigger || !menu) return;
+
+    const closeMenu = () => {
+      menu.classList.add('invisible', 'opacity-0');
+      menu.classList.remove('visible', 'opacity-100');
+      trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    const openMenu = () => {
+      menu.classList.remove('invisible', 'opacity-0');
+      menu.classList.add('visible', 'opacity-100');
+      trigger.setAttribute('aria-expanded', 'true');
+    };
+
+    trigger.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const expanded = trigger.getAttribute('aria-expanded') === 'true';
+      if (expanded) closeMenu();
+      else openMenu();
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!menu.contains(event.target) && !trigger.contains(event.target)) {
+        closeMenu();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeMenu();
+    });
+  })();
+</script>

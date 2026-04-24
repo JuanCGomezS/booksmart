@@ -122,6 +122,31 @@ Las URLs de Firebase Storage son permanentes y públicas. **Guardar la URL en Fi
 
 ---
 
+## Regla de arquitectura UI: .astro vs .tsx
+
+Para mantener el proyecto simple, rápido y sostenible, se define esta regla obligatoria:
+
+### Usar `.astro` cuando
+
+- La sección es mayormente estática (landing, marketing, textos, bloques visuales)
+- Se prioriza SEO, performance y mínimo JavaScript en cliente
+- No hay estado complejo ni listeners en tiempo real
+
+### Usar `.tsx` (React) cuando
+
+- Hay lógica de interacción compleja o múltiples estados acoplados
+- Se necesita integración directa con Firebase Auth/Firestore en cliente
+- Hay formularios complejos, paneles administrativos o flujos tipo wizard
+- Se requiere tiempo real (`onSnapshot`) o UI altamente reactiva
+
+### Regla práctica para este proyecto
+
+- Landing pública: se mantiene en `.astro`
+- Super admin, app de barbería y paneles de gestión: se implementan en `.tsx`
+- Composición de página: Astro como contenedor + React con `client:load` solo donde aporte valor
+
+---
+
 ## Modelo de rutas
 
 ```
@@ -142,9 +167,18 @@ barbers/{barberId}
   ├── name: string
   ├── slug: string              # identificador en URL: /b/abc123
   ├── ownerId: string           # uid del admin de la barbería
-  ├── plan: 'trial' | 'month' | 'quarter' | 'semester' | 'annual'
+  ├── plan: 'standard' | 'plus' | 'extra'
+  ├── billingCycle: 'month_1' | 'month_3' | 'month_12'
+  ├── trialStartedAt: Timestamp
+  ├── trialEndsAt: Timestamp
+  ├── trialUsed: boolean
   ├── planExpiresAt: Timestamp
   ├── active: boolean
+  ├── limits: {
+  │     maxBarbers: number
+  │     maxProducts: number
+  │     maxGalleryItems: number
+  │   }
   ├── config: {
   │     address: string
   │     phone: string
@@ -352,11 +386,53 @@ Init de Firebase siguiendo el patrón del doc de arquitectura (db, auth, storage
 
 | Plan | Duración | Precio |
 |---|---|---|
-| Trial | 15 días | Gratis |
-| Mensual | 1 mes | $ TBD |
-| Trimestral | 3 meses | $ TBD (-10%) |
-| Semestral | 6 meses | $ TBD (-15%) |
-| Anual | 12 meses | $ TBD (-25%) |
+| Estándar | 1 / 3 / 12 meses | $ TBD |
+| Plus | 1 / 3 / 12 meses | $ TBD |
+| Extra | 1 / 3 / 12 meses | $ TBD |
+
+#### Definición comercial de planes (orientado a venta y rentabilidad)
+
+#### Prueba gratuita (15 días)
+
+- La prueba es por barbería creada (no global por dueño).
+- Cada nueva barbería arranca con `trialEndsAt = createdAt + 15 días`.
+- Durante la prueba tiene acceso completo al nivel Estándar para validar operación real.
+- Una vez usada la prueba de esa barbería, no se reinicia automáticamente.
+- Si el mismo dueño crea otra barbería, esa nueva barbería también inicia su propio período de prueba de 15 días.
+
+**Estándar**
+- Incluye: agenda, citas, horarios, servicios base, pocos barberos, datos básicos del negocio y página pública simple.
+- Objetivo: resolver la operación mínima de una barbería pequeña.
+- Limitaciones: menor cantidad de barberos, menor cupo de productos y galería, funciones comerciales avanzadas no incluidas.
+
+**Plus**
+- Incluye: todo Estándar + galería, branding, productos, más barberos, gestión de clientes y recordatorios.
+- Objetivo: vender mejor y verse más profesional.
+- Limitaciones: límites superiores a Estándar pero menores a Extra en barberos, productos, galería y automatizaciones.
+
+**Extra**
+- Incluye: todo Plus + reportes, métricas, historial de clientes, control avanzado, exportación, analítica y herramientas de crecimiento.
+- Objetivo: dar control real del negocio al dueño.
+- Limitaciones: plan tope operativo (sin límites funcionales críticos en comparación con Plus).
+
+Todos los planes mantienen ciclos de facturación de **1, 3 y 12 meses**.
+
+#### ¿Qué pasa cuando termina la prueba?
+
+- Si no se asigna plan pago al vencer los 15 días, la barbería pasa a estado **expirada**.
+- En estado expirada:
+  - La página pública puede mostrarse en modo limitado o con aviso de plan vencido.
+  - El panel admin queda en solo lectura (sin crear/editar citas, servicios o productos).
+  - No se elimina información histórica.
+- Al activar un plan (Estándar, Plus o Extra), se reactiva el acceso normal sin perder datos.
+
+#### Cambios de plan (upgrade/downgrade)
+
+- El usuario puede cambiar de plan en cualquier mes, tanto para subir (upgrade) como para bajar (downgrade).
+- Upgrade: se aplica inmediatamente y se recalculan límites del nuevo plan.
+- Downgrade: puede aplicarse al siguiente ciclo de facturación para evitar corte brusco de operación.
+- Si al bajar de plan supera límites (por ejemplo barberos/productos), el sistema entra en modo ajuste: no permite crear nuevos ítems hasta volver al límite.
+- Toda transición de plan se registra en historial para trazabilidad administrativa.
 
 - [ ] **ContactSection** — email / WhatsApp / formulario estático (Formspree o similar, gratis)
 - [ ] **Footer** — links, redes, aviso legal
@@ -452,6 +528,14 @@ barbers/{barberId}/appointments/{autoId}
   createdAt: serverTimestamp()
 ```
 
+#### Gestión de ausencias, cancelaciones y reactivación
+
+- Recordatorios de cita previos por WhatsApp.
+- Confirmación de asistencia por WhatsApp.
+- Estados de cita claros: pendiente, confirmada, cancelada, realizada, ausente.
+- Detección de clientes con cancelaciones frecuentes para seguimiento.
+- Flujo de reactivación comercial: "hace 3 semanas no vienes, agenda de nuevo".
+
 **No se requiere auth del cliente.** Las reglas de Firestore permiten escritura en esta subcolección sin login.
 
 **Entregable:** cliente puede reservar cita sin crear cuenta. Admin la ve en su panel.
@@ -489,6 +573,7 @@ La misma página `[...slug].astro` detecta si el path incluye `/admin` y verific
 
 **Servicios y cortes**
 - [ ] CRUD de servicios: nombre, descripción, duración, precio
+- [ ] Catálogo de servicios y extras bien armado (barba, cejas, tratamiento, combo, etc.)
 - [ ] Duración impacta directamente en el calendario de citas
 
 **Barberos**
@@ -502,6 +587,14 @@ La misma página `[...slug].astro` detecta si el path incluye `/admin` y verific
 - [ ] Definir horario del local
 - [ ] Color primario (theme básico)
 
+**Clientes y crecimiento**
+- [ ] Historial de clientes: quién vino, qué servicio tomó, con qué barbero y cuánto gastó
+- [ ] Segmentación básica para campañas de reactivación
+
+**Permisos y roles (escalabilidad)**
+- [ ] Roles internos por barbería: owner, admin, barber
+- [ ] Permisos por módulo según rol
+
 **Entregable:** admin puede gestionar toda su barbería sin tocar código.
 
 ---
@@ -513,12 +606,20 @@ La misma página `[...slug].astro` detecta si el path incluye `/admin` y verific
 #### `src/lib/planLimits.ts`
 ```ts
 export function isPlanActive(barber: Barber): boolean {
-  if (barber.plan === 'trial') {
-    return barber.createdAt + 15 días > now
-  }
+  // plan: standard | plus | extra
+  // billingCycle: month_1 | month_3 | month_12
+  // trial: 15 días por barbería
   return barber.planExpiresAt > now && barber.active
 }
 ```
+
+#### Reglas de negocio de membresías
+
+- Cada barbería tiene una prueba gratuita de 15 días (desde `trialStartedAt` hasta `trialEndsAt`).
+- Al finalizar la prueba sin plan activo, queda en estado expirada con acceso limitado.
+- El dueño puede cambiar de plan en cualquier mes (upgrade/downgrade).
+- Upgrade se aplica de inmediato; downgrade puede programarse al próximo ciclo.
+- Nunca se borra data por vencimiento o cambio de plan, solo se limita capacidad operativa.
 
 #### Puntos de control
 - `BarberApp.tsx`: si plan inactivo → muestra `<PlanExpiredView />` con mensaje y contacto
@@ -538,6 +639,8 @@ export function isPlanActive(barber: Barber): boolean {
 - [ ] **Cache multicapa**: datos de configuración de la barbería en localStorage (TTL 1 hora) para reducir lecturas Firestore
 - [ ] **Internacionalización**: preparar strings en objeto de constantes para futura traducción
 - [ ] **Modo oscuro**: soporte básico con Tailwind dark mode
+- [ ] **Métricas útiles, no decorativas**: ingresos por servicio, horas pico, barbero más solicitado, tasa de ocupación
+- [ ] **Dashboard de negocio accionable** para decisiones comerciales semanales
 
 ---
 
@@ -609,18 +712,18 @@ Referencia rápida para trackear el estado del proyecto. Marcar a medida que se 
 - [X] `src/lib/firebase.ts` creado (init de db, auth, storage)
 - [X] Workflow `.github/workflows/deploy.yml` creado
 - [X] Los 6 secrets `PUBLIC_FIREBASE_*` cargados en GitHub Actions Secrets
-- [ ] Primer deploy exitoso — sitio accesible en `https://<usuario>.github.io/barberflow/`
-- [ ] Firebase Usage alerts activadas en la consola
+- [X] Primer deploy exitoso — sitio accesible en `https://<usuario>.github.io/barberflow/`
+- [X] Firebase Usage alerts activadas en la consola
 
 ### Etapa 1 — Landing pública
 
-- [ ] `src/layouts/Layout.astro` creado (head, meta, slot)
-- [ ] `src/pages/index.astro` creada
-- [ ] `HeroSection.astro` — tagline + CTA
-- [ ] `FeaturesSection.astro` — qué ofrece el producto
-- [ ] `PricingSection.astro` — tabla de planes con precios definidos
-- [ ] `ContactSection.astro` — email / WhatsApp / formulario
-- [ ] `Footer.astro` — links y aviso legal
+- [X] `src/layouts/Layout.astro` creado (head, meta, slot)
+- [X] `src/pages/index.astro` creada
+- [X] `HeroSection.astro` — tagline + CTA
+- [X] `FeaturesSection.astro` — qué ofrece el producto
+- [X] `PricingSection.astro` — tabla de planes con precios definidos
+- [X] `ContactSection.astro` — email / WhatsApp / formulario
+- [X] `Footer.astro` — links y aviso legal
 - [ ] Landing responsive verificada en mobile y desktop
 - [ ] Deploy verificado en producción
 
@@ -671,6 +774,9 @@ Referencia rápida para trackear el estado del proyecto. Marcar a medida que se 
 - [ ] Paso 6: pantalla de confirmación con resumen
 - [ ] Escritura en Firestore sin auth del cliente (status: `pending`)
 - [ ] Firestore Rules: permite escritura anónima en `appointments`
+- [ ] Confirmación previa por WhatsApp y recordatorios de cita
+- [ ] Gestión de ausencias y cancelaciones con trazabilidad
+- [ ] Reactivación automática: "hace 3 semanas no vienes, agenda de nuevo"
 - [ ] Flujo completo probado end-to-end
 - [ ] Deploy verificado
 
@@ -693,6 +799,7 @@ Referencia rápida para trackear el estado del proyecto. Marcar a medida que se 
   - [ ] Activar / desactivar sin borrar
 - [ ] **Módulo Servicios**
   - [ ] CRUD: nombre, descripción, duración, precio
+- [ ] Catálogo de servicios y extras: barba, cejas, tratamiento, combo
 - [ ] **Módulo Barberos**
   - [ ] CRUD con foto
   - [ ] Disponibilidad por día (horario y slots)
@@ -702,12 +809,22 @@ Referencia rápida para trackear el estado del proyecto. Marcar a medida que se 
   - [ ] Subir logo y cover
   - [ ] Definir horario del local
   - [ ] Color primario del tema
+- [ ] **Módulo Clientes**
+- [ ] Historial por cliente: visitas, servicios, barbero y gasto acumulado
+- [ ] **Permisos y roles**
+- [ ] Roles internos: owner, admin, barber
+- [ ] Restricciones por módulo según rol
 - [ ] Invalidación de cache localStorage al guardar cambios
 - [ ] Deploy verificado
 
 ### Etapa 6 — Control de plan
 
 - [ ] `src/lib/planLimits.ts` creado (`isPlanActive`)
+- [ ] Planes comerciales activos: standard, plus, extra
+- [ ] Ciclos de facturación activos: 1, 3 y 12 meses
+- [ ] Prueba gratuita por barbería: 15 días (`trialStartedAt`, `trialEndsAt`, `trialUsed`)
+- [ ] Estado expirada al terminar trial sin plan pago
+- [ ] Upgrade inmediato y downgrade al siguiente ciclo (configurable)
 - [ ] `BarberApp.tsx` bloquea vista pública si plan inactivo
 - [ ] Panel admin: solo lectura si plan inactivo
 - [ ] Super admin puede reactivar plan manualmente
