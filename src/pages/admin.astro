@@ -1,0 +1,13 @@
+---
+import Layout from '../layouts/Layout.astro';
+import AuthGuard from '../components/react/AuthGuard';
+import SuperAdminApp from '../components/react/SuperAdminApp';
+import HeaderSection from '../components/home/HeaderSection.astro';
+---
+
+<Layout title="Admin Dashboard - BarberFlow">
+  <HeaderSection />
+  <AuthGuard client:load requiredRole="superadmin">
+    <SuperAdminApp client:load />
+  </AuthGuard>
+</Layout>

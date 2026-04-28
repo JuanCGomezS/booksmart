@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://juancgomezs.github.io',
-	base: '/barberflow/',
+	base: process.env.NODE_ENV === 'production' ? '/barberflow/' : '/',
 	vite: {
 		plugins: [tailwindcss()],
 	},

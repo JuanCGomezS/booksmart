@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function currentUserRole() {
+      return isSignedIn() ? currentUserDoc().data.role : null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && currentUserRole() == 'superadmin';
+    }
+
+    function isBarberOwner(barberId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/barbers/$(barberId)).data.ownerId == request.auth.uid;
+    }
+
+    // Users collection
+    match /users/{uid} {
+      // Superadmin puede leer todo
+      allow read: if isSuperAdmin() || (isSignedIn() && request.auth.uid == uid);
+
+      // Registro inicial: cada usuario solo puede crearse como client
+      allow create: if isSignedIn() && request.auth.uid == uid &&
+                      request.resource.data.role == 'client';
+
+      // Superadmin puede cambiar roles/barberId.
+      // Usuario normal puede actualizar perfil, pero no role ni barberId.
+      allow update: if isSuperAdmin() ||
+                      (isSignedIn() && request.auth.uid == uid &&
+                        !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'barberId']));
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // Barbers collection - pública lectura, admin control total
+    match /barbers/{barberId} {
+      // Lectura pública de barbería activa
+      allow read: if resource.data.active == true;
+      
+      // Super admin puede leer/escribir todo
+      allow read, write: if isSuperAdmin();
+      
+      // Admin de la barbería puede leer/escribir su propia barbería
+      allow read, write: if isBarberOwner(barberId);
+      
+      // Subcolecciones
+      match /services/{serviceId} {
+        // Lectura pública de servicios
+        allow read: if resource.data != null;
+        // Escritura solo para admin de la barbería o super admin
+        allow write: if isSuperAdmin() || isBarberOwner(barberId);
+      }
+
+      match /barbers/{staffId} {
+        // Lectura pública de barberos disponibles
+        allow read: if resource.data.active == true;
+        // Escritura solo para admin de la barbería o super admin
+        allow write: if isSuperAdmin() || isBarberOwner(barberId);
+      }
+
+      match /appointments/{appointmentId} {
+        // Lectura solo para admin y super admin
+        allow read: if isSuperAdmin() || isBarberOwner(barberId);
+        
+        // Escritura sin autenticación para clientes que reservan
+        allow create: if request.resource.data.status == 'pending' &&
+                        request.resource.data.clientName != null &&
+                        request.resource.data.clientPhone != null;
+        
+        // Lectura/escritura para admin y super admin
+        allow write: if isSuperAdmin() || isBarberOwner(barberId);
+      }
+
+      match /catalog/{itemId} {
+        // Lectura pública
+        allow read: if true;
+        // Escritura solo para admin de la barbería o super admin
+        allow write: if isSuperAdmin() || isBarberOwner(barberId);
+      }
+
+      match /products/{productId} {
+        // Lectura pública de productos activos
+        allow read: if resource.data.active == true;
+        // Escritura solo para admin de la barbería o super admin
+        allow write: if isSuperAdmin() || isBarberOwner(barberId);
+      }
+    }
+
+    // Denegar acceso por defecto
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

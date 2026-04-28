@@ -1,9 +1,15 @@
 ---
+const baseUrl = import.meta.env.BASE_URL;
+const loginPath = `${baseUrl}login`;
+const homePath = `${baseUrl}#inicio`;
+const featuresPath = `${baseUrl}#features`;
+const pricingPath = `${baseUrl}#pricing`;
+const contactPath = `${baseUrl}#contact`;
 ---
 
 <header class="sticky top-0 z-50 border-b backdrop-blur-xl" style="border-color: var(--border); background: color-mix(in srgb, var(--bg) 88%, transparent);">
   <div class="mx-auto flex h-15 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-    <a href="#inicio" class="group inline-flex items-center gap-3">
+    <a href={homePath} class="group inline-flex items-center gap-3">
       <span class="inline-block h-10 w-10 rounded-xl" style="background: linear-gradient(140deg, var(--secondary), var(--accent));"></span>
       <span class="text-2xl font-extrabold tracking-tight text-main">BarberFlow</span>
     </a>
@@ -17,7 +23,12 @@
         aria-expanded="false"
         aria-controls="header-dropdown"
       >
-      <span class="text-sm font-bold" style="color: var(--secondary);">JC</span>
+        <svg id="menu-avatar" viewBox="0 0 24 24" class="hidden h-5 w-5" style="color: var(--secondary);" aria-hidden="true">
+          <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.2 0-6 1.6-6 3.5V19h12v-1.5c0-1.9-2.8-3.5-6-3.5Z" fill="currentColor" />
+        </svg>
+        <svg id="menu-hamburger" viewBox="0 0 24 24" class="h-5 w-5" style="color: var(--secondary);" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
         
       </button>
 
@@ -27,38 +38,74 @@
         role="menu"
         aria-label="Menu de usuario"
       >
-        <div class="border-b pb-4" style="border-color: var(--border);">
-          <p class="text-sm text-subtle">BarberFlow</p>
-          <p class="text-lg font-bold text-main">SaaS para barberias</p>
-          <p class="text-sm text-subtle">Infraestructura 100% gratuita para iniciar</p>
+        <!-- Estado guest: branding + nav + CTA -->
+        <div id="menu-guest-section">
+          <div class="border-b pb-4" style="border-color: var(--border);">
+            <p class="text-sm text-subtle">BarberFlow</p>
+            <p class="text-lg font-bold text-main">SaaS para barberias</p>
+            <p class="text-sm text-subtle">Infraestructura 100% gratuita para iniciar</p>
+          </div>
+
+          <nav class="py-4" aria-label="Navegacion principal">
+            <ul class="space-y-2">
+              <li><a href={homePath} class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Inicio</a></li>
+              <li><a href={featuresPath} class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Lo que ofrecemos</a></li>
+              <li><a href={pricingPath} class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Planes</a></li>
+              <li><a href={contactPath} class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Contacto</a></li>
+            </ul>
+          </nav>
+
+          <div class="border-t pt-4" style="border-color: var(--border);">
+            <a href={pricingPath} class="btn-primary block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Probar 1 mes gratis</a>
+          </div>
         </div>
 
-        <nav class="py-4" aria-label="Navegacion principal">
-          <ul class="space-y-2">
-            <li><a href="#inicio" class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Inicio</a></li>
-            <li><a href="#features" class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Lo que ofrecemos</a></li>
-            <li><a href="#pricing" class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Planes</a></li>
-            <li><a href="#contact" class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Contacto</a></li>
-          </ul>
-        </nav>
-
-        <div class="space-y-2 border-t pt-4" style="border-color: var(--border);">
-          <a href="#pricing" class="btn-primary block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Probar 1 mes gratis</a>
-          <a href="#contact" class="btn-outline block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Agendar demo</a>
+        <!-- Estado auth: rol + cerrar sesion -->
+        <div id="menu-auth-section" class="hidden space-y-3">
+          <nav class="border-b pb-3" style="border-color: var(--border);">
+            <ul class="space-y-1">
+              <li><a href={homePath} class="block rounded-xl px-3 py-2 text-sm text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Inicio</a></li>
+            </ul>
+          </nav>
+          <div id="menu-role-box" class="rounded-xl px-4 py-3" style="background: color-mix(in srgb, var(--surface-soft) 82%, var(--bg)); border: 1px solid var(--border);">
+            <p id="menu-role-label" class="text-xs font-semibold uppercase tracking-[0.18em] text-subtle">Rol</p>
+            <a id="menu-role-link" href="#" class="mt-2 hidden text-sm font-bold text-main transition hover:text-[var(--secondary)]"></a>
+            <p id="menu-role-note" class="mt-2 hidden text-sm text-subtle"></p>
+          </div>
+          <button id="menu-logout-button" type="button" class="btn-outline block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Cerrar sesion</button>
         </div>
 
-        <p class="mt-4 text-center text-sm text-subtle">Etapa 1: Landing publica</p>
+        <!-- Estado loading/guest: boton de login -->
+        <div id="menu-login-section" class="hidden pt-4 border-t" style="border-color: var(--border);">
+          <a id="menu-auth-link" href={loginPath} class="btn-outline block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Iniciar sesion / Registrarse</a>
+        </div>
       </div>
     </div>
   </div>
 </header>
 
-<script is:inline>
+<script>
+  import { onAuthStateChanged, signOut } from 'firebase/auth';
+  import { auth } from '../../lib/firebase';
+  import { getUserRecord } from '../../lib/auth';
+
   (() => {
     const trigger = document.getElementById('menu-trigger');
     const menu = document.getElementById('header-dropdown');
+    const avatar = document.getElementById('menu-avatar');
+    const hamburger = document.getElementById('menu-hamburger');
+    const authLink = document.getElementById('menu-auth-link');
+    const logoutButton = document.getElementById('menu-logout-button');
+    const roleLabel = document.getElementById('menu-role-label');
+    const roleLink = document.getElementById('menu-role-link');
+    const roleNote = document.getElementById('menu-role-note');
+    const guestSection = document.getElementById('menu-guest-section');
+    const authSection = document.getElementById('menu-auth-section');
+    const loginSection = document.getElementById('menu-login-section');
 
-    if (!trigger || !menu) return;
+    if (!trigger || !menu || !avatar || !hamburger || !authLink || !logoutButton || !roleLabel || !roleLink || !roleNote || !guestSection || !authSection || !loginSection) return;
+
+    const baseUrl = import.meta.env.BASE_URL;
 
     const closeMenu = () => {
       menu.classList.add('invisible', 'opacity-0');
@@ -72,11 +119,68 @@
       trigger.setAttribute('aria-expanded', 'true');
     };
 
+    const resetRoleArea = () => {
+      roleLink.classList.add('hidden');
+      roleNote.classList.add('hidden');
+      roleLink.textContent = '';
+      roleLink.setAttribute('href', '#');
+      roleNote.textContent = '';
+    };
+
     trigger.addEventListener('click', (event) => {
       event.stopPropagation();
       const expanded = trigger.getAttribute('aria-expanded') === 'true';
       if (expanded) closeMenu();
       else openMenu();
+    });
+
+    onAuthStateChanged(auth, async (user) => {
+      const isLoggedIn = Boolean(user);
+
+      // Alternar secciones según estado de sesión
+      guestSection.classList.toggle('hidden', isLoggedIn);
+      authSection.classList.toggle('hidden', !isLoggedIn);
+      loginSection.classList.toggle('hidden', isLoggedIn);
+      resetRoleArea();
+
+      if (isLoggedIn) {
+        avatar.classList.remove('hidden');
+        hamburger.classList.add('hidden');
+
+        const userRecord = await getUserRecord(user.uid);
+
+        if (userRecord) {
+          if (userRecord.role === 'superadmin') {
+            roleLabel.textContent = 'Super admin';
+            roleLink.textContent = 'Ir al panel de control';
+            roleLink.setAttribute('href', `${baseUrl}admin`);
+            roleLink.classList.remove('hidden');
+          } else if (userRecord.role === 'barber_admin') {
+            roleLabel.textContent = 'Admin barberia';
+            roleNote.textContent = userRecord.barberId
+              ? `Tu panel se habilitara en /b/${userRecord.barberId}/admin durante la Etapa 5.`
+              : 'Tu panel de barberia se habilitara en la Etapa 5.';
+            roleNote.classList.remove('hidden');
+          } else if (userRecord.role === 'barber') {
+            roleLabel.textContent = 'Barbero';
+            roleNote.textContent = 'Tu acceso operativo se habilitara cuando este listo el panel de barberia.';
+            roleNote.classList.remove('hidden');
+          } else {
+            roleLabel.textContent = 'Cliente';
+            roleNote.textContent = 'Los clientes usan la URL publica de su barberia y no necesitan panel interno.';
+            roleNote.classList.remove('hidden');
+          }
+        }
+      } else {
+        avatar.classList.add('hidden');
+        hamburger.classList.remove('hidden');
+      }
+    });
+
+    logoutButton.addEventListener('click', async () => {
+      await signOut(auth);
+      closeMenu();
+      window.location.href = baseUrl;
     });
 
     document.addEventListener('click', (event) => {

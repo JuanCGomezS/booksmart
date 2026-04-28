@@ -119,3 +119,54 @@ body {
   border: 1px solid color-mix(in srgb, var(--secondary) 45%, var(--border));
   color: var(--secondary);
 }
+
+.field-label {
+  color: var(--text-primary);
+}
+
+.field-hint {
+  color: var(--text-secondary);
+}
+
+.field-input,
+.field-select,
+.field-textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text-primary);
+  border-radius: 0.75rem;
+  padding: 0.625rem 1rem;
+}
+
+.field-input::placeholder,
+.field-textarea::placeholder {
+  color: color-mix(in srgb, var(--text-secondary) 78%, transparent);
+}
+
+.field-input:focus,
+.field-select:focus,
+.field-textarea:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--secondary) 72%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--secondary) 30%, transparent);
+}
+
+.field-input:disabled,
+.field-select:disabled,
+.field-textarea:disabled {
+  opacity: 0.65;
+}
+
+.table-head {
+  background: color-mix(in srgb, var(--surface-soft) 88%, var(--bg));
+  border-bottom: 1px solid var(--border);
+}
+
+.table-row {
+  border-bottom: 1px solid var(--border);
+}
+
+.table-row:hover {
+  background: color-mix(in srgb, var(--surface-soft) 58%, transparent);
+}

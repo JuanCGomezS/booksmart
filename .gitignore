@@ -3,3 +3,4 @@ node_modules
 service-account-key.json
 dist
 .astro
+scripts

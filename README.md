@@ -724,8 +724,8 @@ Referencia rápida para trackear el estado del proyecto. Marcar a medida que se 
 - [X] `PricingSection.astro` — tabla de planes con precios definidos
 - [X] `ContactSection.astro` — email / WhatsApp / formulario
 - [X] `Footer.astro` — links y aviso legal
-- [ ] Landing responsive verificada en mobile y desktop
-- [ ] Deploy verificado en producción
+- [X] Landing responsive verificada en mobile y desktop
+- [X] Deploy verificado en producción
 
 ### Etapa 2 — Super Admin
 
