@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { getAllBarbers, getBarberMetrics, getBarberStatus } from '../../lib/barbers';
-import type { Barber, BarberMetrics } from '../../lib/types';
+import { getAllBarbers, getBarberStatus } from '../../lib/barbers';
+import { DATA } from '../../lib/data';
+import type { Barber } from '../../lib/types';
 import BarbersList from './admin/BarbersList';
 import CreateBarberForm from './admin/CreateBarberForm';
 import UsersRolesManager from './admin/UsersRolesManager';
 
 export default function SuperAdminApp() {
   const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [metrics, setMetrics] = useState<Record<string, BarberMetrics>>({});
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [error, setError] = useState('');
@@ -22,16 +22,7 @@ export default function SuperAdminApp() {
     try {
       const barbersData = await getAllBarbers();
       setBarbers(barbersData);
-
-      // Cargar métricas para cada barbería
-      const metricsData: Record<string, BarberMetrics> = {};
-      for (const barber of barbersData) {
-        const barberMetrics = await getBarberMetrics(barber.id);
-        if (barberMetrics) {
-          metricsData[barber.id] = barberMetrics;
-        }
-      }
-      setMetrics(metricsData);
+      
     } catch (err) {
       setError('Error cargando barberías');
       console.error(err);
@@ -80,19 +71,19 @@ export default function SuperAdminApp() {
           <div className="surface-card rounded-lg p-6">
             <p className="text-subtle text-sm">Activas</p>
             <p className="text-3xl font-bold" style={{ color: 'var(--success)' }}>
-              {barbers.filter(b => getBarberStatus(b) === 'active').length}
+              {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.ACTIVE).length}
             </p>
           </div>
           <div className="surface-card rounded-lg p-6">
             <p className="text-subtle text-sm">En prueba</p>
             <p className="text-3xl font-bold" style={{ color: 'var(--accent)' }}>
-              {barbers.filter(b => getBarberStatus(b) === 'trial').length}
+              {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.TRIAL).length}
             </p>
           </div>
           <div className="surface-card rounded-lg p-6">
             <p className="text-subtle text-sm">Expiradas</p>
             <p className="text-3xl font-bold" style={{ color: '#ef4444' }}>
-              {barbers.filter(b => getBarberStatus(b) === 'expired').length}
+              {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.EXPIRED).length}
             </p>
           </div>
         </div>
@@ -115,7 +106,6 @@ export default function SuperAdminApp() {
         {/* Barbers list */}
         <BarbersList 
           barbers={barbers} 
-          metrics={metrics}
           onRefresh={loadBarbers}
         />
 

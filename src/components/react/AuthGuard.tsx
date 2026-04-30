@@ -18,6 +18,12 @@ export default function AuthGuard({
 
   useEffect(() => {
     const checkAuth = async () => {
+      const cachedRole = sessionStorage.getItem('userRole');
+      if (cachedRole === requiredRole) {
+        setIsAuthorized(true);
+        return;
+      }
+      
       const user = await getCurrentUser();
       
       if (!user) {
@@ -31,6 +37,7 @@ export default function AuthGuard({
         return;
       }
 
+      sessionStorage.setItem('userRole', user.userRecord?.role || '');
       setIsAuthorized(true);
     };
 

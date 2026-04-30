@@ -6,7 +6,7 @@ interface Props {
   description?: string;
 }
 
-const { title, description = 'BarberFlow - SaaS de agendamiento para barberías' } = Astro.props;
+const { title, description = 'BarberFlow - Plataforma de agendamiento para barberías' } = Astro.props;
 ---
 
 <!doctype html>
@@ -27,8 +27,25 @@ const { title, description = 'BarberFlow - SaaS de agendamiento para barberías'
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
   </head>
-  <body class="min-h-screen bg-[var(--bg)] text-[var(--text-primary)] transition-colors duration-300">
+  <body class="min-h-screen bg-(--bg) text-(--text-primary) transition-colors duration-300">
     <slot />
+    
+    <script is:inline>
+      (() => {
+        const buttons = document.querySelectorAll('.btn-primary');
+        
+        buttons.forEach((button) => {
+          button.addEventListener('mousemove', (e) => {
+            const rect = button.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            button.style.setProperty('--mouse-x', `${x}px`);
+            button.style.setProperty('--mouse-y', `${y}px`);
+          });
+        });
+      })();
+    </script>
   </body>
 </html>
 

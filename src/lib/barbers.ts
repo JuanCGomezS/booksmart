@@ -1,5 +1,3 @@
-// CRUD de barberías para el super admin
-
 import {
   collection,
   doc,
@@ -13,7 +11,9 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Barber, BarberMetrics, Plan, BillingCycle } from './types';
+import { DATA } from './data';
+import { getUserIdByEmail } from './users';
+import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus } from './types';
 
 // Cache de configuración de barbería
 const BARBER_CACHE_TTL = 60 * 60 * 1000; // 1 hora
@@ -88,13 +88,19 @@ export async function getBarbersByOwner(ownerId: string): Promise<Barber[]> {
  * Crear nueva barbería
  */
 export async function createBarber(
-  ownerId: string,
+  ownerEmail: string,
   name: string,
   slug: string,
-  plan: Plan = 'standard',
-  billingCycle: BillingCycle = 'month_1'
+  plan: Plan = DATA.PLAN.STANDARD,
+  billingCycle: BillingCycle = DATA.BILLING_CYCLE.MONTH_1
 ): Promise<Barber | null> {
   try {
+    // Convertir email a UID
+    const ownerId = await getUserIdByEmail(ownerEmail);
+    if (!ownerId) {
+      throw new Error(`Usuario no encontrado: ${ownerEmail}`);
+    }
+
     // Generar fechas
     const now = new Date();
     const trialEnds = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 días
@@ -103,6 +109,7 @@ export async function createBarber(
       name,
       slug,
       ownerId,
+      ownerEmail,
       plan,
       billingCycle,
       trialStartedAt: serverTimestamp(),
@@ -187,11 +194,11 @@ export async function updateBarberPlan(
     const now = new Date();
     let planExpiresAt = now;
 
-    if (billingCycle === 'month_1') {
+    if (billingCycle === DATA.BILLING_CYCLE.MONTH_1) {
       planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
-    } else if (billingCycle === 'month_3') {
+    } else if (billingCycle === DATA.BILLING_CYCLE.MONTH_3) {
       planExpiresAt.setMonth(planExpiresAt.getMonth() + 3);
-    } else if (billingCycle === 'month_12') {
+    } else if (billingCycle === DATA.BILLING_CYCLE.MONTH_12) {
       planExpiresAt.setFullYear(planExpiresAt.getFullYear() + 1);
     }
 
@@ -249,27 +256,27 @@ export async function deleteBarber(barberId: string): Promise<boolean> {
 /**
  * Obtener estado de una barbería (activa / trial / expirada)
  */
-export function getBarberStatus(barber: Barber): 'active' | 'trial' | 'expired' {
+export function getBarberStatus(barber: Barber): BarberStatus {
   const now = new Date();
   const planExpires = barber.planExpiresAt instanceof Date 
     ? barber.planExpiresAt 
     : (barber.planExpiresAt as any).toDate?.() || new Date(barber.planExpiresAt);
 
   if (!barber.active) {
-    return 'expired';
+    return DATA.BARBER_STATUS.EXPIRED;
   }
 
   // Si está en prueba y no ha terminado
   if (!barber.trialUsed && now < planExpires) {
-    return 'trial';
+    return DATA.BARBER_STATUS.TRIAL;
   }
 
   // Si el plan ha expirado
   if (now > planExpires) {
-    return 'expired';
+    return DATA.BARBER_STATUS.EXPIRED;
   }
 
-  return 'active';
+  return DATA.BARBER_STATUS.ACTIVE;
 }
 
 /**
@@ -277,9 +284,9 @@ export function getBarberStatus(barber: Barber): 'active' | 'trial' | 'expired' 
  */
 export function getLimitsByPlan(plan: Plan) {
   const limits = {
-    standard: { maxBarbers: 3, maxProducts: 10, maxGalleryItems: 20 },
-    plus: { maxBarbers: 8, maxProducts: 50, maxGalleryItems: 100 },
-    extra: { maxBarbers: 20, maxProducts: 200, maxGalleryItems: 500 },
+    [DATA.PLAN.STANDARD]: { maxBarbers: 3, maxProducts: 10, maxGalleryItems: 20 },
+    [DATA.PLAN.PLUS]: { maxBarbers: 8, maxProducts: 50, maxGalleryItems: 100 },
+    [DATA.PLAN.EXTRA]: { maxBarbers: 20, maxProducts: 200, maxGalleryItems: 500 },
   };
   return limits[plan];
 }
@@ -288,6 +295,16 @@ export function getLimitsByPlan(plan: Plan) {
  * Obtener métricas básicas de una barbería
  */
 export async function getBarberMetrics(barberId: string): Promise<BarberMetrics | null> {
+  const cacheKey = `barber_metrics_${barberId}`;
+  const cached = localStorage.getItem(cacheKey);
+
+  if (cached) {
+    const { data, expiresAt } = JSON.parse(cached);
+    if (Date.now() < expiresAt) {
+      return data;
+    }
+  }
+
   try {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -314,13 +331,21 @@ export async function getBarberMetrics(barberId: string): Promise<BarberMetrics 
     const catalogRef = collection(db, 'barbers', barberId, 'catalog');
     const catalogDocs = await getDocs(catalogRef);
 
-    return {
+    const metrics: BarberMetrics = {
       barberId,
       appointmentsThisMonth: appointmentsDocs.size,
       activeProducts: productsDocs.size,
       activeBarbers: barbersDocs.size,
       totalCatalogItems: catalogDocs.size,
     };
+
+    // Cache 1 hora
+    localStorage.setItem(cacheKey, JSON.stringify({
+      data: metrics,
+      expiresAt: Date.now() + 60 * 60 * 1000,
+    }));
+
+    return metrics;
   } catch (error) {
     console.error('Error fetching barber metrics:', error);
     return null;

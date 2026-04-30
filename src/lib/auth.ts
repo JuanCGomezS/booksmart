@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
+import { DATA } from './data';
 import type { User } from './types';
 
 /**
@@ -30,7 +31,7 @@ export async function signUpClient(name: string, email: string, password: string
     uid: user.uid,
     name,
     email: user.email,
-    role: 'client',
+    role: DATA.USER_ROLE.CLIENT,
     createdAt: serverTimestamp(),
   });
 
@@ -82,7 +83,7 @@ export async function getCurrentUser(): Promise<(FirebaseUser & { userRecord?: U
  */
 export async function isSuperAdmin(): Promise<boolean> {
   const user = await getCurrentUser();
-  return user?.userRecord?.role === 'superadmin';
+  return user?.userRecord?.role === DATA.USER_ROLE.SUPERADMIN;
 }
 
 /**

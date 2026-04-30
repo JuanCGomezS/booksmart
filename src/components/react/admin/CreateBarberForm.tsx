@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createBarber } from '../../../lib/barbers';
+import { BILLING_CYCLE_LABEL, DATA, PLAN_LABEL } from '../../../lib/data';
+import { getBarberAdmins } from '../../../lib/users';
+import type { BillingCycle, Plan, User } from '../../../lib/types';
+import FancySelect, { type FancySelectOption } from '../FancySelect';
 
 interface CreateBarberFormProps {
   onSuccess: () => void;
@@ -8,11 +12,48 @@ interface CreateBarberFormProps {
 export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
-  const [ownerId, setOwnerId] = useState('');
-  const [plan, setPlan] = useState('standard');
-  const [billingCycle, setBillingCycle] = useState('month_1');
+  const [ownerEmail, setOwnerEmail] = useState('');
+  const [plan, setPlan] = useState<Plan>(DATA.PLAN.STANDARD);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>(DATA.BILLING_CYCLE.MONTH_1);
   const [loading, setLoading] = useState(false);
+  const [loadingAdmins, setLoadingAdmins] = useState(true);
   const [error, setError] = useState('');
+  const [admins, setAdmins] = useState<User[]>([]);
+
+  const adminOptions: FancySelectOption<string>[] = admins.map((admin) => ({
+    value: admin.email,
+    label: admin.email,
+  }));
+
+  const planOptions: FancySelectOption<string>[] = [
+    { value: DATA.PLAN.STANDARD, label: PLAN_LABEL[DATA.PLAN.STANDARD] },
+    { value: DATA.PLAN.PLUS, label: PLAN_LABEL[DATA.PLAN.PLUS] },
+    { value: DATA.PLAN.EXTRA, label: PLAN_LABEL[DATA.PLAN.EXTRA] },
+  ];
+
+  const billingOptions: FancySelectOption<string>[] = [
+    { value: DATA.BILLING_CYCLE.MONTH_1, label: BILLING_CYCLE_LABEL[DATA.BILLING_CYCLE.MONTH_1] },
+    { value: DATA.BILLING_CYCLE.MONTH_3, label: BILLING_CYCLE_LABEL[DATA.BILLING_CYCLE.MONTH_3] },
+    { value: DATA.BILLING_CYCLE.MONTH_12, label: BILLING_CYCLE_LABEL[DATA.BILLING_CYCLE.MONTH_12] },
+  ];
+
+  // Cargar admins de barbería
+  useEffect(() => {
+    loadAdmins();
+  }, []);
+
+  const loadAdmins = async () => {
+    setLoadingAdmins(true);
+    try {
+      const data = await getBarberAdmins();
+      setAdmins(data);
+    } catch (err) {
+      console.error('Error loading admins:', err);
+      setError('Error cargando administradores');
+    } finally {
+      setLoadingAdmins(false);
+    }
+  };
 
   // Auto-generate slug from name
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,21 +67,21 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
     setError('');
     setLoading(true);
 
-    if (!name || !slug || !ownerId) {
+    if (!name || !slug || !ownerEmail) {
       setError('Por favor completa todos los campos');
       setLoading(false);
       return;
     }
 
     try {
-      const result = await createBarber(ownerId, name, slug, plan as any, billingCycle as any);
+      const result = await createBarber(ownerEmail, name, slug, plan as any, billingCycle as any);
       
       if (result) {
         setName('');
         setSlug('');
-        setOwnerId('');
-        setPlan('standard');
-        setBillingCycle('month_1');
+        setOwnerEmail('');
+        setPlan(DATA.PLAN.STANDARD);
+        setBillingCycle(DATA.BILLING_CYCLE.MONTH_1);
         onSuccess();
       } else {
         setError('Error al crear barbería');
@@ -98,57 +139,47 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
 
           <div>
             <label className="field-label block text-sm font-medium mb-1">
-              UID del propietario
+              Administrador (email)
             </label>
-            <input
-              type="text"
-              value={ownerId}
-              onChange={(e) => setOwnerId(e.target.value)}
-              placeholder="UID de Firebase del admin"
-              required
-              disabled={loading}
-              className="field-input"
+            <FancySelect
+              value={ownerEmail}
+              onChange={setOwnerEmail}
+              options={adminOptions}
+              placeholder={loadingAdmins ? 'Cargando...' : admins.length === 0 ? 'No hay admins disponibles' : 'Selecciona un administrador'}
+              disabled={loading || loadingAdmins}
             />
-            <p className="field-hint text-xs mt-1">Se debe crear el usuario en Firebase Auth primero</p>
+            <p className="field-hint text-xs mt-1">Solo se muestran usuarios con rol "Admin de Barbería"</p>
           </div>
 
           <div>
             <label className="field-label block text-sm font-medium mb-1">
               Plan inicial
             </label>
-            <select
+            <FancySelect
               value={plan}
-              onChange={(e) => setPlan(e.target.value)}
+              onChange={(nextPlan) => setPlan(nextPlan as Plan)}
+              options={planOptions}
               disabled={loading}
-              className="field-select"
-            >
-              <option value="standard">Estándar</option>
-              <option value="plus">Plus</option>
-              <option value="extra">Extra</option>
-            </select>
+            />
           </div>
 
           <div>
             <label className="field-label block text-sm font-medium mb-1">
               Ciclo de facturación
             </label>
-            <select
+            <FancySelect
               value={billingCycle}
-              onChange={(e) => setBillingCycle(e.target.value)}
+              onChange={(nextBillingCycle) => setBillingCycle(nextBillingCycle as BillingCycle)}
+              options={billingOptions}
               disabled={loading}
-              className="field-select"
-            >
-              <option value="month_1">1 mes</option>
-              <option value="month_3">3 meses</option>
-              <option value="month_12">12 meses</option>
-            </select>
+            />
           </div>
         </div>
 
         <div className="flex gap-4 pt-4">
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || loadingAdmins}
             className="btn-primary px-8 py-2 rounded-lg transition-colors disabled:opacity-50 font-semibold"
           >
             {loading ? 'Creando...' : 'Crear barbería'}

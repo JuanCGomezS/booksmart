@@ -60,6 +60,66 @@ html[data-theme='royal-night'] {
   --shadow: 0 20px 45px rgba(3, 9, 24, 0.6);
 }
 
+html[data-theme='crimson-sun'] {
+  --bg: #1a0d10;
+  --surface: #2a1418;
+  --surface-soft: #391c21;
+  --text-primary: #fff1e8;
+  --text-secondary: #f2c8b5;
+  --border: #5b2a30;
+  --primary: #2a0f14;
+  --secondary: #f4c542;
+  --on-secondary: #221705;
+  --accent: #ff7b3d;
+  --success: #67c587;
+  --shadow: 0 20px 45px rgba(22, 8, 10, 0.55);
+}
+
+html[data-theme='violet-blush'] {
+  --bg: #140f1f;
+  --surface: #211833;
+  --surface-soft: #2c2144;
+  --text-primary: #f8efff;
+  --text-secondary: #d9c1ef;
+  --border: #4a3568;
+  --primary: #1b1230;
+  --secondary: #f06bb4;
+  --on-secondary: #2a0f26;
+  --accent: #b584ff;
+  --success: #72cfa9;
+  --shadow: 0 20px 45px rgba(10, 6, 20, 0.6);
+}
+
+html[data-theme='sunset-cream'] {
+  --bg: #fff8f3;
+  --surface: #ffffff;
+  --surface-soft: #ffece1;
+  --text-primary: #3b1f1f;
+  --text-secondary: #875858;
+  --border: #f0c8b3;
+  --primary: #fff3ea;
+  --secondary: #d94b2b;
+  --on-secondary: #fff8f3;
+  --accent: #f5c84a;
+  --success: #4da673;
+  --shadow: 0 12px 30px rgba(120, 48, 24, 0.12);
+}
+
+html[data-theme='orchid-rose'] {
+  --bg: #fdf8ff;
+  --surface: #ffffff;
+  --surface-soft: #f7eefe;
+  --text-primary: #2f1e46;
+  --text-secondary: #7a6398;
+  --border: #e6d1f6;
+  --primary: #f8f1ff;
+  --secondary: #9a5de0;
+  --on-secondary: #ffffff;
+  --accent: #f06db5;
+  --success: #55b78a;
+  --shadow: 0 12px 30px rgba(85, 47, 120, 0.11);
+}
+
 html {
   font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   background: var(--bg);
@@ -69,6 +129,16 @@ html {
 body {
   background: var(--bg);
   color: var(--text-primary);
+}
+
+button,
+[role='button'] {
+  cursor: pointer;
+}
+
+button:disabled,
+[role='button'][aria-disabled='true'] {
+  cursor: not-allowed;
 }
 
 .section-shell {
@@ -139,6 +209,16 @@ body {
   padding: 0.625rem 1rem;
 }
 
+.field-select {
+  appearance: auto;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.field-select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--secondary) 52%, var(--border));
+  background-color: color-mix(in srgb, var(--surface-soft) 85%, var(--bg));
+}
+
 .field-input::placeholder,
 .field-textarea::placeholder {
   color: color-mix(in srgb, var(--text-secondary) 78%, transparent);
@@ -169,4 +249,58 @@ body {
 
 .table-row:hover {
   background: color-mix(in srgb, var(--surface-soft) 58%, transparent);
+}
+
+@keyframes subtle-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.05), var(--shadow);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.15), var(--shadow);
+  }
+}
+
+.surface-card {
+  transition: all 240ms ease;
+}
+
+.surface-card:hover {
+  animation: subtle-glow 2s ease-in-out infinite;
+}
+
+.btn-primary {
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+  transition: all 200ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    80px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(255, 255, 255, 0.38) 0%,
+    rgba(255, 255, 255, 0.18) 40%,
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 140ms ease;
+  pointer-events: none;
+}
+
+.btn-primary:hover::before {
+  opacity: 1;
+}
+
+.btn-outline {
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.btn-outline:hover {
+  border-color: var(--secondary);
+  color: var(--secondary);
 }

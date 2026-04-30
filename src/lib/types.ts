@@ -24,8 +24,9 @@ export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'done' |
 export interface Barber {
   id: string;
   name: string;
-  slug: string; // identificador en URL: /b/abc123
-  ownerId: string; // uid del admin de la barbería
+  slug: string;
+  ownerId: string;
+  ownerEmail?: string;
   plan: Plan;
   billingCycle: BillingCycle;
   

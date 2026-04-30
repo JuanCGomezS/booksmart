@@ -49,6 +49,8 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
       }
 
       if (userRecord.role === 'superadmin') {
+        sessionStorage.setItem('userRole', 'superadmin');
+
         if (onSuccess) {
           onSuccess(user.uid);
         }

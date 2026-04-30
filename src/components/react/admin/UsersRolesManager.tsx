@@ -1,14 +1,23 @@
 import React, { useEffect, useState } from 'react';
+import { DATA, USER_ROLE_LABEL } from '../../../lib/data';
 import { getAllUsers, updateUserRole } from '../../../lib/users';
 import type { User, UserRole } from '../../../lib/types';
+import FancySelect, { type FancySelectOption } from '../FancySelect';
 
-const ROLE_OPTIONS: UserRole[] = ['client', 'barber', 'barber_admin', 'superadmin'];
+const ROLE_OPTIONS: UserRole[] = [
+  DATA.USER_ROLE.CLIENT,
+  DATA.USER_ROLE.BARBER,
+  DATA.USER_ROLE.BARBER_ADMIN,
+  DATA.USER_ROLE.SUPERADMIN,
+];
+
+const ROLE_SELECT_OPTIONS: FancySelectOption<UserRole>[] = ROLE_OPTIONS.map((role) => ({
+  value: role,
+  label: roleLabel(role),
+}));
 
 function roleLabel(role: UserRole): string {
-  if (role === 'client') return 'Cliente';
-  if (role === 'barber') return 'Barbero';
-  if (role === 'barber_admin') return 'Administrador barbería';
-  return 'Superadministrador';
+  return USER_ROLE_LABEL[role];
 }
 
 export default function UsersRolesManager() {
@@ -53,7 +62,7 @@ export default function UsersRolesManager() {
     const role = draftRoles[uid];
     const barberId = draftBarberIds[uid]?.trim();
 
-    if ((role === 'barber' || role === 'barber_admin') && !barberId) {
+    if ((role === DATA.USER_ROLE.BARBER || role === DATA.USER_ROLE.BARBER_ADMIN) && !barberId) {
       setError('Barbero y administrador de barbería requieren barberId');
       return;
     }
@@ -80,7 +89,7 @@ export default function UsersRolesManager() {
   }
 
   return (
-    <section className="surface-card rounded-lg p-6">
+    <section className="surface-card rounded-2xl p-6 md:p-7">
       <div className="mb-4">
         <h2 className="text-xl font-bold text-main">Usuarios y roles</h2>
         <p className="text-sm text-subtle">
@@ -94,7 +103,7 @@ export default function UsersRolesManager() {
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--border)' }}>
         <table className="w-full">
           <thead>
             <tr className="table-head">
@@ -107,34 +116,30 @@ export default function UsersRolesManager() {
           <tbody>
             {users.map((user) => {
               const selectedRole = draftRoles[user.uid];
-              const requiresBarberId = selectedRole === 'barber' || selectedRole === 'barber_admin';
+              const requiresBarberId = selectedRole === DATA.USER_ROLE.BARBER || selectedRole === DATA.USER_ROLE.BARBER_ADMIN;
               const isSaving = savingUid === user.uid;
 
               return (
                 <tr key={user.uid} className="table-row">
                   <td className="px-4 py-3 text-sm text-main">{user.email}</td>
                   <td className="px-4 py-3">
-                    <select
-                      className="field-select text-sm"
+                    <FancySelect
+                      className="min-w-52"
+                      buttonClassName="text-sm"
                       value={selectedRole}
-                      onChange={(e) => {
+                      options={ROLE_SELECT_OPTIONS}
+                      onChange={(nextRole) => {
                         setDraftRoles((prev) => ({
                           ...prev,
-                          [user.uid]: e.target.value as UserRole,
+                          [user.uid]: nextRole,
                         }));
                       }}
                       disabled={isSaving}
-                    >
-                      {ROLE_OPTIONS.map((role) => (
-                        <option key={role} value={role}>
-                          {roleLabel(role)}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </td>
                   <td className="px-4 py-3">
                     <input
-                      className="field-input text-sm"
+                      className="field-input min-w-48 text-sm"
                       placeholder={requiresBarberId ? 'Requerido' : 'No aplica'}
                       value={draftBarberIds[user.uid] ?? ''}
                       onChange={(e) => {
