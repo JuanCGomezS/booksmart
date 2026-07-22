@@ -1,0 +1,48 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUser() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && currentUser().data.role == 'superadmin';
+    }
+
+    function isBusinessAdmin(barberId) {
+      return isSignedIn() && (
+        firestore.get(/databases/(default)/documents/barbers/$(barberId)).data.ownerId == request.auth.uid ||
+        (currentUser().data.role == 'barber_admin' && currentUser().data.barberId == barberId)
+      );
+    }
+
+    function isContentImage() {
+      return request.resource.size <= 5 * 1024 * 1024 &&
+        request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
+    }
+
+    // Legacy deterministic paths remain deletable so replacements do not leave
+    // already-published objects behind. New uploads must use immutable assets.
+    match /barbers/{barberId}/{collectionName}/{recordId}/{imageName} {
+      allow read: if firestore.get(/databases/(default)/documents/barbers/$(barberId)).data.active == true;
+      allow delete: if (isSuperAdmin() || isBusinessAdmin(barberId)) &&
+        collectionName in ['catalog', 'products', 'services', 'barbers'] &&
+        imageName.matches('image\\.(jpg|png|webp)');
+    }
+
+    // Every replacement is a new object. `create` deliberately excludes update
+    // so a client cannot overwrite a currently referenced image.
+    match /barbers/{barberId}/{collectionName}/{recordId}/assets/{assetName} {
+      allow read: if firestore.get(/databases/(default)/documents/barbers/$(barberId)).data.active == true;
+      allow create: if (isSuperAdmin() || isBusinessAdmin(barberId)) &&
+        collectionName in ['catalog', 'products', 'services', 'barbers'] &&
+        assetName.matches('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)') &&
+        isContentImage();
+      allow delete: if isSuperAdmin() || isBusinessAdmin(barberId);
+    }
+  }
+}

@@ -10,7 +10,7 @@ BookSmart es una plataforma de agendamiento para negocios que atienden por cita:
 
 | Capa | Tecnología |
 | --- | --- |
-| Sitio y rutas | Astro 6 |
+| Sitio y rutas | Astro 7 |
 | UI interactiva | React 19 |
 | Estilos | Tailwind CSS 4 |
 | Datos y autenticación | Firebase / Firestore / Firebase Auth |
@@ -54,6 +54,35 @@ El proyecto requiere las variables públicas de Firebase que aparecen en `.env.e
 La configuración de Astro usa `/booksmart/` como `base` solo en producción y `/` en desarrollo. Para que el sitio publicado coincida, el propietario debe renombrar el repositorio de GitHub a `booksmart` y confirmar que GitHub Pages continúe desplegando desde GitHub Actions. El workflow ya construye con `npm run build` y recibe las variables `PUBLIC_FIREBASE_*` desde GitHub Secrets.
 
 Si el repositorio conserva otro nombre, se debe ajustar `base` en `astro.config.mjs` al nombre real antes de desplegar. No se debe publicar con `/barberflow/`, porque los enlaces y assets generados usarán `/booksmart/`.
+
+### Prerrequisito para imágenes y permisos de Firebase
+
+**La función de imágenes no está lista para producción hasta desplegar las reglas.** El workflow de GitHub Pages solo publica el sitio estático: no despliega `firestore.rules` ni `storage.rules` y no debe asumir un proyecto o credenciales de Firebase.
+
+El propietario con acceso al proyecto Firebase debe ejecutar, desde este repositorio y con el proyecto correcto seleccionado:
+
+```bash
+npx firebase-tools deploy --only firestore:rules,storage
+```
+
+`firebase.json` apunta explícitamente a ambos archivos. Para automatizarlo después, el propietario debe configurar autenticación de Firebase y el identificador de proyecto en CI; no se deben inventar secretos ni IDs. Hasta entonces, cualquier error de autorización de imágenes debe tratarse como un bloqueo de lanzamiento.
+
+Las imágenes de Catálogo y Productos se guardan como assets inmutables bajo el registro (`.../{recordId}/assets/{uuid}.{ext}`). Al reemplazar una imagen, la anterior se conserva hasta que la nueva carga y su referencia de Firestore se confirman; después se intenta limpiarla. Las rutas históricas `image.{ext}` se mantienen legibles y eliminables para compatibilidad, pero no aceptan cargas nuevas.
+
+Los servicios públicos requieren `active: true`; así una consulta pública ni las reglas pueden devolver servicios inactivos. Antes de desplegar estas reglas, el propietario debe migrar los servicios heredados (sin `active`) con las mismas credenciales administrativas y después desplegar reglas:
+
+```bash
+npx tsx scripts/migrate-service-active.ts
+npx firebase-tools deploy --only firestore:rules,storage
+```
+
+La limpieza de Storage ya no depende de `localStorage`: al reemplazar una imagen, el registro conserva `pendingImageCleanupPaths` hasta que el cliente elimina el asset anterior, y el cliente reintenta esas rutas al cargar o modificar esa colección. Al eliminar un registro, primero se eliminan sus assets; si Storage falla, el documento se conserva para reintentar. Esto reduce huérfanos en la arquitectura actual, pero **no sustituye un worker server-side**: una función programada o cola con privilegios administrativos sigue siendo el siguiente endurecimiento para garantizar limpieza si ningún cliente vuelve a abrir el contenido.
+
+Las reservas públicas siguen deshabilitadas. La UI dirige a WhatsApp y Firestore rechaza creaciones anónimas de citas hasta que exista un backend autenticado que calcule disponibilidad y cree la reserva de forma atómica.
+
+### Pruebas automatizadas
+
+`npm test` ejecuta las pruebas de Node y primero rechaza marcadores exclusivos como `test.only`, `describe.only`, `fit` o `only: true`; por eso CI no puede publicar una suite enfocada por accidente. Las reglas de Firebase aún requieren pruebas con emuladores antes del lanzamiento.
 
 ## Contacto de marca
 

@@ -19,6 +19,32 @@ export type UserRole = 'client' | 'barber' | 'barber_admin' | 'superadmin';
 // Estado de una cita
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'done' | 'no_show';
 
+export interface TimeRange {
+  start: string;
+  end: string;
+}
+
+export interface ScheduleDay {
+  enabled: boolean;
+  start: string;
+  end: string;
+  breaks: TimeRange[];
+}
+
+export type WeeklySchedule = Record<number, ScheduleDay>;
+
+export interface ExceptionalClosure {
+  date: string; // YYYY-MM-DD in Colombia local time
+  reason?: string;
+}
+
+export interface BookingSettings {
+  minimumNoticeMinutes: number;
+  bookingHorizonDays: number;
+  slotIntervalMinutes: number;
+  exceptionalClosures: ExceptionalClosure[];
+}
+
 /**
  * Documento principal del negocio (almacenado en la colección heredada)
  * Path: barbers/{barberId}
@@ -66,6 +92,8 @@ export interface Barber {
     theme?: {
       primaryColor: string;
     };
+    /** Optional until a business configures public booking. */
+    booking?: BookingSettings;
   };
   
   // Horario de atención del local
@@ -99,8 +127,16 @@ export interface Service {
   name: string;
   description: string;
   duration: number; // en minutos
+  /** Minutes blocked after the service before the professional can be booked again. */
+  bufferMinutes?: number;
+  /** Omitted in legacy records means every active professional is compatible. */
+  staffIds?: string[];
   price: number;
+  active?: boolean;
   imageUrl?: string;
+  imageStoragePath?: string;
+  /** Old immutable assets awaiting a successful client-side Storage deletion. */
+  pendingImageCleanupPaths?: string[];
   createdAt: Timestamp;
 }
 
@@ -113,12 +149,19 @@ export interface BarberStaff {
   name: string;
   role?: string;
   photoUrl?: string;
+  /** Storage metadata used by the content manager; photoUrl remains the public legacy field. */
+  imageStoragePath?: string;
+  /** Old immutable assets awaiting a successful client-side Storage deletion. */
+  pendingImageCleanupPaths?: string[];
   active: boolean;
-  availability: {
+  /** Legacy discrete slots. New schedules should use schedule. */
+  availability?: {
     [day: number]: {
       slots: string[]; // ["09:00", "09:30", "10:00", ...]
     };
   };
+  /** Work hours and breaks used by future availability calculation. */
+  schedule?: WeeklySchedule;
   createdAt: Timestamp;
 }
 
@@ -147,6 +190,8 @@ export interface CatalogItem {
   id: string;
   title: string;
   imageUrl: string;
+  imageStoragePath?: string;
+  pendingImageCleanupPaths?: string[];
   tags: string[];
   createdAt: Timestamp;
 }
@@ -162,6 +207,8 @@ export interface Product {
   price: number;
   stock: number;
   imageUrl?: string;
+  imageStoragePath?: string;
+  pendingImageCleanupPaths?: string[];
   active: boolean;
   createdAt: Timestamp;
 }

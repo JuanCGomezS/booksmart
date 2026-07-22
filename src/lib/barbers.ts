@@ -10,11 +10,13 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
+  deleteField,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { DATA } from './data';
 import { getUserIdByEmail } from './users';
-import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus, BarberStaff, BusinessType, CatalogItem, Product, Service } from './types';
+import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus, BarberStaff, BusinessType, BookingSettings, CatalogItem, Product, Service } from './types';
+import { bookingSettingsUpdate } from './booking';
 
 const LEGACY_BUSINESS_TYPE: BusinessType = 'barbershop';
 
@@ -89,7 +91,7 @@ export async function getBarberConfigBySlug(slug: string): Promise<Barber | null
 
   try {
     const barbersRef = collection(db, 'barbers');
-    const barberQuery = query(barbersRef, where('slug', '==', slug), limit(1));
+    const barberQuery = query(barbersRef, where('slug', '==', slug), where('active', '==', true), limit(1));
     const barberDocs = await getDocs(barberQuery);
 
     if (barberDocs.empty) {
@@ -233,6 +235,66 @@ export async function updateBarber(
     return true;
   } catch (error) {
     console.error('Error updating barber:', error);
+    return false;
+  }
+}
+
+/** Updates only booking configuration, preserving every other business config field. */
+export async function updateBarberBookingSettings(barberId: string, settings: BookingSettings): Promise<boolean> {
+  try {
+    await updateDoc(doc(db, 'barbers', barberId), {
+      ...bookingSettingsUpdate(settings),
+      updatedAt: serverTimestamp(),
+    });
+    localStorage.removeItem(`barber_config_${barberId}`);
+    return true;
+  } catch (error) {
+    console.error('Error updating barber booking settings:', error);
+    return false;
+  }
+}
+
+/**
+ * Updates only operational business fields using dotted paths. This deliberately
+ * avoids replacing `config`, which would discard booking settings saved by a
+ * concurrent administration session.
+ */
+export async function updateBarberBusinessDetails(
+  barberId: string,
+  details: {
+    name: string;
+    businessType: BusinessType;
+    address: string;
+    phone: string;
+    logoUrl: string;
+    coverUrl: string;
+    instagram: string;
+    facebook: string;
+    whatsapp: string;
+    primaryColor: string;
+    workingHours: Barber['workingHours'];
+  },
+): Promise<boolean> {
+  try {
+    const valueOrDelete = (value: string) => value.trim() || deleteField();
+    await updateDoc(doc(db, 'barbers', barberId), {
+      name: details.name.trim(),
+      businessType: details.businessType,
+      'config.address': details.address.trim(),
+      'config.phone': details.phone.trim(),
+      'config.logoUrl': valueOrDelete(details.logoUrl),
+      'config.coverUrl': valueOrDelete(details.coverUrl),
+      'config.socialLinks.instagram': valueOrDelete(details.instagram),
+      'config.socialLinks.facebook': valueOrDelete(details.facebook),
+      'config.socialLinks.whatsapp': valueOrDelete(details.whatsapp),
+      'config.theme.primaryColor': details.primaryColor,
+      workingHours: details.workingHours,
+      updatedAt: serverTimestamp(),
+    });
+    localStorage.removeItem(`barber_config_${barberId}`);
+    return true;
+  } catch (error) {
+    console.error('Error updating barber business details:', error);
     return false;
   }
 }

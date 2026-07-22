@@ -1,19 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import {
-  createBarberManagedRecord,
   deleteBarber,
-  deleteBarberManagedRecord,
-  getBarberManagedCollection,
   getBarberMetrics,
   toggleBarberActive,
-  updateBarber,
-  updateBarberManagedRecord,
+  updateBarberBusinessDetails,
   updateBarberPlanSettings,
 } from '../../../lib/barbers';
 import type { Barber, BarberMetrics, BarberStaff, BillingCycle, CatalogItem, Plan, Product, Service } from '../../../lib/types';
 import { BILLING_CYCLE_LABEL, DATA, PLAN_LABEL } from '../../../lib/data';
 import ConfirmModal from '../ConfirmModal';
 import FancySelect, { type FancySelectOption } from '../FancySelect';
+import BookingConfiguration from './BookingConfiguration';
+import ContentManagement from './ContentManagement';
 
 interface BarberManagementModalProps {
   barber: Barber;
@@ -21,7 +19,7 @@ interface BarberManagementModalProps {
   onRefresh: () => void;
 }
 
-type Tab = 'resumen' | 'negocio' | 'contenido' | 'suscripcion' | 'peligro';
+type Tab = 'resumen' | 'negocio' | 'contenido' | 'reservas' | 'suscripcion' | 'peligro';
 type CollectionName = 'catalog' | 'products' | 'services' | 'barbers';
 interface Confirmation {
   title: string;
@@ -34,6 +32,7 @@ const TAB_LABELS: Record<Tab, string> = {
   resumen: 'Resumen',
   negocio: 'Negocio',
   contenido: 'Contenido',
+  reservas: 'Reservas',
   suscripcion: 'Suscripción',
   peligro: 'Peligro',
 };
@@ -49,6 +48,7 @@ const dateForInput = (value: unknown) => {
 
 export default function BarberManagementModal({ barber, onClose, onRefresh }: BarberManagementModalProps) {
   const [tab, setTab] = useState<Tab>('resumen');
+  const [contentActivated, setContentActivated] = useState(false);
   const [metrics, setMetrics] = useState<BarberMetrics | null>(null);
   const [loadingMetrics, setLoadingMetrics] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,15 +70,6 @@ export default function BarberManagementModal({ barber, onClose, onRefresh }: Ba
   const [plan, setPlan] = useState<Plan>(barber.plan);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>(barber.billingCycle);
   const [planExpiresAt, setPlanExpiresAt] = useState(dateForInput(barber.planExpiresAt));
-  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
-  const [staff, setStaff] = useState<BarberStaff[]>([]);
-  const [contentLoaded, setContentLoaded] = useState(false);
-  const [catalogForm, setCatalogForm] = useState({ title: '', imageUrl: '', tags: '' });
-  const [productForm, setProductForm] = useState({ name: '', description: '', price: '', stock: '', imageUrl: '', active: true });
-  const [serviceForm, setServiceForm] = useState({ name: '', description: '', duration: '', price: '', imageUrl: '' });
-  const [staffForm, setStaffForm] = useState({ name: '', role: '', photoUrl: '', active: true });
 
   const loadMetrics = async () => {
     setLoadingMetrics(true);
@@ -86,24 +77,7 @@ export default function BarberManagementModal({ barber, onClose, onRefresh }: Ba
     setLoadingMetrics(false);
   };
 
-  const loadContent = async () => {
-    setSaving(true);
-    const [nextCatalog, nextProducts, nextServices, nextStaff] = await Promise.all([
-      getBarberManagedCollection<CatalogItem>(barber.id, 'catalog'),
-      getBarberManagedCollection<Product>(barber.id, 'products'),
-      getBarberManagedCollection<Service>(barber.id, 'services'),
-      getBarberManagedCollection<BarberStaff>(barber.id, 'barbers'),
-    ]);
-    setCatalog(nextCatalog);
-    setProducts(nextProducts);
-    setServices(nextServices);
-    setStaff(nextStaff);
-    setContentLoaded(true);
-    setSaving(false);
-  };
-
   useEffect(() => { loadMetrics(); }, [barber.id]);
-  useEffect(() => { if (tab === 'contenido' && !contentLoaded) loadContent(); }, [tab, contentLoaded]);
 
   const run = async (action: () => Promise<boolean>, successMessage?: string): Promise<boolean> => {
     setSaving(true);
@@ -121,56 +95,12 @@ export default function BarberManagementModal({ barber, onClose, onRefresh }: Ba
     }
   };
 
-  const saveBusiness = () => run(() => updateBarber(barber.id, {
-    name: business.name.trim(),
-    businessType: business.businessType,
-    config: {
-      address: business.address.trim(), phone: business.phone.trim(),
-      ...(business.logoUrl.trim() ? { logoUrl: business.logoUrl.trim() } : {}),
-      ...(business.coverUrl.trim() ? { coverUrl: business.coverUrl.trim() } : {}),
-      socialLinks: {
-        ...(business.instagram.trim() ? { instagram: business.instagram.trim() } : {}),
-        ...(business.facebook.trim() ? { facebook: business.facebook.trim() } : {}),
-        ...(business.whatsapp.trim() ? { whatsapp: business.whatsapp.trim() } : {}),
-      },
-      theme: { primaryColor: business.primaryColor },
-    },
-    workingHours: hours,
-  }));
+  const saveBusiness = () => run(() => updateBarberBusinessDetails(barber.id, { ...business, workingHours: hours }));
 
   const savePlan = () => setConfirmation({
     title: 'Actualizar suscripción',
     message: `¿Aplicar el plan ${PLAN_LABEL[plan]} a ${barber.name}? Esto también activa el negocio.`,
     action: async () => { await run(() => updateBarberPlanSettings(barber.id, plan, billingCycle, planExpiresAt ? new Date(`${planExpiresAt}T23:59:59`) : undefined)); },
-  });
-
-  const saveRecord = async (collection: CollectionName, data: Record<string, unknown>, reset: () => void) => {
-    await run(async () => {
-      const result = await createBarberManagedRecord(barber.id, collection, data);
-      if (result) { reset(); await loadContent(); await loadMetrics(); }
-      return result;
-    });
-  };
-
-  const confirmDeleteRecord = (collection: CollectionName, id: string, label: string) => setConfirmation({
-    title: 'Eliminar elemento', message: `¿Eliminar ${label}? Esta acción no se puede deshacer.`, dangerous: true,
-    action: async () => { await run(async () => {
-      const result = await deleteBarberManagedRecord(barber.id, collection, id);
-      if (result) { await loadContent(); await loadMetrics(); }
-      return result;
-    }); },
-  });
-
-  const toggleRecord = (collection: CollectionName, id: string, active: boolean) => run(async () => {
-    const result = await updateBarberManagedRecord(barber.id, collection, id, { active: !active });
-    if (result) { await loadContent(); await loadMetrics(); }
-    return result;
-  });
-
-  const editRecord = (collection: CollectionName, id: string, data: Record<string, unknown>) => run(async () => {
-    const result = await updateBarberManagedRecord(barber.id, collection, id, data);
-    if (result) { await loadContent(); await loadMetrics(); }
-    return result;
   });
 
   const saveConfirmation = async () => {
@@ -197,7 +127,7 @@ export default function BarberManagementModal({ barber, onClose, onRefresh }: Ba
                   role="tab"
                   aria-selected={tab === key}
                   aria-controls={`barber-panel-${key}`}
-                  onClick={() => setTab(key)}
+                  onClick={() => { setTab(key); if (key === 'contenido') setContentActivated(true); }}
                   className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-(--secondary) focus-visible:ring-offset-2 ${tab === key ? 'border-(--secondary) text-(--secondary)' : 'border-transparent text-subtle hover:border-(--border) hover:text-main'}`}
                 >
                   {TAB_LABELS[key]}
@@ -209,7 +139,8 @@ export default function BarberManagementModal({ barber, onClose, onRefresh }: Ba
             {error && <p className="mb-4 rounded-lg p-3 text-sm" style={{ background: 'color-mix(in srgb, #ef4444 14%, var(--surface))', color: '#fecaca' }}>{error}</p>}
             {tab === 'resumen' && <Summary metrics={metrics} loading={loadingMetrics} onRefresh={loadMetrics} />}
             {tab === 'negocio' && <section className="space-y-6"><h3 className="text-lg font-bold text-main">Datos del negocio y horario</h3><div className="grid gap-4 md:grid-cols-2"><Field label="Nombre"><input className="field-input" value={business.name} onChange={(e) => setBusiness({ ...business, name: e.target.value })} /></Field><Field label="Dirección"><input className="field-input" value={business.address} onChange={(e) => setBusiness({ ...business, address: e.target.value })} /></Field><Field label="Teléfono"><input className="field-input" value={business.phone} onChange={(e) => setBusiness({ ...business, phone: e.target.value })} /></Field><Field label="Color principal"><input type="color" className="field-input h-11 p-1" value={business.primaryColor} onChange={(e) => setBusiness({ ...business, primaryColor: e.target.value })} /></Field><Field label="URL del logo"><input type="url" className="field-input" value={business.logoUrl} onChange={(e) => setBusiness({ ...business, logoUrl: e.target.value })} /></Field><Field label="URL de portada"><input type="url" className="field-input" value={business.coverUrl} onChange={(e) => setBusiness({ ...business, coverUrl: e.target.value })} /></Field><Field label="Instagram"><input className="field-input" value={business.instagram} onChange={(e) => setBusiness({ ...business, instagram: e.target.value })} /></Field><Field label="Facebook"><input className="field-input" value={business.facebook} onChange={(e) => setBusiness({ ...business, facebook: e.target.value })} /></Field><Field label="WhatsApp"><input className="field-input" value={business.whatsapp} onChange={(e) => setBusiness({ ...business, whatsapp: e.target.value })} /></Field></div><div><h4 className="mb-3 font-semibold text-main">Horario de atención</h4><div className="space-y-2">{DAYS.map((day, index) => <div key={day} className="surface-soft grid grid-cols-[1fr_auto_auto] items-center gap-2 rounded-lg p-3 sm:grid-cols-[1fr_auto_auto_auto]"><label className="flex items-center gap-2 text-sm text-main"><input type="checkbox" checked={hours[index].enabled} onChange={(e) => setHours({ ...hours, [index]: { ...hours[index], enabled: e.target.checked } })} />{day}</label><input aria-label={`Apertura ${day}`} type="time" className="field-input w-25 p-2" value={hours[index].open} disabled={!hours[index].enabled} onChange={(e) => setHours({ ...hours, [index]: { ...hours[index], open: e.target.value } })} /><span className="hidden text-subtle sm:block">a</span><input aria-label={`Cierre ${day}`} type="time" className="field-input w-25 p-2" value={hours[index].close} disabled={!hours[index].enabled} onChange={(e) => setHours({ ...hours, [index]: { ...hours[index], close: e.target.value } })} /></div>)}</div></div><button type="button" disabled={saving || !business.name.trim()} onClick={saveBusiness} className="btn-primary rounded-xl px-5 py-2 font-semibold disabled:opacity-50">Guardar negocio</button></section>}
-            {tab === 'contenido' && <ContentManager catalog={catalog} products={products} services={services} staff={staff} loading={saving && !contentLoaded} catalogForm={catalogForm} productForm={productForm} serviceForm={serviceForm} staffForm={staffForm} setCatalogForm={setCatalogForm} setProductForm={setProductForm} setServiceForm={setServiceForm} setStaffForm={setStaffForm} onCatalog={() => saveRecord('catalog', { title: catalogForm.title.trim(), imageUrl: catalogForm.imageUrl.trim(), tags: catalogForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean) }, () => setCatalogForm({ title: '', imageUrl: '', tags: '' }))} onProduct={() => saveRecord('products', { name: productForm.name.trim(), description: productForm.description.trim(), price: Number(productForm.price), stock: Number(productForm.stock || 0), imageUrl: productForm.imageUrl.trim() || undefined, active: productForm.active }, () => setProductForm({ name: '', description: '', price: '', stock: '', imageUrl: '', active: true }))} onService={() => saveRecord('services', { name: serviceForm.name.trim(), description: serviceForm.description.trim(), duration: Number(serviceForm.duration), price: Number(serviceForm.price), imageUrl: serviceForm.imageUrl.trim() || undefined }, () => setServiceForm({ name: '', description: '', duration: '', price: '', imageUrl: '' }))} onStaff={() => saveRecord('barbers', { name: staffForm.name.trim(), role: staffForm.role.trim(), photoUrl: staffForm.photoUrl.trim() || undefined, active: staffForm.active, availability: {} }, () => setStaffForm({ name: '', role: '', photoUrl: '', active: true }))} onDelete={confirmDeleteRecord} onToggle={toggleRecord} onEdit={editRecord} />}
+            {contentActivated && <div hidden={tab !== 'contenido'}><ContentManagement barberId={barber.id} onChange={loadMetrics} /></div>}
+            {tab === 'reservas' && <BookingConfiguration barber={barber} />}
             {tab === 'suscripcion' && <section className="max-w-2xl space-y-5"><h3 className="text-lg font-bold text-main">Plan y estado</h3><p className="text-sm text-subtle">El cambio de plan activa el negocio y marca el período de prueba como utilizado.</p><Field label="Plan"><FancySelect value={plan} onChange={(value) => setPlan(value as Plan)} options={PLAN_OPTIONS} /></Field><Field label="Ciclo de facturación"><FancySelect value={billingCycle} onChange={(value) => setBillingCycle(value as BillingCycle)} options={BILLING_OPTIONS} /></Field><Field label="Vencimiento"><input type="date" className="field-input" value={planExpiresAt} onChange={(e) => setPlanExpiresAt(e.target.value)} /></Field><button type="button" disabled={saving} onClick={savePlan} className="btn-primary rounded-xl px-5 py-2 font-semibold disabled:opacity-50">Guardar suscripción</button><div className="surface-soft flex flex-wrap items-center justify-between gap-3 rounded-xl p-4"><div><p className="font-semibold text-main">Acceso del negocio</p><p className="text-sm text-subtle">Actualmente está {barber.active ? 'activo' : 'desactivado'}.</p></div><button type="button" disabled={saving} onClick={() => setConfirmation({ title: barber.active ? 'Desactivar negocio' : 'Activar negocio', message: `¿${barber.active ? 'Desactivar' : 'Activar'} ${barber.name}?`, action: async () => { await run(() => toggleBarberActive(barber.id, !barber.active)); } })} className="btn-outline rounded-xl px-4 py-2 text-sm font-semibold">{barber.active ? 'Desactivar' : 'Activar'}</button></div></section>}
             {tab === 'peligro' && <section className="max-w-2xl rounded-xl border p-5" style={{ borderColor: 'color-mix(in srgb, #ef4444 55%, var(--border))' }}><h3 className="text-lg font-bold" style={{ color: '#fca5a5' }}>Zona de peligro</h3><p className="mt-2 text-sm text-subtle">Eliminar borra físicamente el documento del negocio. Las subcolecciones existentes no se eliminan automáticamente con Firestore.</p><button type="button" disabled={saving} onClick={() => setConfirmation({ title: 'Eliminar negocio', message: `¿Eliminar físicamente "${barber.name}"? Esta acción no se puede deshacer y puede dejar datos en subcolecciones.`, dangerous: true, action: async () => { if (await run(() => deleteBarber(barber.id))) onClose(); } })} className="mt-5 rounded-xl px-5 py-2 font-semibold text-white disabled:opacity-50" style={{ background: '#b91c1c' }}>Eliminar negocio</button></section>}
           </div>

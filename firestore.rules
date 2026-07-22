@@ -22,6 +22,23 @@ service cloud.firestore {
         get(/databases/$(database)/documents/barbers/$(barberId)).data.ownerId == request.auth.uid;
     }
 
+    function isBusinessAdmin(barberId) {
+      return isBarberOwner(barberId) ||
+        (isSignedIn() && currentUserRole() == 'barber_admin' && currentUserDoc().data.barberId == barberId);
+    }
+
+    function businessIsActive(barberId) {
+      return get(/databases/$(database)/documents/barbers/$(barberId)).data.active == true;
+    }
+
+    // Business admins can operate their business, but cannot change ownership,
+    // subscription, activation, limits, or any other protected top-level field.
+    function businessAdminCanUpdateBusiness() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'name', 'businessType', 'config', 'workingHours', 'updatedAt'
+      ]);
+    }
+
     // Users collection
     match /users/{uid} {
       // Superadmin puede leer todo
@@ -48,49 +65,53 @@ service cloud.firestore {
       // Super admin puede leer/escribir todo
       allow read, write: if isSuperAdmin();
       
-      // Admin de la barbería puede leer/escribir su propia barbería
-      allow read, write: if isBarberOwner(barberId);
+      // Business admins may read their own business and update only operations fields.
+      allow read: if isBusinessAdmin(barberId);
+      allow update: if isBusinessAdmin(barberId) && businessAdminCanUpdateBusiness();
       
       // Subcolecciones
       match /services/{serviceId} {
-        // Lectura pública de servicios
-        allow read: if resource.data != null;
+        // Public queries must constrain active == true; legacy services are
+        // migrated explicitly before these rules are deployed.
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) ||
+          (businessIsActive(barberId) && resource.data.active == true);
         // Escritura solo para admin de la barbería o super admin
-        allow write: if isSuperAdmin() || isBarberOwner(barberId);
+        allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
       }
 
       match /barbers/{staffId} {
         // Lectura pública de barberos disponibles
-        allow read: if resource.data.active == true;
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) ||
+          (businessIsActive(barberId) && resource.data.active == true);
         // Escritura solo para admin de la barbería o super admin
-        allow write: if isSuperAdmin() || isBarberOwner(barberId);
+        allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
       }
 
       match /appointments/{appointmentId} {
         // Lectura solo para admin y super admin
-        allow read: if isSuperAdmin() || isBarberOwner(barberId);
-        
-        // Escritura sin autenticación para clientes que reservan
-        allow create: if request.resource.data.status == 'pending' &&
-                        request.resource.data.clientName != null &&
-                        request.resource.data.clientPhone != null;
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId);
+
+        // Public booking is deferred until an authenticated server-side service
+        // can validate availability and atomically create appointments.
+        allow create: if false;
         
         // Lectura/escritura para admin y super admin
-        allow write: if isSuperAdmin() || isBarberOwner(barberId);
+        allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
       }
 
       match /catalog/{itemId} {
         // Lectura pública
-        allow read: if true;
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || businessIsActive(barberId);
         // Escritura solo para admin de la barbería o super admin
-        allow write: if isSuperAdmin() || isBarberOwner(barberId);
+        allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
       }
 
       match /products/{productId} {
         // Lectura pública de productos activos
-        allow read: if resource.data.active == true;
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) ||
+          (businessIsActive(barberId) && resource.data.active == true);
         // Escritura solo para admin de la barbería o super admin
-        allow write: if isSuperAdmin() || isBarberOwner(barberId);
+        allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
       }
     }
 
