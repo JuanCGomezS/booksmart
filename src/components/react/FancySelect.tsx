@@ -33,7 +33,7 @@ export default function FancySelect<T extends string = string>({
   buttonClassName = '',
 }: FancySelectProps<T>) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<MenuPosition>({ top: 0, left: 0, width: 0 });
+  const [position, setPosition] = useState<MenuPosition | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -41,27 +41,32 @@ export default function FancySelect<T extends string = string>({
 
   const selected = options.find((item) => item.value === value);
 
+  const getMenuPosition = (): MenuPosition | null => {
+    const trigger = triggerRef.current;
+    if (!trigger) return null;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const estimatedHeight = options.length * 42 + 12;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    const placeAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+    const top = placeAbove ? rect.top - estimatedHeight - 4 : rect.bottom + 4;
+
+    return {
+      top: Math.max(8, top),
+      left: rect.left,
+      width: rect.width,
+    };
+  };
+
   useEffect(() => {
     if (!open) return;
 
     const updatePosition = () => {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
-
-      const rect = trigger.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      const estimatedHeight = options.length * 42 + 12;
-      const spaceBelow = viewportHeight - rect.bottom;
-      const spaceAbove = rect.top;
-
-      const placeAbove = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
-      const top = placeAbove ? rect.top - estimatedHeight - 4 : rect.bottom + 4;
-
-      setPosition({
-        top: Math.max(8, top),
-        left: rect.left,
-        width: rect.width,
-      });
+      const nextPosition = getMenuPosition();
+      if (nextPosition) setPosition(nextPosition);
     };
 
     const closeOnOutside = (event: MouseEvent) => {
@@ -104,7 +109,18 @@ export default function FancySelect<T extends string = string>({
         aria-controls={listId}
         disabled={disabled}
         onClick={() => {
-          if (!disabled) setOpen((prev) => !prev);
+          if (disabled) return;
+
+          if (open) {
+            setOpen(false);
+            return;
+          }
+
+          const nextPosition = getMenuPosition();
+          if (nextPosition) {
+            setPosition(nextPosition);
+            setOpen(true);
+          }
         }}
       >
         <span className={selected ? 'text-main' : 'text-subtle'}>{selected?.label ?? placeholder}</span>
@@ -117,7 +133,7 @@ export default function FancySelect<T extends string = string>({
         </svg>
       </button>
 
-      {open && createPortal(
+      {open && position && createPortal(
         <div
           ref={menuRef}
           id={listId}

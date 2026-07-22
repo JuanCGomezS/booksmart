@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redirigiendo…</title>
+  </head>
+  <body>
+    <script>
+      (function () {
+        var path = window.location.pathname + window.location.search + window.location.hash;
+        sessionStorage.setItem('booksmart:redirect-path', path);
+        var barberPathIndex = window.location.pathname.indexOf('/b/');
+        var destination = barberPathIndex === -1
+          ? '/'
+          : window.location.pathname.slice(0, barberPathIndex + 3);
+        window.location.replace(destination);
+      })();
+    </script>
+  </body>
+</html>

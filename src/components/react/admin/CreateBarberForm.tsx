@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { createBarber } from '../../../lib/barbers';
-import { BILLING_CYCLE_LABEL, DATA, PLAN_LABEL } from '../../../lib/data';
+import { BILLING_CYCLE_LABEL, BUSINESS_TYPE_LABEL, DATA, PLAN_LABEL } from '../../../lib/data';
 import { getBarberAdmins } from '../../../lib/users';
-import type { BillingCycle, Plan, User } from '../../../lib/types';
+import type { BillingCycle, BusinessType, Plan, User } from '../../../lib/types';
 import FancySelect, { type FancySelectOption } from '../FancySelect';
 
 interface CreateBarberFormProps {
@@ -15,6 +15,7 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
   const [ownerEmail, setOwnerEmail] = useState('');
   const [plan, setPlan] = useState<Plan>(DATA.PLAN.STANDARD);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>(DATA.BILLING_CYCLE.MONTH_1);
+  const [businessType, setBusinessType] = useState<BusinessType>('barbershop');
   const [loading, setLoading] = useState(false);
   const [loadingAdmins, setLoadingAdmins] = useState(true);
   const [error, setError] = useState('');
@@ -36,8 +37,9 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
     { value: DATA.BILLING_CYCLE.MONTH_3, label: BILLING_CYCLE_LABEL[DATA.BILLING_CYCLE.MONTH_3] },
     { value: DATA.BILLING_CYCLE.MONTH_12, label: BILLING_CYCLE_LABEL[DATA.BILLING_CYCLE.MONTH_12] },
   ];
+  const businessTypeOptions: FancySelectOption<string>[] = Object.entries(BUSINESS_TYPE_LABEL).map(([value, label]) => ({ value, label }));
 
-  // Cargar admins de barbería
+  // Cargar administradores del negocio (rol heredado).
   useEffect(() => {
     loadAdmins();
   }, []);
@@ -74,7 +76,7 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
     }
 
     try {
-      const result = await createBarber(ownerEmail, name, slug, plan as any, billingCycle as any);
+      const result = await createBarber(ownerEmail, name, slug, plan, billingCycle, businessType);
       
       if (result) {
         setName('');
@@ -82,12 +84,13 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
         setOwnerEmail('');
         setPlan(DATA.PLAN.STANDARD);
         setBillingCycle(DATA.BILLING_CYCLE.MONTH_1);
+        setBusinessType('barbershop');
         onSuccess();
       } else {
-        setError('Error al crear barbería');
+        setError('Error al crear el negocio');
       }
     } catch (err) {
-      setError('Error al crear barbería');
+      setError('Error al crear el negocio');
       console.error(err);
     } finally {
       setLoading(false);
@@ -96,7 +99,7 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
 
   return (
     <div className="surface-card rounded-lg p-8 mb-8">
-      <h2 className="text-2xl font-bold mb-6 text-main">Crear nueva barbería</h2>
+      <h2 className="text-2xl font-bold mb-6 text-main">Crear nuevo negocio</h2>
 
       {error && (
         <div className="mb-4 p-4 rounded-lg" style={{ background: 'color-mix(in srgb, #ef4444 14%, var(--surface))', border: '1px solid color-mix(in srgb, #ef4444 45%, var(--border))' }}>
@@ -108,13 +111,13 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="field-label block text-sm font-medium mb-1">
-              Nombre de la barbería
+              Nombre del negocio
             </label>
             <input
               type="text"
               value={name}
               onChange={handleNameChange}
-              placeholder="Ej: Barber Shop Javier"
+              placeholder="Ej: Estudio Aurora"
               required
               disabled={loading}
               className="field-input"
@@ -129,7 +132,7 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
               type="text"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              placeholder="ej: barber-shop-javier"
+              placeholder="ej: estudio-aurora"
               required
               disabled={loading}
               className="field-input"
@@ -148,7 +151,12 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
               placeholder={loadingAdmins ? 'Cargando...' : admins.length === 0 ? 'No hay admins disponibles' : 'Selecciona un administrador'}
               disabled={loading || loadingAdmins}
             />
-            <p className="field-hint text-xs mt-1">Solo se muestran usuarios con rol "Admin de Barbería"</p>
+            <p className="field-hint text-xs mt-1">Solo se muestran usuarios con rol de administrador del negocio</p>
+          </div>
+
+          <div>
+            <label className="field-label block text-sm font-medium mb-1">Tipo de negocio</label>
+            <FancySelect value={businessType} onChange={(value) => setBusinessType(value as BusinessType)} options={businessTypeOptions} disabled={loading} />
           </div>
 
           <div>
@@ -182,7 +190,7 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
             disabled={loading || loadingAdmins}
             className="btn-primary px-8 py-2 rounded-lg transition-colors disabled:opacity-50 font-semibold"
           >
-            {loading ? 'Creando...' : 'Crear barbería'}
+            {loading ? 'Creando...' : 'Crear negocio'}
           </button>
         </div>
       </form>

@@ -5,7 +5,7 @@ import SuperAdminApp from '../components/react/SuperAdminApp';
 import HeaderSection from '../components/home/HeaderSection.astro';
 ---
 
-<Layout title="Admin Dashboard - BarberFlow">
+<Layout title="Panel administrativo">
   <HeaderSection />
   <AuthGuard client:load requiredRole="superadmin">
     <SuperAdminApp client:load />

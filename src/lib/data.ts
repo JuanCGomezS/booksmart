@@ -1,4 +1,4 @@
-import type { BarberStatus, BillingCycle, Plan, UserRole } from './types';
+import type { BarberStatus, BillingCycle, BusinessType, Plan, UserRole } from './types';
 
 export const DATA = {
   PLAN: {
@@ -47,9 +47,17 @@ export const BARBER_STATUS_LABEL: Record<BarberStatus, string> = {
   [DATA.BARBER_STATUS.EXPIRED]: 'Expirada',
 };
 
+export const BUSINESS_TYPE_LABEL: Record<BusinessType, string> = {
+  barbershop: 'Barbería',
+  hair_salon: 'Salón de belleza',
+  nail_studio: 'Estudio de uñas',
+  dental_clinic: 'Clínica dental',
+  other: 'Otro negocio por cita',
+};
+
 export const USER_ROLE_LABEL: Record<UserRole, string> = {
   [DATA.USER_ROLE.CLIENT]: 'Cliente',
-  [DATA.USER_ROLE.BARBER]: 'Barbero',
-  [DATA.USER_ROLE.BARBER_ADMIN]: 'Administrador barbería',
+  [DATA.USER_ROLE.BARBER]: 'Personal',
+  [DATA.USER_ROLE.BARBER_ADMIN]: 'Administrador del negocio',
   [DATA.USER_ROLE.SUPERADMIN]: 'Superadministrador',
 };

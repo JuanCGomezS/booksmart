@@ -59,9 +59,9 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
         return;
       }
 
-      // Etapa 5: panel de barbería pendiente. Por ahora informamos y cerramos sesión.
+      // Etapa 5: panel del negocio pendiente. Por ahora informamos y cerramos sesión.
       await signOut();
-      setSuccess('Tu usuario interno fue validado. El panel de barbería estará disponible en la Etapa 5.');
+      setSuccess('Tu usuario interno fue validado. El panel del negocio estará disponible en la Etapa 5.');
       setPassword('');
       return;
     } catch (err: any) {
@@ -130,7 +130,7 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@barberflow.com"
+                placeholder="admin@booksmart.com"
                 required
                 disabled={loading}
                 className="w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--secondary)] disabled:opacity-50"
@@ -177,7 +177,7 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
           </button>
 
           <p className="mt-3 text-center text-xs text-subtle">
-            Los clientes finales reservan por la URL pública de la barbería y no necesitan iniciar sesión aquí.
+            Los clientes finales reservan por la URL pública del negocio y no necesitan iniciar sesión aquí.
           </p>
         </div>
       </div>

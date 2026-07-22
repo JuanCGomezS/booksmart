@@ -1,4 +1,4 @@
-// Funciones de autenticación para BarberFlow
+// Funciones de autenticación para BookSmart
 
 import {
   createUserWithEmailAndPassword,

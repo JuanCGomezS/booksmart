@@ -1,0 +1,12 @@
+---
+export function getStaticPaths() {
+  return [{ params: { slug: undefined } }];
+}
+
+import Layout from '../../layouts/Layout.astro';
+import BarberApp from '../../components/react/barber/BarberApp';
+---
+
+<Layout title="Negocio">
+  <BarberApp client:load />
+</Layout>

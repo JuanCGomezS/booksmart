@@ -1,4 +1,4 @@
-// Tipos base del dominio de BarberFlow
+// Tipos base del dominio de BookSmart.
 
 import type { Timestamp } from 'firebase/firestore';
 
@@ -8,8 +8,10 @@ export type Plan = 'standard' | 'plus' | 'extra';
 // Ciclos de facturación
 export type BillingCycle = 'month_1' | 'month_3' | 'month_12';
 
-// Estados de barbería
+// Estados del negocio
 export type BarberStatus = 'active' | 'trial' | 'expired';
+
+export type BusinessType = 'barbershop' | 'hair_salon' | 'nail_studio' | 'dental_clinic' | 'other';
 
 // Roles en el sistema
 export type UserRole = 'client' | 'barber' | 'barber_admin' | 'superadmin';
@@ -18,13 +20,15 @@ export type UserRole = 'client' | 'barber' | 'barber_admin' | 'superadmin';
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'done' | 'no_show';
 
 /**
- * Documento de barbería principal
+ * Documento principal del negocio (almacenado en la colección heredada)
  * Path: barbers/{barberId}
  */
 export interface Barber {
   id: string;
   name: string;
   slug: string;
+  /** Categoría visible del negocio. Los documentos anteriores usan barbershop por compatibilidad. */
+  businessType: BusinessType;
   ownerId: string;
   ownerEmail?: string;
   plan: Plan;
@@ -101,12 +105,13 @@ export interface Service {
 }
 
 /**
- * Barbero / Estilista
+ * Miembro del equipo / profesional
  * Path: barbers/{barberId}/barbers/{barberId}
  */
 export interface BarberStaff {
   id: string;
   name: string;
+  role?: string;
   photoUrl?: string;
   active: boolean;
   availability: {

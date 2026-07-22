@@ -24,7 +24,7 @@ export default function SuperAdminApp() {
       setBarbers(barbersData);
       
     } catch (err) {
-      setError('Error cargando barberías');
+      setError('Error cargando negocios');
       console.error(err);
     } finally {
       setLoading(false);
@@ -41,7 +41,7 @@ export default function SuperAdminApp() {
       <div className="min-h-screen flex items-center justify-center section-shell">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderColor: 'var(--secondary)' }}></div>
-          <p className="text-subtle">Cargando barberías...</p>
+          <p className="text-subtle">Cargando negocios...</p>
         </div>
       </div>
     );
@@ -52,8 +52,8 @@ export default function SuperAdminApp() {
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-main">BarberFlow Admin</h1>
-          <p className="text-subtle text-sm">Control de barberías</p>
+          <h1 className="text-3xl font-bold text-main">BookSmart Admin</h1>
+          <p className="text-subtle text-sm">Control de negocios por cita</p>
         </div>
 
         {error && (
@@ -65,7 +65,7 @@ export default function SuperAdminApp() {
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="surface-card rounded-lg p-6">
-            <p className="text-subtle text-sm">Total de barberías</p>
+            <p className="text-subtle text-sm">Total de negocios</p>
             <p className="text-3xl font-bold text-main">{barbers.length}</p>
           </div>
           <div className="surface-card rounded-lg p-6">
@@ -94,7 +94,7 @@ export default function SuperAdminApp() {
             onClick={() => setShowCreateForm(!showCreateForm)}
             className="btn-primary px-8 py-3 rounded-xl transition-colors font-semibold"
           >
-            {showCreateForm ? 'Cancelar' : '+ Nueva barbería'}
+            {showCreateForm ? 'Cancelar' : '+ Nuevo negocio'}
           </button>
         </div>
 

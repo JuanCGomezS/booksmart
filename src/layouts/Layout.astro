@@ -6,7 +6,7 @@ interface Props {
   description?: string;
 }
 
-const { title, description = 'BarberFlow - Plataforma de agendamiento para barberías' } = Astro.props;
+const { title, description = 'BookSmart - Plataforma de agendamiento para negocios por cita' } = Astro.props;
 ---
 
 <!doctype html>
@@ -17,12 +17,18 @@ const { title, description = 'BarberFlow - Plataforma de agendamiento para barbe
     <meta name="description" content={description} />
     <script is:inline>
       (() => {
-        const savedTheme = localStorage.getItem('barberflow-theme');
+        const redirectPath = sessionStorage.getItem('booksmart:redirect-path');
+        if (redirectPath && redirectPath !== window.location.pathname + window.location.search + window.location.hash) {
+          history.replaceState(null, '', redirectPath);
+        }
+        sessionStorage.removeItem('booksmart:redirect-path');
+
+        const savedTheme = localStorage.getItem('booksmart-theme');
         const theme = savedTheme || 'gold-night';
         document.documentElement.setAttribute('data-theme', theme);
       })();
     </script>
-    <title>{title} | BarberFlow</title>
+    <title>{title} | BookSmart</title>
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
@@ -48,5 +54,3 @@ const { title, description = 'BarberFlow - Plataforma de agendamiento para barbe
     </script>
   </body>
 </html>
-
-

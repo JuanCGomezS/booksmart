@@ -4,3 +4,4 @@ service-account-key.json
 dist
 .astro
 scripts
+.atl

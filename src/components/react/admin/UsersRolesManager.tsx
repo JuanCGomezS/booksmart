@@ -63,7 +63,7 @@ export default function UsersRolesManager() {
     const barberId = draftBarberIds[uid]?.trim();
 
     if ((role === DATA.USER_ROLE.BARBER || role === DATA.USER_ROLE.BARBER_ADMIN) && !barberId) {
-      setError('Barbero y administrador de barbería requieren barberId');
+      setError('Personal y administrador del negocio requieren el identificador interno del negocio');
       return;
     }
 
