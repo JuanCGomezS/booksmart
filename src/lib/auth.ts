@@ -21,7 +21,7 @@ export async function signIn(email: string, password: string): Promise<FirebaseU
 }
 
 /**
- * Registro público: siempre crea rol client.
+ * Registro público: siempre crea el rol customer. No se requiere para reservar.
  */
 export async function signUpClient(name: string, email: string, password: string): Promise<FirebaseUser> {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
@@ -31,7 +31,7 @@ export async function signUpClient(name: string, email: string, password: string
     uid: user.uid,
     name,
     email: user.email,
-    role: DATA.USER_ROLE.CLIENT,
+    role: DATA.USER_ROLE.CUSTOMER,
     createdAt: serverTimestamp(),
   });
 

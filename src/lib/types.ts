@@ -14,10 +14,17 @@ export type BarberStatus = 'active' | 'trial' | 'expired';
 export type BusinessType = 'barbershop' | 'hair_salon' | 'nail_studio' | 'dental_clinic' | 'other';
 
 // Roles en el sistema
-export type UserRole = 'client' | 'barber' | 'barber_admin' | 'superadmin';
+/** Canonical role values written by the application. */
+export type UserRole = 'superadmin' | 'storeadmin' | 'staff' | 'customer';
+/** Read-only rollout compatibility for documents not yet migrated. */
+export type LegacyUserRole = 'barber_admin' | 'barber' | 'client';
+export type StoredUserRole = UserRole | LegacyUserRole;
 
 // Estado de una cita
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'done' | 'no_show';
+
+/** Appointment states that block staff availability. */
+export type BookingBlockingAppointmentStatus = Extract<AppointmentStatus, 'pending' | 'confirmed'>;
 
 export interface TimeRange {
   start: string;
@@ -107,15 +114,53 @@ export interface Barber {
 }
 
 /**
+ * Safe, public-only projection of `barbers/{id}`.
+ * Path: publicBusinesses/{businessId}
+ *
+ * Never add owner, plan, trial, limits, or other operational fields here.
+ */
+export interface PublicBusiness {
+  id: string;
+  name: string;
+  slug: string;
+  businessType: BusinessType;
+  active: boolean;
+  config: Pick<Barber['config'], 'address' | 'phone' | 'logoUrl' | 'coverUrl' | 'socialLinks' | 'theme' | 'booking'>;
+  workingHours: Barber['workingHours'];
+}
+
+/**
  * Documento de usuario (auth)
  * Path: users/{uid}
  */
 export interface User {
   uid: string;
   email: string;
-  role: UserRole;
-  barberId?: string; // para barber y barber_admin
+  /** Optional profile name collected at registration; used for a generated staff record only when present. */
+  name?: string;
+  /** Optional external-auth display name, if a profile sync has stored one. */
+  displayName?: string;
+  role: StoredUserRole;
+  /** Legacy primary business assignment. Kept while existing users are migrated. */
+  barberId?: string;
+  /** Explicit multi-business assignment for a business administrator. */
+  businessIds?: string[];
+  /** Internal staff-record links resolved automatically from the selected businesses. */
+  staffAssignments?: StaffAssignment[];
+  /** Legacy primary staff binding. Kept while existing users are migrated. */
+  staffId?: string;
   createdAt: Timestamp;
+}
+
+export interface StaffAssignment {
+  businessId: string;
+  staffId: string;
+}
+
+/** Name-only option used by the superadmin business-assignment control. */
+export interface BusinessAssignmentOption {
+  id: string;
+  name: string;
 }
 
 /**
@@ -148,6 +193,8 @@ export interface BarberStaff {
   id: string;
   name: string;
   role?: string;
+  /** Authenticated user automatically bound from a superadmin-selected business. */
+  userId?: string;
   photoUrl?: string;
   /** Storage metadata used by the content manager; photoUrl remains the public legacy field. */
   imageStoragePath?: string;
@@ -177,8 +224,26 @@ export interface Appointment {
   serviceId: string;
   extraServices: string[];
   date: Timestamp;
+  /** Colombia-local date used for bounded operational Agenda queries. */
+  bookingDate?: string;
+  startTime?: string;
+  endTime?: string;
   status: AppointmentStatus;
   notes?: string;
+  /** Present only when an authenticated customer made the booking. */
+  customerUid?: string;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+/** Minimal, non-PII occupancy record used by public availability reads. */
+export interface BookingLock {
+  appointmentId: string;
+  bookingDate: string;
+  staffId: string;
+  intervalId: string;
+  startTime: string;
+  endTime: string;
   createdAt: Timestamp;
 }
 

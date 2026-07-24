@@ -1,10 +1,9 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import AdminRoute from '../components/react/AdminRoute';
 import HeaderSection from '../components/home/HeaderSection.astro';
 ---
 
-<Layout title="Panel administrativo">
+<Layout title="Espacio de trabajo">
   <HeaderSection />
-  <AdminRoute client:load />
+  <script>window.location.replace(`${import.meta.env.BASE_URL}admin`);</script>
 </Layout>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getUserRecord, signIn, signOut, signUpClient } from '../../lib/auth';
-import type { UserRole } from '../../lib/types';
+import { isInternalRole, normalizeUserRole } from '../../lib/roles';
 
 interface LoginFormProps {
   onSuccess?: (uid: string) => void;
@@ -9,7 +9,6 @@ interface LoginFormProps {
 
 export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
   const baseUrl = import.meta.env.BASE_URL;
-  const internalRoles: UserRole[] = ['barber', 'barber_admin', 'superadmin'];
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -33,7 +32,7 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
     try {
       if (mode === 'register') {
         await signUpClient(name.trim(), email, password);
-        setSuccess('Tu cuenta fue creada como cliente. Ahora puedes iniciar sesion.');
+        setSuccess('Tu cuenta fue creada como customer. Ahora puedes iniciar sesión.');
         setMode('login');
         setPassword('');
         return;
@@ -42,14 +41,14 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
       const user = await signIn(email, password);
       const userRecord = await getUserRecord(user.uid);
 
-      if (!userRecord || !internalRoles.includes(userRecord.role)) {
+      if (!userRecord || !isInternalRole(userRecord.role)) {
         await signOut();
-        setError('Este acceso es solo para equipo interno (barberos y administradores).');
+        setError('Este acceso es solo para superadmin, storeadmin y staff.');
         return;
       }
 
-      if (userRecord.role === 'superadmin') {
-        sessionStorage.setItem('userRole', 'superadmin');
+      if (normalizeUserRole(userRecord.role)) {
+        sessionStorage.setItem('userRole', normalizeUserRole(userRecord.role) || 'customer');
 
         if (onSuccess) {
           onSuccess(user.uid);
@@ -58,12 +57,6 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
         window.location.href = `${baseUrl}admin`;
         return;
       }
-
-      // Etapa 5: panel del negocio pendiente. Por ahora informamos y cerramos sesión.
-      await signOut();
-      setSuccess('Tu usuario interno fue validado. El panel del negocio estará disponible en la Etapa 5.');
-      setPassword('');
-      return;
     } catch (err: any) {
       const message = err.message || 'Error al iniciar sesión';
       setError(message);
@@ -85,8 +78,8 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
           </h1>
           <p className="text-center text-subtle mb-8">
             {mode === 'login'
-              ? 'Acceso solo para equipo interno: barber, admin barbero y super admin.'
-              : 'Registrate con nombre, correo y contraseña. Tu rol inicial será cliente.'}
+              ? 'Acceso solo para superadmin, storeadmin y staff.'
+              : 'Regístrate con nombre, correo y contraseña. Tu rol inicial será customer.'}
           </p>
 
           {error && (
@@ -177,7 +170,7 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
           </button>
 
           <p className="mt-3 text-center text-xs text-subtle">
-            Los clientes finales reservan por la URL pública del negocio y no necesitan iniciar sesión aquí.
+            Las personas pueden reservar por la URL pública sin iniciar sesión. Una cuenta customer será opcional para su historial futuro.
           </p>
         </div>
       </div>

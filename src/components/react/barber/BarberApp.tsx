@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { getBarberCatalog, getBarberConfigBySlug, getBarberProducts, getBarberStatus } from '../../../lib/barbers';
-import { DATA } from '../../../lib/data';
-import type { Barber, CatalogItem, Product } from '../../../lib/types';
+import { getBarberCatalog, getBarberConfigBySlug, getBarberProducts } from '../../../lib/barbers';
+import type { CatalogItem, Product, PublicBusiness } from '../../../lib/types';
+import PublicBookingWidget from './PublicBookingWidget';
 
 type BarberTab = 'inicio' | 'agendar' | 'catalogo' | 'productos' | 'ubicacion';
 
@@ -46,7 +46,7 @@ function formatPrice(price: number): string {
 
 export default function BarberApp() {
   const [barberSlug, setBarberSlug] = useState<string | null>(null);
-  const [barber, setBarber] = useState<Barber | null>(null);
+  const [barber, setBarber] = useState<PublicBusiness | null>(null);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [tab, setTab] = useState<BarberTab>('inicio');
@@ -78,14 +78,7 @@ export default function BarberApp() {
           return;
         }
 
-        const [catalogData, productsData] = await Promise.all([
-          getBarberCatalog(barberData.id),
-          getBarberProducts(barberData.id),
-        ]);
-
         setBarber(barberData);
-        setCatalog(catalogData);
-        setProducts(productsData);
       } catch (err) {
         console.error(err);
           setError('No pudimos cargar el negocio. Intentá nuevamente en unos minutos.');
@@ -97,10 +90,15 @@ export default function BarberApp() {
     load();
   }, [barberSlug]);
 
-  const isExpired = useMemo(() => {
-    if (!barber) return false;
-    return getBarberStatus(barber) === DATA.BARBER_STATUS.EXPIRED;
-  }, [barber]);
+  useEffect(() => {
+    if (!barber || tab !== 'catalogo' || catalog.length > 0) return;
+    void getBarberCatalog(barber.id).then(setCatalog);
+  }, [barber, catalog.length, tab]);
+
+  useEffect(() => {
+    if (!barber || tab !== 'productos' || products.length > 0) return;
+    void getBarberProducts(barber.id).then(setProducts);
+  }, [barber, products.length, tab]);
 
   const mapsSrc = useMemo(() => {
     const address = barber?.config?.address;
@@ -136,17 +134,6 @@ export default function BarberApp() {
         <div className="surface-card rounded-xl p-6 max-w-xl w-full">
           <h1 className="text-2xl font-semibold text-main mb-2">Negocio no encontrado</h1>
           <p className="text-subtle">No encontramos un negocio activo para esta URL.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isExpired) {
-    return (
-      <div className="min-h-screen section-shell flex items-center justify-center px-4">
-        <div className="surface-card rounded-xl p-6 max-w-xl w-full">
-          <h1 className="text-2xl font-semibold text-main mb-2">Plan expirado</h1>
-          <p className="text-subtle">Este negocio está temporalmente fuera de servicio por vencimiento de plan.</p>
         </div>
       </div>
     );
@@ -227,20 +214,7 @@ export default function BarberApp() {
           )}
 
           {tab === 'agendar' && (
-            <div>
-              <h2 className="text-xl font-semibold text-main mb-2">Agendar</h2>
-              <p className="text-subtle">Estamos preparando el flujo de reservas online. Por ahora, gestioná tu turno por WhatsApp.</p>
-              {whatsappUrl && (
-                <a
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-block mt-4 btn-primary px-4 py-2 rounded-xl font-semibold"
-                >
-                  Reservar por WhatsApp
-                </a>
-              )}
-            </div>
+            <PublicBookingWidget business={barber} whatsappUrl={whatsappUrl} />
           )}
 
           {tab === 'catalogo' && (

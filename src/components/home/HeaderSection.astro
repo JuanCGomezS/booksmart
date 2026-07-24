@@ -96,6 +96,7 @@ const contactPath = `${baseUrl}#contact`;
   import { onAuthStateChanged, signOut } from 'firebase/auth';
   import { auth } from '../../lib/firebase';
   import { getUserRecord } from '../../lib/auth';
+  import { normalizeUserRole } from '../../lib/roles';
 
   (() => {
     const trigger = document.getElementById('menu-trigger');
@@ -158,24 +159,25 @@ const contactPath = `${baseUrl}#contact`;
         const userRecord = await getUserRecord(user.uid);
 
         if (userRecord) {
-          if (userRecord.role === 'superadmin') {
-            roleLabel.textContent = 'Super admin';
+          const role = normalizeUserRole(userRecord.role);
+          if (role === 'superadmin') {
+            roleLabel.textContent = 'Superadmin';
             roleLink.textContent = 'Ir al panel de control';
             roleLink.setAttribute('href', `${baseUrl}admin`);
             roleLink.classList.remove('hidden');
-          } else if (userRecord.role === 'barber_admin') {
-            roleLabel.textContent = 'Admin del negocio';
-            roleNote.textContent = userRecord.barberId
-              ? `Tu panel se habilitara en /b/${userRecord.barberId}/admin durante la Etapa 5.`
-              : 'Tu panel del negocio se habilitara en la Etapa 5.';
-            roleNote.classList.remove('hidden');
-          } else if (userRecord.role === 'barber') {
-            roleLabel.textContent = 'Personal';
-            roleNote.textContent = 'Tu acceso operativo se habilitara cuando este listo el panel del negocio.';
-            roleNote.classList.remove('hidden');
+          } else if (role === 'storeadmin') {
+            roleLabel.textContent = 'Storeadmin';
+            roleLink.textContent = 'Ir a administración';
+            roleLink.setAttribute('href', `${baseUrl}admin`);
+            roleLink.classList.remove('hidden');
+          } else if (role === 'staff') {
+            roleLabel.textContent = 'Staff';
+            roleLink.textContent = 'Ir a administración';
+            roleLink.setAttribute('href', `${baseUrl}admin`);
+            roleLink.classList.remove('hidden');
           } else {
-            roleLabel.textContent = 'Cliente';
-            roleNote.textContent = 'Los clientes usan la URL publica de su negocio y no necesitan panel interno.';
+            roleLabel.textContent = 'Customer';
+            roleNote.textContent = 'Reservar por la URL pública no requiere una cuenta customer. El historial autenticado se incorporará más adelante.';
             roleNote.classList.remove('hidden');
           }
         }

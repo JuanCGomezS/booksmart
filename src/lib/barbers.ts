@@ -11,12 +11,15 @@ import {
   deleteDoc,
   serverTimestamp,
   deleteField,
+  runTransaction,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { DATA } from './data';
 import { getUserIdByEmail } from './users';
-import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus, BarberStaff, BusinessType, BookingSettings, CatalogItem, Product, Service } from './types';
-import { bookingSettingsUpdate } from './booking';
+import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus, BarberStaff, BusinessType, BookingSettings, CatalogItem, Product, Service, PublicBusiness } from './types';
+import { bookingSettingsUpdate, getBogotaDateTime, getBookingDate } from './booking';
+import { PUBLIC_BUSINESSES_COLLECTION, readPublicBusiness, toPublicBusiness } from './public-business';
 
 const LEGACY_BUSINESS_TYPE: BusinessType = 'barbershop';
 
@@ -41,7 +44,7 @@ const BARBER_PRODUCTS_CACHE_TTL = 30 * 60 * 1000; // 30 minutos
 /**
  * Obtener barbería por ID (con cache en localStorage)
  */
-export async function getBarberConfig(barberId: string): Promise<Barber | null> {
+export async function getBarberConfig(barberId: string): Promise<PublicBusiness | null> {
   const cacheKey = `barber_config_${barberId}`;
   const cached = localStorage.getItem(cacheKey);
 
@@ -53,14 +56,14 @@ export async function getBarberConfig(barberId: string): Promise<Barber | null> 
   }
 
   try {
-    const barberRef = doc(db, 'barbers', barberId);
+    const barberRef = doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId);
     const barberSnap = await getDoc(barberRef);
 
     if (!barberSnap.exists()) {
       return null;
     }
 
-    const data = toBusiness(barberSnap.data(), barberSnap.id);
+    const data = readPublicBusiness(barberSnap.data(), barberSnap.id);
     
     // Guardar en cache
     localStorage.setItem(cacheKey, JSON.stringify({
@@ -78,7 +81,7 @@ export async function getBarberConfig(barberId: string): Promise<Barber | null> 
 /**
  * Obtener la configuración pública de una barbería por su slug de URL.
  */
-export async function getBarberConfigBySlug(slug: string): Promise<Barber | null> {
+export async function getBarberConfigBySlug(slug: string): Promise<PublicBusiness | null> {
   const cacheKey = `barber_config_slug_${slug}`;
   const cached = localStorage.getItem(cacheKey);
 
@@ -90,7 +93,7 @@ export async function getBarberConfigBySlug(slug: string): Promise<Barber | null
   }
 
   try {
-    const barbersRef = collection(db, 'barbers');
+    const barbersRef = collection(db, PUBLIC_BUSINESSES_COLLECTION);
     const barberQuery = query(barbersRef, where('slug', '==', slug), where('active', '==', true), limit(1));
     const barberDocs = await getDocs(barberQuery);
 
@@ -99,7 +102,7 @@ export async function getBarberConfigBySlug(slug: string): Promise<Barber | null
     }
 
     const barberDoc = barberDocs.docs[0];
-    const data = toBusiness(barberDoc.data(), barberDoc.id);
+    const data = readPublicBusiness(barberDoc.data(), barberDoc.id);
 
     localStorage.setItem(cacheKey, JSON.stringify({
       data,
@@ -125,6 +128,16 @@ export async function getAllBarbers(): Promise<Barber[]> {
     console.error('Error fetching all barbers:', error);
     return [];
   }
+}
+
+/** Reads only explicitly allowed public business summaries, never a collection query. */
+export async function getBusinessSummaries(businessIds: string[]): Promise<PublicBusiness[]> {
+  const ids = [...new Set(businessIds.filter(Boolean))];
+  const summaries = await Promise.all(ids.map(async (businessId) => {
+    const snapshot = await getDoc(doc(db, PUBLIC_BUSINESSES_COLLECTION, businessId));
+    return snapshot.exists() ? readPublicBusiness(snapshot.data(), snapshot.id) : null;
+  }));
+  return summaries.filter((summary): summary is PublicBusiness => summary !== null);
 }
 
 /**
@@ -201,8 +214,35 @@ export async function createBarber(
       },
     };
 
-    const barbersRef = collection(db, 'barbers');
-    const docRef = await addDoc(barbersRef, barberData);
+    const docRef = doc(collection(db, 'barbers'));
+    const ownerRef = doc(db, 'users', ownerId);
+    await runTransaction(db, async (transaction) => {
+      const ownerSnapshot = await transaction.get(ownerRef);
+      if (!ownerSnapshot.exists()) {
+        throw new Error(`Owner user document no longer exists: ${ownerEmail}`);
+      }
+
+      const owner = ownerSnapshot.data();
+      const existingBusinessIds = Array.isArray(owner.businessIds)
+        ? owner.businessIds.filter((businessId): businessId is string => typeof businessId === 'string' && businessId.trim().length > 0)
+        : [];
+      const businessIds = [...new Set([...existingBusinessIds, docRef.id])];
+      const ownerUpdates: Record<string, unknown> = {
+        businessIds,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (typeof owner.barberId !== 'string' || !owner.barberId.trim()) {
+        ownerUpdates.barberId = docRef.id;
+      }
+      if (owner.role === DATA.USER_ROLE.STOREADMIN || owner.role === 'barber_admin') {
+        ownerUpdates.role = DATA.USER_ROLE.STOREADMIN;
+      }
+
+      transaction.set(docRef, barberData);
+      transaction.set(doc(db, PUBLIC_BUSINESSES_COLLECTION, docRef.id), toPublicBusiness({ id: docRef.id, ...barberData } as unknown as Barber));
+      transaction.update(ownerRef, ownerUpdates);
+    });
 
     return {
       id: docRef.id,
@@ -242,10 +282,15 @@ export async function updateBarber(
 /** Updates only booking configuration, preserving every other business config field. */
 export async function updateBarberBookingSettings(barberId: string, settings: BookingSettings): Promise<boolean> {
   try {
-    await updateDoc(doc(db, 'barbers', barberId), {
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'barbers', barberId), {
       ...bookingSettingsUpdate(settings),
       updatedAt: serverTimestamp(),
     });
+    // `set` does not interpret dotted object keys as field paths. Use an update
+    // so the existing allowlisted projection keeps its sibling config fields.
+    batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), bookingSettingsUpdate(settings));
+    await batch.commit();
     localStorage.removeItem(`barber_config_${barberId}`);
     return true;
   } catch (error) {
@@ -277,7 +322,7 @@ export async function updateBarberBusinessDetails(
 ): Promise<boolean> {
   try {
     const valueOrDelete = (value: string) => value.trim() || deleteField();
-    await updateDoc(doc(db, 'barbers', barberId), {
+    const updates = {
       name: details.name.trim(),
       businessType: details.businessType,
       'config.address': details.address.trim(),
@@ -290,7 +335,12 @@ export async function updateBarberBusinessDetails(
       'config.theme.primaryColor': details.primaryColor,
       workingHours: details.workingHours,
       updatedAt: serverTimestamp(),
-    });
+    };
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'barbers', barberId), updates);
+    const { updatedAt: _updatedAt, ...publicUpdates } = updates;
+    batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), publicUpdates);
+    await batch.commit();
     localStorage.removeItem(`barber_config_${barberId}`);
     return true;
   } catch (error) {
@@ -335,7 +385,8 @@ export async function updateBarberPlanSettings(
       }
     }
 
-    await updateDoc(barberRef, {
+    const batch = writeBatch(db);
+    batch.update(barberRef, {
       plan: newPlan,
       billingCycle,
       planExpiresAt,
@@ -343,6 +394,8 @@ export async function updateBarberPlanSettings(
       trialUsed: true,
       updatedAt: serverTimestamp(),
     });
+    batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), { active: true });
+    await batch.commit();
 
     localStorage.removeItem(`barber_config_${barberId}`);
     return true;
@@ -358,10 +411,13 @@ export async function updateBarberPlanSettings(
 export async function toggleBarberActive(barberId: string, active: boolean): Promise<boolean> {
   try {
     const barberRef = doc(db, 'barbers', barberId);
-    await updateDoc(barberRef, {
+    const batch = writeBatch(db);
+    batch.update(barberRef, {
       active,
       updatedAt: serverTimestamp(),
     });
+    batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), { active });
+    await batch.commit();
 
     localStorage.removeItem(`barber_config_${barberId}`);
     return true;
@@ -376,8 +432,10 @@ export async function toggleBarberActive(barberId: string, active: boolean): Pro
  */
 export async function deleteBarber(barberId: string): Promise<boolean> {
   try {
-    const barberRef = doc(db, 'barbers', barberId);
-    await deleteDoc(barberRef);
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'barbers', barberId));
+    batch.delete(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId));
+    await batch.commit();
     localStorage.removeItem(`barber_config_${barberId}`);
     return true;
   } catch (error) {
@@ -430,23 +488,42 @@ export async function getBarberMetrics(barberId: string): Promise<BarberMetrics 
   const cached = localStorage.getItem(cacheKey);
 
   if (cached) {
-    const { data, expiresAt } = JSON.parse(cached);
-    if (Date.now() < expiresAt) {
+    const { data, expiresAt, version } = JSON.parse(cached);
+    if (version === 2 && Date.now() < expiresAt) {
       return data;
     }
   }
 
   try {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const currentBookingDate = getBookingDate(now);
+    const currentMonth = currentBookingDate.slice(0, 7);
+    const [year, month] = currentMonth.split('-').map(Number);
+    const nextMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 7);
+    const legacyMonthStart = getBogotaDateTime(`${currentMonth}-01`, '00:00');
+    const legacyNextMonthStart = getBogotaDateTime(`${nextMonth}-01`, '00:00');
+    if (!legacyMonthStart || !legacyNextMonthStart) return null;
 
-    // Contar citas del mes
     const appointmentsRef = collection(db, 'barbers', barberId, 'appointments');
-    const appointmentsQuery = query(
-      appointmentsRef,
-      where('date', '>=', monthStart)
-    );
-    const appointmentsDocs = await getDocs(appointmentsQuery);
+    // New appointments have a Colombia-local bookingDate. The bounded legacy
+    // date query remains during migration; IDs are unioned to avoid double-counting
+    // records that contain both formats without reading the full collection.
+    const [bookingDateAppointments, legacyAppointments] = await Promise.all([
+      getDocs(query(
+        appointmentsRef,
+        where('bookingDate', '>=', `${currentMonth}-01`),
+        where('bookingDate', '<', `${nextMonth}-01`),
+      )),
+      getDocs(query(
+        appointmentsRef,
+        where('date', '>=', legacyMonthStart),
+        where('date', '<', legacyNextMonthStart),
+      )),
+    ]);
+    const appointmentIds = new Set([
+      ...bookingDateAppointments.docs.map((appointment) => appointment.id),
+      ...legacyAppointments.docs.map((appointment) => appointment.id),
+    ]);
 
     // Contar productos activos
     const productsRef = collection(db, 'barbers', barberId, 'products');
@@ -464,7 +541,7 @@ export async function getBarberMetrics(barberId: string): Promise<BarberMetrics 
 
     const metrics: BarberMetrics = {
       barberId,
-      appointmentsThisMonth: appointmentsDocs.size,
+      appointmentsThisMonth: appointmentIds.size,
       activeProducts: productsDocs.size,
       activeBarbers: barbersDocs.size,
       totalCatalogItems: catalogDocs.size,
@@ -472,6 +549,7 @@ export async function getBarberMetrics(barberId: string): Promise<BarberMetrics 
 
     // Cache 1 hora
     localStorage.setItem(cacheKey, JSON.stringify({
+      version: 2,
       data: metrics,
       expiresAt: Date.now() + 60 * 60 * 1000,
     }));

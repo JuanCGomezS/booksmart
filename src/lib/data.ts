@@ -17,9 +17,9 @@ export const DATA = {
     EXPIRED: 'expired',
   } as const,
   USER_ROLE: {
-    CLIENT: 'client',
-    BARBER: 'barber',
-    BARBER_ADMIN: 'barber_admin',
+    CUSTOMER: 'customer',
+    STAFF: 'staff',
+    STOREADMIN: 'storeadmin',
     SUPERADMIN: 'superadmin',
   } as const,
   CONFIRM_ACTION: {
@@ -56,8 +56,8 @@ export const BUSINESS_TYPE_LABEL: Record<BusinessType, string> = {
 };
 
 export const USER_ROLE_LABEL: Record<UserRole, string> = {
-  [DATA.USER_ROLE.CLIENT]: 'Cliente',
-  [DATA.USER_ROLE.BARBER]: 'Personal',
-  [DATA.USER_ROLE.BARBER_ADMIN]: 'Administrador del negocio',
+  [DATA.USER_ROLE.CUSTOMER]: 'Customer',
+  [DATA.USER_ROLE.STAFF]: 'Staff',
+  [DATA.USER_ROLE.STOREADMIN]: 'Storeadmin',
   [DATA.USER_ROLE.SUPERADMIN]: 'Superadministrador',
 };

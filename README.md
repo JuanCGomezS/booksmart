@@ -78,11 +78,25 @@ npx firebase-tools deploy --only firestore:rules,storage
 
 La limpieza de Storage ya no depende de `localStorage`: al reemplazar una imagen, el registro conserva `pendingImageCleanupPaths` hasta que el cliente elimina el asset anterior, y el cliente reintenta esas rutas al cargar o modificar esa colección. Al eliminar un registro, primero se eliminan sus assets; si Storage falla, el documento se conserva para reintentar. Esto reduce huérfanos en la arquitectura actual, pero **no sustituye un worker server-side**: una función programada o cola con privilegios administrativos sigue siendo el siguiente endurecimiento para garantizar limpieza si ningún cliente vuelve a abrir el contenido.
 
-Las reservas públicas siguen deshabilitadas. La UI dirige a WhatsApp y Firestore rechaza creaciones anónimas de citas hasta que exista un backend autenticado que calcule disponibilidad y cree la reserva de forma atómica.
+El widget público permite solicitar una reserva desde `/b/<slug>` y mantiene WhatsApp como contacto alternativo. Antes de recibir reservas reales, el propietario debe ejecutar las migraciones con credenciales administrativas y desplegar las reglas actuales:
 
-### Pruebas automatizadas
+```bash
+npx tsx scripts/backfill-public-businesses.ts
+npx tsx scripts/migrate-service-active.ts
+npx firebase-tools deploy --only firestore:rules
+```
 
-`npm test` ejecuta las pruebas de Node y primero rechaza marcadores exclusivos como `test.only`, `describe.only`, `fit` o `only: true`; por eso CI no puede publicar una suite enfocada por accidente. Las reglas de Firebase aún requieren pruebas con emuladores antes del lanzamiento.
+La reserva sigue siendo una transacción optimista de cliente: protege las colisiones entre clientes normales de la aplicación, pero no constituye una defensa autoritativa contra clientes maliciosos que llamen Firestore directamente.
+
+### Verificación actual
+
+En esta etapa no se mantienen ni ejecutan pruebas automatizadas. Antes de publicar cambios, usa estas verificaciones manuales del repositorio:
+
+| Comando | Resultado |
+| --- | --- |
+| `npx tsc --noEmit` | Comprueba los tipos de TypeScript sin generar archivos. |
+| `npm run build` | Genera el sitio estático de producción. |
+| `git diff --check` | Detecta errores de espacios en blanco en los cambios. |
 
 ## Contacto de marca
 

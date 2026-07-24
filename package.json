@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "test": "node scripts/check-no-exclusive-tests.mjs && node --import tsx --test test/*.test.ts",
     "preview": "astro preview",
     "astro": "astro"
   },

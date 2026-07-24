@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getBookingSettings, getStaffSchedule, isServiceCompatibleWithStaff } from '../../../lib/booking';
 import { getBarberManagedCollection, updateBarberBookingSettings, updateBarberManagedRecord } from '../../../lib/barbers';
-import type { Barber, BarberStaff, BookingSettings, Service, WeeklySchedule } from '../../../lib/types';
+import type { Barber, BarberStaff, BookingSettings, PublicBusiness, Service, WeeklySchedule } from '../../../lib/types';
 
 const DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -17,8 +17,10 @@ function parseBreaks(value: string, start: string, end: string) {
   return breaks.map(([breakStart, breakEnd]) => ({ start: breakStart, end: breakEnd }));
 }
 
-export default function BookingConfiguration({ barber }: { barber: Barber }) {
-  const [settings, setSettings] = useState<BookingSettings>(() => getBookingSettings(barber));
+type BookingBusiness = Pick<Barber | PublicBusiness, 'id' | 'config' | 'workingHours'>;
+
+export default function BookingConfiguration({ business }: { business: BookingBusiness }) {
+  const [settings, setSettings] = useState<BookingSettings>(() => getBookingSettings(business));
   const [services, setServices] = useState<Service[]>([]);
   const [staff, setStaff] = useState<BarberStaff[]>([]);
   const [schedules, setSchedules] = useState<Record<string, WeeklySchedule>>({});
@@ -29,19 +31,19 @@ export default function BookingConfiguration({ barber }: { barber: Barber }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    Promise.all([getBarberManagedCollection<Service>(barber.id, 'services'), getBarberManagedCollection<BarberStaff>(barber.id, 'barbers')]).then(([nextServices, nextStaff]) => {
+    Promise.all([getBarberManagedCollection<Service>(business.id, 'services'), getBarberManagedCollection<BarberStaff>(business.id, 'barbers')]).then(([nextServices, nextStaff]) => {
       setServices(nextServices);
       setStaff(nextStaff);
-      setSchedules(Object.fromEntries(nextStaff.map((member) => [member.id, getStaffSchedule(member, barber.workingHours)])));
+      setSchedules(Object.fromEntries(nextStaff.map((member) => [member.id, getStaffSchedule(member, business.workingHours)])));
       setSelectedStaffId(nextStaff[0]?.id || '');
     });
-  }, [barber.id]);
+  }, [business.id]);
 
   const saveSettings = async () => {
     try {
       if (settings.minimumNoticeMinutes < 0 || settings.bookingHorizonDays < 1 || settings.slotIntervalMinutes < 5 || settings.slotIntervalMinutes > 120) throw new Error('Revisá los límites de reserva y el intervalo de turnos.');
       setSaving(true);
-      if (!await updateBarberBookingSettings(barber.id, settings)) throw new Error('No se pudo guardar la configuración de reservas.');
+      if (!await updateBarberBookingSettings(business.id, settings)) throw new Error('No se pudo guardar la configuración de reservas.');
       setMessage('Configuración de reservas guardada.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'No se pudo guardar la configuración de reservas.'); } finally { setSaving(false); }
   };
@@ -49,7 +51,7 @@ export default function BookingConfiguration({ barber }: { barber: Barber }) {
   const saveServiceStaff = async (service: Service, staffIds: string[]) => {
     if (staffIds.length === 0) return setMessage('Cada servicio debe tener al menos un profesional activo compatible.');
     setSaving(true);
-    const saved = await updateBarberManagedRecord(barber.id, 'services', service.id, { staffIds });
+    const saved = await updateBarberManagedRecord(business.id, 'services', service.id, { staffIds });
     if (saved) setServices((items) => items.map((item) => item.id === service.id ? { ...item, staffIds } : item));
     setMessage(saved ? 'Compatibilidad de servicio guardada.' : 'No se pudo guardar la compatibilidad.');
     setSaving(false);
@@ -59,7 +61,7 @@ export default function BookingConfiguration({ barber }: { barber: Barber }) {
     const bufferMinutes = service.bufferMinutes || 0;
     if (!Number.isInteger(bufferMinutes) || bufferMinutes < 0 || bufferMinutes > 240) return setMessage('El buffer debe ser un número entero entre 0 y 240 minutos.');
     setSaving(true);
-    const saved = await updateBarberManagedRecord(barber.id, 'services', service.id, { bufferMinutes });
+    const saved = await updateBarberManagedRecord(business.id, 'services', service.id, { bufferMinutes });
     setMessage(saved ? 'Buffer de servicio guardado.' : 'No se pudo guardar el buffer.');
     setSaving(false);
   };
@@ -72,7 +74,7 @@ export default function BookingConfiguration({ barber }: { barber: Barber }) {
       if (!TIME.test(day.start) || !TIME.test(day.end) || day.start >= day.end || day.breaks.some((item) => item.start < day.start || item.end > day.end || item.start >= item.end)) return setMessage('Revisá los horarios y descansos del profesional seleccionado.');
     }
     setSaving(true);
-    const saved = await updateBarberManagedRecord(barber.id, 'barbers', selectedStaffId, { schedule });
+    const saved = await updateBarberManagedRecord(business.id, 'barbers', selectedStaffId, { schedule });
     setMessage(saved ? 'Horario del profesional guardado.' : 'No se pudo guardar el horario.');
     setSaving(false);
   };

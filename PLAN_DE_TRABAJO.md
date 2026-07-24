@@ -11,9 +11,9 @@ BookSmart es una plataforma de agendamiento para negocios que atienden por cita.
 | Datos heredados | Entregado | Se conserva `barbers` y sus subcolecciones; `businessType` clasifica altas nuevas y los documentos históricos se leen como `barbershop`. |
 | Landing | Entregado | Secciones de propuesta, funcionalidades, temas, planes y contacto. |
 | Super admin | Entregado | Alta de negocios, planes, estado, métricas básicas y gestión de contenido. |
-| Página pública | Entregado | Ruta dinámica `/b/<slug>` resuelta en cliente, con fallback de GitHub Pages. |
-| Configuración de reservas | En progreso | Se añadieron políticas, cierres, compatibilidad servicio-profesional y horarios/descansos del personal. |
-| Agendamiento completo | Próximo | La vista pública hoy deriva las reservas a WhatsApp. |
+| Página pública | Entregado | Ruta dinámica `/b/<slug>` resuelta en cliente, con fallback de GitHub Pages y proyección pública sin PII. |
+| Configuración de reservas | En progreso | Políticas, cierres, compatibilidad servicio-profesional y horarios/descansos del personal. |
+| Base de reserva pública | Entregado con limitación | Transacciones del cliente, locks mínimos y validación optimista; la vista pública aún deriva a WhatsApp hasta el widget. |
 
 ## Seguimiento de implementación
 
@@ -28,16 +28,19 @@ Esta es la lista operativa para marcar el avance real. Cada elemento se marca s�
 
 ### Fase 1: agendamiento universal
 
-- [ ] Definir qué estados de cita bloquean la agenda.
-- [ ] Crear el servicio seguro para calcular disponibilidad sin exponer citas.
-- [ ] Crear reservas de forma atómica y evitar dobles reservas.
-- [ ] Implementar el widget público: servicio, fecha, profesional y hora.
-- [ ] Solicitar nombre, teléfono y consentimiento del cliente.
+- [x] Definir qué estados de cita bloquean la agenda (`pending` y `confirmed`).
+- [x] Implementar disponibilidad local Colombia, compatibilidad, horarios, descansos, cierres y buffers.
+- [x] Crear reservas optimistas atómicas con locks deterministas sin leer citas ni PII.
+- [x] Abrir sólo lecturas de locks mínimos y escrituras de creación con esquema y enlace transaccional estrictos.
+- [ ] Verificar las reglas con Firebase Emulator Suite antes de habilitar el widget público.
+- [x] Implementar el widget público: servicio, fecha, profesional y hora.
+- [x] Solicitar nombre, teléfono y consentimiento del cliente.
 - [ ] Mostrar confirmación, gestionar cancelación y crear el panel administrativo de citas.
 - [ ] Verificar reserva concurrente, teclado, lector de pantalla y móvil.
 
 ### Fase 2: administración del negocio
 
+- [x] Administración unificada: `/admin` selecciona el negocio y abre una página compartida con Agenda primero; Storeadmin y Personal se asignan por nombre en un único selector de negocios. Personal conserva o crea automáticamente su vínculo interno, sin romper `barberId`/`staffId` heredados.
 - [ ] Completar gestión de citas, servicios, equipo, catálogo, productos y configuración.
 - [x] Contenido: cargar Galería y Productos bajo demanda y guardar sus imágenes en Storage.
 - [x] Contenido: incorporar Servicios y Personal como cortes independientes, sin precarga; incluir identidad, estado e imágenes en Storage.
@@ -62,12 +65,16 @@ Esta es la lista operativa para marcar el avance real. Cada elemento se marca s�
 | Decisión | Razón |
 | --- | --- |
 | Mantener `barbers/{id}` | Cambiar la colección separaría los datos existentes de sus citas, servicios, catálogo, productos y permisos. |
+| Proyección `publicBusinesses/{id}` | Las páginas públicas y reservas no leen el documento raíz: evita exponer propietario, facturación, prueba, límites o configuración interna. |
 | Usar `businessType` | Generaliza el producto sin una migración destructiva. Valores: `barbershop`, `hair_salon`, `nail_studio`, `dental_clinic`, `other`. |
 | Mantener rutas `/b/<slug>` | Las URLs públicas existentes no se rompen. El slug sigue siendo una identidad de negocio, no de una vertical. |
-| Mantener roles heredados | `barber` y `barber_admin` permanecen como valores internos hasta una migración de permisos explícita. La UI los presenta como personal y administrador del negocio. |
+| Roles canónicos con transición | Los valores persistidos y visibles son `superadmin`, `storeadmin`, `staff` y `customer`. Las Rules leen temporalmente `barber_admin`, `barber`, `client`, `barberId` y `staffId` hasta completar la migración explícita. |
+| Administración unificada | Todos los roles internos entran por `/admin`, seleccionan sólo negocios autorizados y comparten la misma página por negocio; los controles globales se reservan para superadministración. |
+| Vínculo automático de staff | Superadministración selecciona los negocios de `staff` por nombre. Para cada negocio se conserva el vínculo existente, se reutiliza un registro con el mismo `userId` o se crea `user-{uid}` con nombre editable; no hay entrada manual `businessId:staffId`. |
 | Cache con TTL | Las lecturas puntuales y el cache local reducen el consumo del plan gratuito de Firebase. |
 | Reservas por servicio primero | La duración y el buffer del servicio determinan qué personal y horarios son realmente válidos. |
 | Hora de Colombia para reservas | Todas las fechas y horas de reserva usan `America/Bogota`. La configuración por negocio y el soporte multi-país se difieren hasta necesitarlos explícitamente. |
+| Reserva pública optimista sin backend | GitHub Pages + Firebase solamente. La transacción vuelve a leer cada lock determinista y crea cita privada más locks de forma atómica; reduce conflictos normales entre clientes de la app. Las Rules no son una defensa autoritativa contra clientes maliciosos que llamen Firestore directamente. |
 
 ## Arquitectura operativa
 
@@ -81,8 +88,14 @@ barbers/{businessId}                    # nombre histórico de colección, no ca
   products/{productId}
 
 users/{uid}
-  role: client | barber | barber_admin | superadmin
-  barberId?: string                      # referencia heredada al negocio
+  role: superadmin | storeadmin | staff | customer
+  barberId?: string                      # referencia heredada/primaria al negocio
+  businessIds?: string[]                 # negocios seleccionados para Storeadmin y Personal
+  staffAssignments?: [{ businessId, staffId }] # vínculo interno automático de Personal
+```
+
+```text
+publicBusinesses/{businessId}             # proyección pública allowlisted, sin PII ni facturación
 ```
 
 Los registros nuevos siempre incluyen `businessType`. Los existentes no deben migrarse en bloque para este cambio: la capa de lectura les aplica el valor `barbershop` hasta que se editen o se migren de forma explícita y verificable.
@@ -101,7 +114,7 @@ Los registros nuevos siempre incluyen `businessType`. Los existentes no deben mi
 | Personal | Debe estar activo y tener jornada y descansos configurados. |
 | Servicios | Definen duración, buffer opcional y profesionales compatibles. |
 | Políticas | Hora local de Colombia (`America/Bogota`), aviso mínimo, horizonte de reserva e intervalo de agenda. El soporte de zonas horarias por negocio o por país se difiere hasta que se necesite explícitamente. |
-| Citas existentes | Sólo bloquean agenda en un servicio seguro del servidor; nunca se exponen públicamente. |
+| Citas y ocupación | Las citas y PII son privadas. La disponibilidad pública lee solamente locks deterministas sin PII y la reserva vuelve a leer cada lock dentro de una transacción. |
 
 #### Experiencia de reserva
 
@@ -121,11 +134,11 @@ La agenda debe ser usable con teclado y móvil, mostrar un paso a la vez con res
 | Corte | Estado | Resultado |
 | --- | --- | --- |
 | Configuración administrable | En progreso | Políticas de agenda, cierres, compatibilidad servicio-profesional y horarios/descansos por profesional. |
-| Disponibilidad segura | Pendiente | Backend o función autenticada que calcule slots sin leer citas desde el cliente. |
+| Base optimista de reserva | Entregado con limitación | Locks deterministas, transacción cliente y mensajes de conflicto; no habilita todavía el widget. |
 | Widget público | Pendiente | Asistente servicio-primero con calendario, horas y datos básicos del cliente. |
-| Confirmación y operación | Pendiente | Creación atómica, estado inicial `pending`, confirmación, cancelación y panel de citas. |
+| Confirmación y operación | Pendiente | Confirmación visible, cancelación y panel de citas después del widget. |
 
-La validación final debe confirmar negocio activo, compatibilidad, horario, descansos, cierres, anticipación y ausencia de solapamientos. La creación debe ser atómica para impedir dobles reservas concurrentes.
+La base actual valida negocio, servicio, profesional, horario, descansos, cierres, anticipación y compatibilidad contra la configuración pública cargada. Dentro de la transacción vuelve a leer la proyección pública actual del negocio, el servicio y el profesional seleccionados; después lee todos los locks deterministas requeridos y crea la cita privada más los locks en una operación atómica. Si otro cliente normal ocupa un lock, se devuelve: **“Ese horario acaba de ser ocupado. Por favor, elige otra hora.”** Firestore Rules restringe esquema, rutas y enlace con la cita, pero no puede demostrar que un cliente malicioso suministró todos los locks ni toda la semántica de agenda. Esta limitación está aceptada explícitamente para el modelo GitHub Pages + Firebase sin backend.
 
 ### Fase 2: administración del negocio
 
@@ -154,6 +167,7 @@ La validación final debe confirmar negocio activo, compatibilidad, horario, des
 - [ ] Mantener los secretos `PUBLIC_FIREBASE_*` en el repositorio renombrado.
 - [ ] Configurar canales finales de email e Instagram para BookSmart.
 - [ ] Ejecutar `npm run build` antes de publicar.
+- [ ] Ejecutar `npm run migrate:user-roles -- --apply`, `npx tsx scripts/backfill-public-businesses.ts` y desplegar reglas antes de publicar cambios de roles.
 - [ ] Probar una URL pública existente `/b/<slug>` después del despliegue.
 
 ## Fuera de alcance de este rebrand

@@ -6,7 +6,7 @@ import BarbersList from './admin/BarbersList';
 import CreateBarberForm from './admin/CreateBarberForm';
 import UsersRolesManager from './admin/UsersRolesManager';
 
-export default function SuperAdminApp() {
+export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: (barber: Barber) => void }) {
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -107,6 +107,7 @@ export default function SuperAdminApp() {
         <BarbersList 
           barbers={barbers} 
           onRefresh={loadBarbers}
+          onSelect={onSelectBusiness}
         />
 
         <div className="mt-8">

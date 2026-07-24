@@ -17,6 +17,16 @@ service cloud.firestore {
       return isSignedIn() && currentUserRole() == 'superadmin';
     }
 
+    // Canonical roles are superadmin, storeadmin, staff, and customer. The
+    // legacy values remain readable only until the explicit migration runs.
+    function isStoreAdminRole() {
+      return isSignedIn() && currentUserRole() in ['storeadmin', 'barber_admin'];
+    }
+
+    function isStaffRole() {
+      return isSignedIn() && currentUserRole() in ['staff', 'barber'];
+    }
+
     function isBarberOwner(barberId) {
       return isSignedIn() &&
         get(/databases/$(database)/documents/barbers/$(barberId)).data.ownerId == request.auth.uid;
@@ -24,7 +34,42 @@ service cloud.firestore {
 
     function isBusinessAdmin(barberId) {
       return isBarberOwner(barberId) ||
-        (isSignedIn() && currentUserRole() == 'barber_admin' && currentUserDoc().data.barberId == barberId);
+        (isStoreAdminRole() && hasBusinessMembership(barberId));
+    }
+
+    // `barberId` is the legacy primary assignment. Storeadmins and staff now
+    // receive selected business IDs; staffAssignments remains the internal
+    // automatic account-to-staff-record binding during rollout.
+    function hasBusinessMembership(barberId) {
+      return currentUserDoc().data.barberId == barberId ||
+        (currentUserDoc().data.keys().hasAll(['businessIds']) &&
+          currentUserDoc().data.businessIds.hasAny([barberId]));
+    }
+
+    function isBusinessStaff(barberId) {
+      return isStaffRole() &&
+        hasBusinessMembership(barberId);
+    }
+
+    // A staff user must have the automatic double binding between their selected
+    // business and its matching staff record. The UI never exposes staff IDs.
+    function isAssignedStaff(barberId, staffId) {
+      return isBusinessStaff(barberId) &&
+        ((currentUserDoc().data.barberId == barberId && currentUserDoc().data.staffId == staffId) ||
+          (currentUserDoc().data.keys().hasAll(['staffAssignments']) &&
+            currentUserDoc().data.staffAssignments.hasAny([{businessId: barberId, staffId: staffId}]))) &&
+        get(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId)).data.userId == request.auth.uid;
+    }
+
+    function staffCanUpdateOwnSchedule(barberId, staffId) {
+      return isAssignedStaff(barberId, staffId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['schedule', 'updatedAt']);
+    }
+
+    function staffCanUpdateAssignedAppointment(barberId) {
+      return isAssignedStaff(barberId, resource.data.barberId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+        request.resource.data.status in ['done', 'no_show', 'cancelled'];
     }
 
     function businessIsActive(barberId) {
@@ -39,41 +84,97 @@ service cloud.firestore {
       ]);
     }
 
+    // This projection is the sole anonymous source for business presentation
+    // and booking policy. Its allowlist deliberately excludes owner, billing,
+    // trial, plan, limits, and every other internal field in `barbers/{id}`.
+    function validPublicBusiness() {
+      return request.resource.data.keys().hasAll(['name', 'slug', 'businessType', 'active', 'config', 'workingHours']) &&
+        request.resource.data.keys().hasOnly(['name', 'slug', 'businessType', 'active', 'config', 'workingHours']) &&
+        request.resource.data.name is string && request.resource.data.slug is string &&
+        request.resource.data.businessType is string && request.resource.data.active is bool &&
+        request.resource.data.config is map && request.resource.data.config.keys().hasAll(['address', 'phone']) &&
+        request.resource.data.config.keys().hasOnly(['address', 'phone', 'logoUrl', 'coverUrl', 'socialLinks', 'theme', 'booking']) &&
+        request.resource.data.workingHours is map;
+    }
+
+    // Browser bookings are deliberately an optimistic, client-only flow. Rules
+    // validate record shape and the primary lock linkage, but cannot prove a
+    // client supplied every interval lock or the complete scheduling policy.
+    // This is not server-authoritative protection against malicious clients.
+    function validPublicAppointment(barberId, appointmentId) {
+      return request.resource.data.keys().hasAll([
+          'clientName', 'clientPhone', 'barberId', 'serviceId', 'extraServices',
+          'bookingDate', 'startTime', 'endTime', 'occupiedIntervalIds',
+          'primaryLockId', 'status', 'createdAt'
+        ]) &&
+        request.resource.data.keys().hasOnly([
+          'clientName', 'clientPhone', 'barberId', 'serviceId', 'extraServices',
+          'bookingDate', 'startTime', 'endTime', 'occupiedIntervalIds',
+          'primaryLockId', 'status', 'notes', 'customerUid', 'createdAt'
+        ]) &&
+        request.resource.data.clientName is string && request.resource.data.clientName.size() > 0 && request.resource.data.clientName.size() <= 120 &&
+        request.resource.data.clientPhone is string && request.resource.data.clientPhone.size() > 0 && request.resource.data.clientPhone.size() <= 40 &&
+        (!request.resource.data.keys().hasAll(['notes']) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 500)) &&
+        request.resource.data.barberId is string && request.resource.data.barberId.size() > 0 &&
+        request.resource.data.serviceId is string && request.resource.data.serviceId.size() > 0 &&
+        request.resource.data.extraServices is list && request.resource.data.extraServices.size() == 0 &&
+        request.resource.data.bookingDate is string && request.resource.data.bookingDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        request.resource.data.startTime is string && request.resource.data.startTime.matches('^[0-2][0-9]:[0-5][0-9]$') &&
+        request.resource.data.endTime is string && request.resource.data.endTime.matches('^[0-2][0-9]:[0-5][0-9]$') &&
+        request.resource.data.occupiedIntervalIds is list && request.resource.data.occupiedIntervalIds.size() > 0 && request.resource.data.occupiedIntervalIds.size() <= 19 &&
+        request.resource.data.primaryLockId is string && request.resource.data.occupiedIntervalIds.hasAny([request.resource.data.primaryLockId]) &&
+        request.resource.data.status == 'pending' && request.resource.data.createdAt == request.time &&
+        (!request.resource.data.keys().hasAll(['customerUid']) ||
+          (isSignedIn() && request.resource.data.customerUid is string && request.resource.data.customerUid == request.auth.uid)) &&
+        getAfter(/databases/$(database)/documents/barbers/$(barberId)/bookingLocks/$(request.resource.data.bookingDate)/staff/$(request.resource.data.barberId)/intervals/$(request.resource.data.primaryLockId)).data.appointmentId == appointmentId;
+    }
+
+    function validPublicBookingLock(barberId, bookingDate, staffId, intervalId) {
+      let appointment = getAfter(/databases/$(database)/documents/barbers/$(barberId)/appointments/$(request.resource.data.appointmentId));
+      return request.resource.data.keys().hasOnly(['appointmentId', 'bookingDate', 'staffId', 'intervalId', 'startTime', 'endTime', 'createdAt']) &&
+        request.resource.data.keys().hasAll(['appointmentId', 'bookingDate', 'staffId', 'intervalId', 'startTime', 'endTime', 'createdAt']) &&
+        request.resource.data.appointmentId is string && request.resource.data.appointmentId.size() > 0 &&
+        request.resource.data.bookingDate == bookingDate && request.resource.data.staffId == staffId && request.resource.data.intervalId == intervalId &&
+        request.resource.data.startTime is string && request.resource.data.startTime.matches('^[0-2][0-9]:[0-5][0-9]$') &&
+        request.resource.data.endTime is string && request.resource.data.endTime.matches('^[0-2][0-9]:[0-5][0-9]$') &&
+        request.resource.data.createdAt == request.time &&
+        appointment.data.barberId == staffId && appointment.data.bookingDate == bookingDate &&
+        appointment.data.occupiedIntervalIds.hasAny([intervalId]);
+    }
+
     // Users collection
     match /users/{uid} {
       // Superadmin puede leer todo
       allow read: if isSuperAdmin() || (isSignedIn() && request.auth.uid == uid);
 
-      // Registro inicial: cada usuario solo puede crearse como client
+      // Registro inicial: cada usuario solo puede crearse como customer.
       allow create: if isSignedIn() && request.auth.uid == uid &&
-                      request.resource.data.role == 'client';
+                       request.resource.data.role == 'customer';
 
-      // Superadmin puede cambiar roles/barberId.
-      // Usuario normal puede actualizar perfil, pero no role ni barberId.
+      // Superadmin puede cambiar roles y vínculos de negocio/personal.
+      // Usuario normal puede actualizar perfil, pero no role ni vínculos.
       allow update: if isSuperAdmin() ||
-                      (isSignedIn() && request.auth.uid == uid &&
-                        !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'barberId']));
+                       (isSignedIn() && request.auth.uid == uid &&
+                          !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'barberId', 'businessIds', 'staffId', 'staffAssignments']));
 
       allow delete: if isSuperAdmin();
     }
 
-    // Barbers collection - pública lectura, admin control total
+    // Root businesses contain owner and billing data. They are never public.
     match /barbers/{barberId} {
-      // Lectura pública de barbería activa
-      allow read: if resource.data.active == true;
-      
       // Super admin puede leer/escribir todo
       allow read, write: if isSuperAdmin();
       
-      // Business admins may read their own business and update only operations fields.
-      allow read: if isBusinessAdmin(barberId);
+      // Root records include subscription and platform fields, so only platform
+      // administrators can read them. Scoped clients may still update the
+      // strictly allowlisted operational fields below.
       allow update: if isBusinessAdmin(barberId) && businessAdminCanUpdateBusiness();
       
       // Subcolecciones
       match /services/{serviceId} {
         // Public queries must constrain active == true; legacy services are
         // migrated explicitly before these rules are deployed.
-        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) ||
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isBusinessStaff(barberId) ||
           (businessIsActive(barberId) && resource.data.active == true);
         // Escritura solo para admin de la barbería o super admin
         allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
@@ -81,22 +182,29 @@ service cloud.firestore {
 
       match /barbers/{staffId} {
         // Lectura pública de barberos disponibles
-        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) ||
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isAssignedStaff(barberId, staffId) ||
           (businessIsActive(barberId) && resource.data.active == true);
-        // Escritura solo para admin de la barbería o super admin
-        allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
+        allow create, delete: if isSuperAdmin() || isBusinessAdmin(barberId);
+        allow update: if isSuperAdmin() || isBusinessAdmin(barberId) || staffCanUpdateOwnSchedule(barberId, staffId);
       }
 
       match /appointments/{appointmentId} {
-        // Lectura solo para admin y super admin
-        allow read: if isSuperAdmin() || isBusinessAdmin(barberId);
+        // Appointments contain PII and are never publicly readable. A public
+        // client may only create the strict pending shape linked to a lock.
+        allow create: if isSuperAdmin() || isBusinessAdmin(barberId) ||
+          (businessIsActive(barberId) && validPublicAppointment(barberId, appointmentId));
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isAssignedStaff(barberId, resource.data.barberId);
+        allow update: if isSuperAdmin() || isBusinessAdmin(barberId) || staffCanUpdateAssignedAppointment(barberId);
+        allow delete: if isSuperAdmin() || isBusinessAdmin(barberId);
+      }
 
-        // Public booking is deferred until an authenticated server-side service
-        // can validate availability and atomically create appointments.
-        allow create: if false;
-        
-        // Lectura/escritura para admin y super admin
-        allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
+      match /bookingLocks/{bookingDate}/staff/{staffId}/intervals/{intervalId} {
+        // Locks contain no PII. Public availability reads only these small,
+        // predictable documents; appointments remain private.
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isBusinessStaff(barberId) || businessIsActive(barberId);
+        allow create: if isSuperAdmin() || isBusinessAdmin(barberId) ||
+          (businessIsActive(barberId) && validPublicBookingLock(barberId, bookingDate, staffId, intervalId));
+        allow update, delete: if isSuperAdmin() || isBusinessAdmin(barberId);
       }
 
       match /catalog/{itemId} {
@@ -108,11 +216,25 @@ service cloud.firestore {
 
       match /products/{productId} {
         // Lectura pública de productos activos
-        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) ||
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isBusinessStaff(barberId) ||
           (businessIsActive(barberId) && resource.data.active == true);
         // Escritura solo para admin de la barbería o super admin
         allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
       }
+    }
+
+    match /publicBusinesses/{barberId} {
+      // Public pages can only read active, allowlisted projections.
+      // Public traffic still reads active projections only. Assigned internal
+      // users may fetch an exact inactive summary for their own selector.
+      allow read: if resource.data.active == true ||
+        (isSignedIn() && hasBusinessMembership(barberId));
+      allow create: if isSuperAdmin() && validPublicBusiness();
+      allow delete: if isSuperAdmin();
+      // Business admins may synchronize public presentation and booking fields,
+      // but cannot reactivate a business through the projection.
+      allow update: if validPublicBusiness() &&
+        (isSuperAdmin() || (isBusinessAdmin(barberId) && request.resource.data.active == resource.data.active));
     }
 
     // Denegar acceso por defecto
