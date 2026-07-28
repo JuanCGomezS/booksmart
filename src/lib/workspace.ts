@@ -1,6 +1,6 @@
 import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
-import { getBogotaDateTime, parseBookingDate } from './booking';
+import { getBogotaDateTime, getBookingDate, parseBookingDate } from './booking';
 import type { Appointment, AppointmentStatus } from './types';
 
 export type WorkspaceAppointment = Appointment & {
@@ -8,6 +8,16 @@ export type WorkspaceAppointment = Appointment & {
   startTime: string;
   endTime: string;
 };
+
+/** Identifies the Firestore error returned when a composite query index is not ready. */
+export function isWorkspaceAgendaIndexError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  return code === 'failed-precondition'
+    && typeof message === 'string'
+    && /requires an index|create (?:a |the )?index|index.*(?:create|configuration)/i.test(message);
+}
 
 type LegacyAppointment = Appointment & { durationMinutes?: number };
 
@@ -38,7 +48,7 @@ function toBogotaTime(date: Date): string {
   return `${values.hour}:${values.minute}`;
 }
 
-function normalizeLegacyAppointment(id: string, data: LegacyAppointment, bookingDate: string): WorkspaceAppointment | null {
+function normalizeLegacyAppointment(id: string, data: LegacyAppointment, bookingDate?: string): WorkspaceAppointment | null {
   const startsAt = toDate(data.date);
   if (!startsAt) return null;
 
@@ -47,10 +57,25 @@ function normalizeLegacyAppointment(id: string, data: LegacyAppointment, booking
   return {
     ...data,
     id,
-    bookingDate,
+    bookingDate: bookingDate || getBookingDate(startsAt),
     startTime,
     endTime: durationMinutes ? toBogotaTime(new Date(startsAt.getTime() + durationMinutes * 60 * 1000)) : startTime,
   };
+}
+
+function monthRange(month: string): { start: string; end: string; legacyStart: Date; legacyEnd: Date } | null {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return null;
+
+  const start = `${match[1]}-${match[2]}-01`;
+  const next = new Date(Date.UTC(year, monthIndex + 1, 1));
+  const end = next.toISOString().slice(0, 10);
+  const legacyStart = getBogotaDateTime(start, '00:00');
+  const legacyEnd = getBogotaDateTime(end, '00:00');
+  return legacyStart && legacyEnd ? { start, end, legacyStart, legacyEnd } : null;
 }
 
 /** Reads one Colombia-local day only. Staff queries must include their assigned legacy barberId. */
@@ -94,6 +119,47 @@ export async function getWorkspaceAgenda(
 
   return [...agenda.values()]
     .sort((left, right) => left.startTime.localeCompare(right.startTime));
+}
+
+/**
+ * Reads a single Colombia-local calendar month with two bounded queries: one
+ * for modern `bookingDate` records and one for legacy Timestamp records.
+ * Document IDs are deduplicated so migrated records remain visible once.
+ */
+export async function getWorkspaceMonthAgenda(
+  businessId: string,
+  month: string,
+  staffId?: string,
+): Promise<WorkspaceAppointment[]> {
+  const range = monthRange(month);
+  if (!range) return [];
+
+  const appointments = collection(db, 'barbers', businessId, 'appointments');
+  const modernConstraints = [where('bookingDate', '>=', range.start), where('bookingDate', '<', range.end)];
+  const legacyConstraints = [where('date', '>=', range.legacyStart), where('date', '<', range.legacyEnd)];
+  if (staffId) {
+    const staffConstraint = where('barberId', '==', staffId);
+    modernConstraints.push(staffConstraint);
+    legacyConstraints.push(staffConstraint);
+  }
+
+  const [modernSnapshot, legacySnapshot] = await Promise.all([
+    getDocs(query(appointments, ...modernConstraints)),
+    getDocs(query(appointments, ...legacyConstraints)),
+  ]);
+  const agenda = new Map<string, WorkspaceAppointment>();
+  modernSnapshot.docs.forEach((item) => {
+    agenda.set(item.id, { id: item.id, ...item.data() } as WorkspaceAppointment);
+  });
+  legacySnapshot.docs.forEach((item) => {
+    if (agenda.has(item.id)) return;
+    const normalized = normalizeLegacyAppointment(item.id, item.data() as LegacyAppointment);
+    if (normalized) agenda.set(item.id, normalized);
+  });
+
+  return [...agenda.values()].sort((left, right) =>
+    left.bookingDate.localeCompare(right.bookingDate) || left.startTime.localeCompare(right.startTime),
+  );
 }
 
 export async function updateWorkspaceAppointmentStatus(

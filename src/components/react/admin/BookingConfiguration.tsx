@@ -82,7 +82,7 @@ export default function BookingConfiguration({ business }: { business: BookingBu
   const activeStaff = staff.filter((member) => member.active);
   const selectedSchedule = schedules[selectedStaffId];
 
-  return <section className="space-y-8">
+  return <section className="business-admin-panel space-y-8">
     <div><h3 className="text-lg font-bold text-main">Configuración de reservas</h3><p className="mt-1 text-sm text-subtle">Estos datos preparan la disponibilidad. Todavía no habilitan reservas públicas.</p></div>
     {message && <p className="surface-soft rounded-lg p-3 text-sm">{message}</p>}
     <div className="grid gap-3 md:grid-cols-3"><label className="field-label">Anticipación mínima (minutos)<input type="number" min="0" className="field-input mt-1" value={settings.minimumNoticeMinutes} onChange={(event) => setSettings({ ...settings, minimumNoticeMinutes: Number(event.target.value) })} /></label><label className="field-label">Horizonte (días)<input type="number" min="1" className="field-input mt-1" value={settings.bookingHorizonDays} onChange={(event) => setSettings({ ...settings, bookingHorizonDays: Number(event.target.value) })} /></label><label className="field-label">Intervalo (minutos)<input type="number" min="5" max="120" className="field-input mt-1" value={settings.slotIntervalMinutes} onChange={(event) => setSettings({ ...settings, slotIntervalMinutes: Number(event.target.value) })} /></label></div>

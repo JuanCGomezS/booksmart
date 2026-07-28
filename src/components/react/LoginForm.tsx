@@ -67,7 +67,7 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
   };
 
   return (
-    <div className="min-h-[calc(100vh-90px)] section-shell flex items-center justify-center px-4 py-10">
+    <div className="login-refinement min-h-[calc(100vh-90px)] section-shell flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <button className="mb-4 text-sm text-subtle transition-colors cursor-pointer" onClick={() => window.history.back()}>
           &lt; Atrás
@@ -83,14 +83,14 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
           </p>
 
           {error && (
-            <div className="mb-4 p-4 rounded-lg" style={{ background: 'color-mix(in srgb, #ef4444 14%, var(--surface))', border: '1px solid color-mix(in srgb, #ef4444 45%, var(--border))' }}>
-              <p className="text-sm" style={{ color: '#fecaca' }}>{error}</p>
+            <div className="error-notice mb-4 rounded-lg p-4" role="alert">
+              <p className="text-sm">{error}</p>
             </div>
           )}
 
           {success && (
-            <div className="mb-4 p-4 rounded-lg" style={{ background: 'color-mix(in srgb, #22c55e 14%, var(--surface))', border: '1px solid color-mix(in srgb, #22c55e 45%, var(--border))' }}>
-              <p className="text-sm" style={{ color: '#86efac' }}>{success}</p>
+            <div className="success-notice mb-4 rounded-lg p-4" role="status" aria-live="polite">
+              <p className="text-sm">{success}</p>
             </div>
           )}
 

@@ -162,7 +162,6 @@ service cloud.firestore {
 
     // Root businesses contain owner and billing data. They are never public.
     match /barbers/{barberId} {
-      // Super admin puede leer/escribir todo
       allow read, write: if isSuperAdmin();
       
       // Root records include subscription and platform fields, so only platform

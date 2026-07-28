@@ -57,7 +57,7 @@ const initialPlan = pricingData[0];
 const initialDuration = initialPlan.durations[2];
 ---
 
-<section id="pricing" class="section-shell px-4 py-12 sm:px-6 lg:px-8 lg:py-10">
+<section id="pricing" class="landing-refinement section-shell px-4 py-12 sm:px-6 lg:px-8 lg:py-10">
   <div class="mx-auto max-w-7xl">
     <div class="text-center">
       <h2 class="text-3xl font-bold text-main sm:text-4xl">Planes para cada etapa de crecimiento</h2>
@@ -162,9 +162,9 @@ const initialDuration = initialPlan.durations[2];
             }
           </div>
 
-          <button class="btn-primary mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition-transform duration-200 hover:scale-[1.01]" type="button" data-cta-button>
+          <a class="btn-primary mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-bold transition-transform duration-200 hover:scale-[1.01]" href="#contact" data-cta-button>
             Suscribirme por ${initialDuration.total}
-          </button>
+          </a>
 
           <p class="mt-2 text-center text-[11px] text-subtle" data-small-print>
             Facturacion renovable. Cancelas cuando quieras.

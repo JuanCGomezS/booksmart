@@ -16,7 +16,6 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { DATA } from './data';
-import { getUserIdByEmail } from './users';
 import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus, BarberStaff, BusinessType, BookingSettings, CatalogItem, Product, Service, PublicBusiness } from './types';
 import { bookingSettingsUpdate, getBogotaDateTime, getBookingDate } from './booking';
 import { PUBLIC_BUSINESSES_COLLECTION, readPublicBusiness, toPublicBusiness } from './public-business';
@@ -40,6 +39,22 @@ function toDate(value: unknown): Date {
 const BARBER_CACHE_TTL = 60 * 60 * 1000; // 1 hora
 const BARBER_CATALOG_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 horas
 const BARBER_PRODUCTS_CACHE_TTL = 30 * 60 * 1000; // 30 minutos
+
+function invalidateBarberConfigCaches(barberId: string): void {
+  localStorage.removeItem(`barber_config_${barberId}`);
+
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith('barber_config_slug_')) continue;
+
+    try {
+      const cached = localStorage.getItem(key);
+      if (cached && JSON.parse(cached)?.data?.id === barberId) localStorage.removeItem(key);
+    } catch {
+      // A malformed cache entry is unrelated to this save and will be refreshed on its next read.
+    }
+  }
+}
 
 /**
  * Obtener barbería por ID (con cache en localStorage)
@@ -167,89 +182,47 @@ export async function createBarber(
   businessType: BusinessType = LEGACY_BUSINESS_TYPE,
 ): Promise<Barber | null> {
   try {
-    // Convertir email a UID
-    const ownerId = await getUserIdByEmail(ownerEmail);
-    if (!ownerId) {
-      throw new Error(`Usuario no encontrado: ${ownerEmail}`);
-    }
+    const owners = await getDocs(query(collection(db, 'users'), where('email', '==', ownerEmail), limit(1)));
+    if (owners.empty) throw new Error(`Usuario no encontrado: ${ownerEmail}`);
+    const ownerRef = owners.docs[0].ref;
+    const ownerId = ownerRef.id;
 
-    // Generar fechas
     const now = new Date();
-    const trialEnds = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 días
-
+    const trialEnds = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
     const barberData = {
-      name,
-      slug,
-      businessType,
-      ownerId,
-      ownerEmail,
-      plan,
-      billingCycle,
-      trialStartedAt: serverTimestamp(),
-      trialEndsAt: trialEnds,
-      trialUsed: false,
-      planExpiresAt: trialEnds,
-      active: true,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      name, slug, businessType, ownerId, ownerEmail, plan, billingCycle,
+      trialStartedAt: serverTimestamp(), trialEndsAt: trialEnds, trialUsed: false,
+      planExpiresAt: trialEnds, active: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
       limits: {
         maxBarbers: getLimitsByPlan(plan).maxBarbers,
         maxProducts: getLimitsByPlan(plan).maxProducts,
         maxGalleryItems: getLimitsByPlan(plan).maxGalleryItems,
       },
-      config: {
-        address: '',
-        phone: '',
-        socialLinks: {},
-        theme: { primaryColor: '#000000' },
-      },
+      config: { address: '', phone: '', socialLinks: {}, theme: { primaryColor: '#000000' } },
       workingHours: {
-        0: { open: '09:00', close: '18:00', enabled: false }, // Sunday
-        1: { open: '09:00', close: '18:00', enabled: true },  // Monday
-        2: { open: '09:00', close: '18:00', enabled: true },  // Tuesday
-        3: { open: '09:00', close: '18:00', enabled: true },  // Wednesday
-        4: { open: '09:00', close: '18:00', enabled: true },  // Thursday
-        5: { open: '09:00', close: '18:00', enabled: true },  // Friday
-        6: { open: '09:00', close: '14:00', enabled: true },  // Saturday
+        0: { open: '09:00', close: '18:00', enabled: false }, 1: { open: '09:00', close: '18:00', enabled: true },
+        2: { open: '09:00', close: '18:00', enabled: true }, 3: { open: '09:00', close: '18:00', enabled: true },
+        4: { open: '09:00', close: '18:00', enabled: true }, 5: { open: '09:00', close: '18:00', enabled: true },
+        6: { open: '09:00', close: '14:00', enabled: true },
       },
     };
-
     const docRef = doc(collection(db, 'barbers'));
-    const ownerRef = doc(db, 'users', ownerId);
     await runTransaction(db, async (transaction) => {
       const ownerSnapshot = await transaction.get(ownerRef);
-      if (!ownerSnapshot.exists()) {
-        throw new Error(`Owner user document no longer exists: ${ownerEmail}`);
-      }
-
+      if (!ownerSnapshot.exists()) throw new Error(`Owner user document no longer exists: ${ownerEmail}`);
       const owner = ownerSnapshot.data();
       const existingBusinessIds = Array.isArray(owner.businessIds)
         ? owner.businessIds.filter((businessId): businessId is string => typeof businessId === 'string' && businessId.trim().length > 0)
         : [];
       const businessIds = [...new Set([...existingBusinessIds, docRef.id])];
-      const ownerUpdates: Record<string, unknown> = {
-        businessIds,
-        updatedAt: serverTimestamp(),
-      };
-
-      if (typeof owner.barberId !== 'string' || !owner.barberId.trim()) {
-        ownerUpdates.barberId = docRef.id;
-      }
-      if (owner.role === DATA.USER_ROLE.STOREADMIN || owner.role === 'barber_admin') {
-        ownerUpdates.role = DATA.USER_ROLE.STOREADMIN;
-      }
-
+      const ownerUpdates: Record<string, unknown> = { businessIds, updatedAt: serverTimestamp() };
+      if (typeof owner.barberId !== 'string' || !owner.barberId.trim()) ownerUpdates.barberId = docRef.id;
+      if (owner.role === DATA.USER_ROLE.STOREADMIN || owner.role === 'barber_admin') ownerUpdates.role = DATA.USER_ROLE.STOREADMIN;
       transaction.set(docRef, barberData);
       transaction.set(doc(db, PUBLIC_BUSINESSES_COLLECTION, docRef.id), toPublicBusiness({ id: docRef.id, ...barberData } as unknown as Barber));
       transaction.update(ownerRef, ownerUpdates);
     });
-
-    return {
-      id: docRef.id,
-      ...barberData,
-      trialEndsAt: trialEnds as any,
-      planExpiresAt: trialEnds as any,
-    } as unknown as Barber;
+    return { id: docRef.id, ...barberData, trialEndsAt: trialEnds as any, planExpiresAt: trialEnds as any } as unknown as Barber;
   } catch (error) {
     console.error('Error creating barber:', error);
     return null;
@@ -291,7 +264,7 @@ export async function updateBarberBookingSettings(barberId: string, settings: Bo
     // so the existing allowlisted projection keeps its sibling config fields.
     batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), bookingSettingsUpdate(settings));
     await batch.commit();
-    localStorage.removeItem(`barber_config_${barberId}`);
+    invalidateBarberConfigCaches(barberId);
     return true;
   } catch (error) {
     console.error('Error updating barber booking settings:', error);

@@ -4,7 +4,6 @@ import { DATA } from '../../lib/data';
 import type { Barber } from '../../lib/types';
 import BarbersList from './admin/BarbersList';
 import CreateBarberForm from './admin/CreateBarberForm';
-import UsersRolesManager from './admin/UsersRolesManager';
 
 export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: (barber: Barber) => void }) {
   const [barbers, setBarbers] = useState<Barber[]>([]);
@@ -38,9 +37,9 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center section-shell">
+      <div className="super-admin-workspace section-shell min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderColor: 'var(--secondary)' }}></div>
+          <div className="animate-spin mx-auto mb-4 h-10 w-10 border-2" style={{ borderColor: 'var(--secondary)' }}></div>
           <p className="text-subtle">Cargando negocios...</p>
         </div>
       </div>
@@ -48,43 +47,47 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
   }
 
   return (
-    <div className="section-shell">
+    <div className="super-admin-workspace section-shell">
       {/* Main content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-main">BookSmart Admin</h1>
-          <p className="text-subtle text-sm">Control de negocios por cita</p>
+      <main className="super-admin-content max-w-7xl mx-auto px-4 py-10 sm:py-12">
+        <div className="super-admin-header mb-10">
+          <p className="super-admin-eyebrow">Control de plataforma</p>
+          <h1 className="mt-2 text-3xl font-bold">BookSmart Admin</h1>
+          <p className="mt-2 text-sm">Control de negocios por cita</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 rounded-lg" style={{ background: 'color-mix(in srgb, #ef4444 14%, var(--surface))', border: '1px solid color-mix(in srgb, #ef4444 45%, var(--border))' }}>
-            <p style={{ color: '#fecaca' }}>{error}</p>
+          <div className="status-cancelled mb-6 flex flex-wrap items-center gap-3 rounded border p-4" role="alert">
+            <p>{error}</p>
+            <button type="button" className="btn-outline px-3 py-1 text-sm" onClick={() => void loadBarbers()}>Reintentar</button>
           </div>
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="surface-card rounded-lg p-6">
+        <div className="super-admin-metrics mb-10">
+          <div className="super-admin-metric-primary surface-card p-7">
             <p className="text-subtle text-sm">Total de negocios</p>
-            <p className="text-3xl font-bold text-main">{barbers.length}</p>
+            <p className="text-5xl font-semibold text-main">{barbers.length}</p>
           </div>
-          <div className="surface-card rounded-lg p-6">
-            <p className="text-subtle text-sm">Activas</p>
-            <p className="text-3xl font-bold" style={{ color: 'var(--success)' }}>
-              {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.ACTIVE).length}
-            </p>
-          </div>
-          <div className="surface-card rounded-lg p-6">
-            <p className="text-subtle text-sm">En prueba</p>
-            <p className="text-3xl font-bold" style={{ color: 'var(--accent)' }}>
-              {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.TRIAL).length}
-            </p>
-          </div>
-          <div className="surface-card rounded-lg p-6">
-            <p className="text-subtle text-sm">Expiradas</p>
-            <p className="text-3xl font-bold" style={{ color: '#ef4444' }}>
-              {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.EXPIRED).length}
-            </p>
+          <div className="super-admin-metric-statuses" aria-label="Estado de negocios">
+            <div>
+              <p className="text-subtle text-sm">Activas</p>
+              <p className="text-xl font-semibold" style={{ color: 'var(--success)' }}>
+                {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.ACTIVE).length}
+              </p>
+            </div>
+            <div>
+              <p className="text-subtle text-sm">En prueba</p>
+              <p className="status-trial-fg text-xl font-semibold">
+                {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.TRIAL).length}
+              </p>
+            </div>
+            <div>
+              <p className="text-subtle text-sm">Expiradas</p>
+              <p className="text-xl font-semibold" style={{ color: 'var(--danger)' }}>
+                {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.EXPIRED).length}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -92,7 +95,7 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
         <div className="mb-8">
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
-            className="btn-primary px-8 py-3 rounded-xl transition-colors font-semibold"
+            className="btn-primary super-admin-action px-6 py-3 font-semibold"
           >
             {showCreateForm ? 'Cancelar' : '+ Nuevo negocio'}
           </button>
@@ -110,9 +113,6 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
           onSelect={onSelectBusiness}
         />
 
-        <div className="mt-8">
-          <UsersRolesManager />
-        </div>
       </main>
     </div>
   );

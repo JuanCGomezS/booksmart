@@ -7,7 +7,7 @@ const pricingPath = `${baseUrl}#pricing`;
 const contactPath = `${baseUrl}#contact`;
 ---
 
-<header class="sticky top-0 z-50 border-b backdrop-blur-xl" style="border-color: var(--border); background: color-mix(in srgb, var(--bg) 88%, transparent);">
+<header class="site-header sticky top-0 z-50 border-b backdrop-blur-xl" style="border-color: #b9bdc4; background: color-mix(in srgb, #101114 94%, transparent);">
   <div class="mx-auto flex h-15 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
     <a href={homePath} class="group inline-flex items-center gap-3">
       <img
@@ -19,14 +19,14 @@ const contactPath = `${baseUrl}#contact`;
         loading="eager"
         decoding="async"
       />
-      <span class="text-2xl font-extrabold tracking-tight text-main">BookSmart</span>
+      <span class="text-2xl font-extrabold tracking-tight text-[#f1eee6]">BookSmart</span>
     </a>
 
     <div class="relative">
       <button
         id="menu-trigger"
         type="button"
-        class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-2" style="border-color: color-mix(in srgb, var(--secondary) 75%, var(--border)); background: linear-gradient(120deg, var(--primary), var(--surface));"
+        class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded border-2" style="border-color: var(--secondary); background: #101114;"
         aria-haspopup="menu"
         aria-expanded="false"
         aria-controls="header-dropdown"
@@ -42,7 +42,7 @@ const contactPath = `${baseUrl}#contact`;
 
       <div
         id="header-dropdown"
-        class="surface-card invisible absolute right-0 mt-3 w-[320px] origin-top-right rounded-2xl p-5 opacity-0 transition duration-200"
+        class="surface-card invisible absolute right-0 mt-3 w-[320px] origin-top-right rounded p-5 opacity-0 transition duration-200"
         role="menu"
         aria-label="Menu de usuario"
       >
@@ -56,10 +56,10 @@ const contactPath = `${baseUrl}#contact`;
 
           <nav class="py-4" aria-label="Navegacion principal">
             <ul class="space-y-2">
-              <li><a href={homePath} class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Inicio</a></li>
-              <li><a href={featuresPath} class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Lo que ofrecemos</a></li>
-              <li><a href={pricingPath} class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Planes</a></li>
-              <li><a href={contactPath} class="block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Contacto</a></li>
+              <li><a href={homePath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Inicio</a></li>
+              <li><a href={featuresPath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Lo que ofrecemos</a></li>
+              <li><a href={pricingPath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Planes</a></li>
+              <li><a href={contactPath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Contacto</a></li>
             </ul>
           </nav>
 
@@ -72,12 +72,12 @@ const contactPath = `${baseUrl}#contact`;
         <div id="menu-auth-section" class="hidden space-y-3">
           <nav class="border-b pb-3" style="border-color: var(--border);">
             <ul class="space-y-1">
-              <li><a href={homePath} class="block rounded-xl px-3 py-2 text-sm text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)] hover:text-[var(--secondary)]">Inicio</a></li>
+              <li><a href={homePath} class="accent-link block rounded-xl px-3 py-2 text-sm text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Inicio</a></li>
             </ul>
           </nav>
           <div id="menu-role-box" class="rounded-xl px-4 py-3" style="background: color-mix(in srgb, var(--surface-soft) 82%, var(--bg)); border: 1px solid var(--border);">
             <p id="menu-role-label" class="text-xs font-semibold uppercase tracking-[0.18em] text-subtle">Rol</p>
-            <a id="menu-role-link" href="#" class="mt-2 hidden text-sm font-bold text-main transition hover:text-[var(--secondary)]"></a>
+            <a id="menu-role-link" href="#" class="accent-link mt-2 hidden text-sm font-bold text-main transition"></a>
             <p id="menu-role-note" class="mt-2 hidden text-sm text-subtle"></p>
           </div>
           <button id="menu-logout-button" type="button" class="btn-outline block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Cerrar sesion</button>

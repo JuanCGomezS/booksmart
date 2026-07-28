@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { createBarber } from '../../../lib/barbers';
 import { BILLING_CYCLE_LABEL, BUSINESS_TYPE_LABEL, DATA, PLAN_LABEL } from '../../../lib/data';
-import { getBarberAdmins } from '../../../lib/users';
-import type { BillingCycle, BusinessType, Plan, User } from '../../../lib/types';
+import type { BillingCycle, BusinessType, Plan } from '../../../lib/types';
 import FancySelect, { type FancySelectOption } from '../FancySelect';
 
 interface CreateBarberFormProps {
@@ -17,14 +16,7 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>(DATA.BILLING_CYCLE.MONTH_1);
   const [businessType, setBusinessType] = useState<BusinessType>('barbershop');
   const [loading, setLoading] = useState(false);
-  const [loadingAdmins, setLoadingAdmins] = useState(true);
   const [error, setError] = useState('');
-  const [admins, setAdmins] = useState<User[]>([]);
-
-  const adminOptions: FancySelectOption<string>[] = admins.map((admin) => ({
-    value: admin.email,
-    label: admin.email,
-  }));
 
   const planOptions: FancySelectOption<string>[] = [
     { value: DATA.PLAN.STANDARD, label: PLAN_LABEL[DATA.PLAN.STANDARD] },
@@ -38,24 +30,6 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
     { value: DATA.BILLING_CYCLE.MONTH_12, label: BILLING_CYCLE_LABEL[DATA.BILLING_CYCLE.MONTH_12] },
   ];
   const businessTypeOptions: FancySelectOption<string>[] = Object.entries(BUSINESS_TYPE_LABEL).map(([value, label]) => ({ value, label }));
-
-  // Cargar administradores del negocio (rol heredado).
-  useEffect(() => {
-    loadAdmins();
-  }, []);
-
-  const loadAdmins = async () => {
-    setLoadingAdmins(true);
-    try {
-      const data = await getBarberAdmins();
-      setAdmins(data);
-    } catch (err) {
-      console.error('Error loading admins:', err);
-      setError('Error cargando administradores');
-    } finally {
-      setLoadingAdmins(false);
-    }
-  };
 
   // Auto-generate slug from name
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,9 +60,7 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
         setBillingCycle(DATA.BILLING_CYCLE.MONTH_1);
         setBusinessType('barbershop');
         onSuccess();
-      } else {
-        setError('Error al crear el negocio');
-      }
+      } else setError('Error al crear el negocio');
     } catch (err) {
       setError('Error al crear el negocio');
       console.error(err);
@@ -98,12 +70,12 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
   };
 
   return (
-    <div className="surface-card rounded-lg p-8 mb-8">
+    <div className="super-admin-surface super-admin-form surface-card p-8 mb-8">
       <h2 className="text-2xl font-bold mb-6 text-main">Crear nuevo negocio</h2>
 
       {error && (
-        <div className="mb-4 p-4 rounded-lg" style={{ background: 'color-mix(in srgb, #ef4444 14%, var(--surface))', border: '1px solid color-mix(in srgb, #ef4444 45%, var(--border))' }}>
-          <p style={{ color: '#fecaca' }}>{error}</p>
+        <div className="error-notice mb-4 rounded-lg p-4">
+          <p>{error}</p>
         </div>
       )}
 
@@ -144,19 +116,13 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
             <label className="field-label block text-sm font-medium mb-1">
               Administrador (email)
             </label>
-            <FancySelect
-              value={ownerEmail}
-              onChange={setOwnerEmail}
-              options={adminOptions}
-              placeholder={loadingAdmins ? 'Cargando...' : admins.length === 0 ? 'No hay admins disponibles' : 'Selecciona un administrador'}
-              disabled={loading || loadingAdmins}
-            />
-            <p className="field-hint text-xs mt-1">Solo se muestran usuarios con rol de administrador del negocio</p>
+            <input type="email" value={ownerEmail} onChange={(event) => setOwnerEmail(event.target.value)} placeholder="owner@example.com" required disabled={loading} className="field-input" />
+            <p className="field-hint text-xs mt-1">Debe corresponder a una cuenta de administrador existente.</p>
           </div>
 
           <div>
             <label className="field-label block text-sm font-medium mb-1">Tipo de negocio</label>
-            <FancySelect value={businessType} onChange={(value) => setBusinessType(value as BusinessType)} options={businessTypeOptions} disabled={loading} />
+            <FancySelect value={businessType} onChange={(value) => setBusinessType(value as BusinessType)} options={businessTypeOptions} disabled={loading} menuClassName="super-admin-select-menu" />
           </div>
 
           <div>
@@ -168,6 +134,7 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
               onChange={(nextPlan) => setPlan(nextPlan as Plan)}
               options={planOptions}
               disabled={loading}
+              menuClassName="super-admin-select-menu"
             />
           </div>
 
@@ -180,6 +147,7 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
               onChange={(nextBillingCycle) => setBillingCycle(nextBillingCycle as BillingCycle)}
               options={billingOptions}
               disabled={loading}
+              menuClassName="super-admin-select-menu"
             />
           </div>
         </div>
@@ -187,8 +155,8 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
         <div className="flex gap-4 pt-4">
           <button
             type="submit"
-            disabled={loading || loadingAdmins}
-            className="btn-primary px-8 py-2 rounded-lg transition-colors disabled:opacity-50 font-semibold"
+            disabled={loading}
+            className="btn-primary super-admin-action px-6 py-2 transition-colors disabled:opacity-50 font-semibold"
           >
             {loading ? 'Creando...' : 'Crear negocio'}
           </button>
