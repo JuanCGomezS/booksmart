@@ -44,7 +44,7 @@ function getWhatsappUrl(phone?: string): string | null {
 }
 
 function formatPrice(price: number): string {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(price);
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(price);
 }
 
 export default function BarberApp() {
@@ -157,35 +157,33 @@ export default function BarberApp() {
 
   return (
     <div className="public-booking-refinement min-h-screen section-shell">
-      <main className="max-w-5xl mx-auto px-4 py-8 sm:py-12">
-        <header className="press-panel-dark registration-mark mb-6 p-5 sm:p-7">
-          <div className="flex items-start gap-4">
+      <main className="max-w-5xl mx-auto px-4 py-10 sm:py-14">
+        <header className="public-business-intro">
+          <div className="flex min-w-0 items-start gap-4">
             {barber.config?.logoUrl && !logoFailed ? (
-              <img src={barber.config.logoUrl} alt={`Logo de ${barber.name}`} className="h-16 w-16 border border-[#f1eee6] object-cover" onError={() => setLogoFailed(true)} />
+              <img src={barber.config.logoUrl} alt={`Logo de ${barber.name}`} className="public-business-logo" onError={() => setLogoFailed(true)} />
             ) : (
-              <div className="flex h-16 w-16 items-center justify-center border border-[#f1eee6] text-2xl" style={{ background: '#f13b87', color: '#101114' }}>
-                📅
-              </div>
+              <div className="public-business-logo public-business-logo-fallback" aria-hidden="true">📅</div>
             )}
-
-            <div>
-              <p className="press-kicker text-[#ffb400]">Página pública / reservas</p>
-              <h1 className="mt-2 text-3xl font-black text-[#f1eee6]">{barber.name}</h1>
-              <p className="mt-1 text-[#d8d3c8]">{barber.config?.address || 'Dirección no disponible'}</p>
+            <div className="min-w-0">
+              <p className="press-label accent-text">Reservas en línea</p>
+              <h1 className="public-business-title">{barber.name}</h1>
             </div>
+          </div>
+          <div className="public-business-intro-action">
+            <p className="text-subtle">Elige una sección o reserva tu cita.</p>
+            <button type="button" className="btn-primary public-business-cta" onClick={() => setTab('agendar')}>Reservar ahora</button>
           </div>
         </header>
 
-        <nav className="surface-card mb-6 rounded p-2" aria-label="Secciones del negocio">
-          <ul className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <nav className="public-business-tabs" aria-label="Secciones del negocio">
+          <ul>
             {(Object.keys(TAB_LABELS) as BarberTab[]).map((tabKey) => (
               <li key={tabKey}>
                 <button
                   type="button"
-                  className="w-full rounded px-3 py-2 text-sm font-bold transition-colors"
-                  style={tab === tabKey
-                    ? { background: 'var(--secondary)', color: 'var(--on-secondary)', boxShadow: '3px 3px 0 #101114' }
-                    : { background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                  className={tab === tabKey ? 'is-active' : ''}
+                  aria-current={tab === tabKey ? 'page' : undefined}
                   onClick={() => setTab(tabKey)}
                 >
                   {TAB_LABELS[tabKey]}
@@ -195,16 +193,16 @@ export default function BarberApp() {
           </ul>
         </nav>
 
-        <section className="surface-card registration-mark rounded p-5 sm:p-7">
+        <section className="public-business-content">
           {tab === 'inicio' && (
-            <div className="space-y-6">
+            <div className="public-business-overview">
               <div>
-                <h2 className="text-xl font-semibold text-main mb-2">Inicio</h2>
-                <p className="text-subtle">Conocé el negocio y su información principal.</p>
+                <h2 className="text-2xl font-semibold text-main">Información del negocio</h2>
+                <p className="mt-2 text-subtle">Consulta los datos de contacto y los horarios de atención.</p>
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="surface-soft rounded-xl p-4">
+              <div className="public-business-info-grid">
+                <section>
                   <h3 className="font-semibold text-main mb-2">Contacto</h3>
                   <p className="text-subtle">Teléfono: {barber.config?.phone || 'No disponible'}</p>
                   <div className="text-subtle mt-2 space-y-1">
@@ -212,9 +210,9 @@ export default function BarberApp() {
                     <p>Facebook: {barber.config?.socialLinks?.facebook || 'No disponible'}</p>
                     <p>WhatsApp: {barber.config?.socialLinks?.whatsapp || barber.config?.phone || 'No disponible'}</p>
                   </div>
-                </div>
+                </section>
 
-                <div className="surface-soft rounded-xl p-4">
+                <section>
                   <h3 className="font-semibold text-main mb-2">Horario</h3>
                   <ul className="space-y-1 text-subtle text-sm">
                     {Object.entries(barber.workingHours || {}).map(([day, config]) => (
@@ -223,7 +221,7 @@ export default function BarberApp() {
                       </li>
                     ))}
                   </ul>
-                </div>
+                </section>
               </div>
             </div>
           )}

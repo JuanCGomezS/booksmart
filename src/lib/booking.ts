@@ -163,12 +163,26 @@ export function appointmentStatusBlocksAgenda(status: string): status is Booking
   return (BOOKING_BLOCKING_STATUSES as readonly string[]).includes(status);
 }
 
-export function getStaffSchedule(staff: BarberStaff, workingHours: Barber['workingHours']): WeeklySchedule {
-  if (staff.schedule) return staff.schedule;
+function validScheduleRange(start: unknown, end: unknown): start is string {
+  const startMinutes = typeof start === 'string' ? timeToMinutes(start) : null;
+  const endMinutes = typeof end === 'string' ? timeToMinutes(end) : null;
+  return startMinutes !== null && endMinutes !== null && startMinutes < endMinutes;
+}
 
+/** Returns the effective schedule: staff availability can narrow, never expand, business hours. */
+export function getStaffSchedule(staff: BarberStaff, workingHours: Barber['workingHours']): WeeklySchedule {
   return Object.fromEntries(Array.from({ length: 7 }, (_, day) => {
     const businessDay = workingHours?.[day];
-    return [day, businessDay ? { enabled: businessDay.enabled, start: businessDay.open, end: businessDay.close, breaks: [] } : CLOSED_DAY];
+    if (!businessDay?.enabled || !validScheduleRange(businessDay.open, businessDay.close)) return [day, CLOSED_DAY];
+
+    const staffDay = staff.schedule?.[day];
+    if (!staffDay) return [day, { enabled: true, start: businessDay.open, end: businessDay.close, breaks: [] }];
+    if (!staffDay.enabled || !validScheduleRange(staffDay.start, staffDay.end)) return [day, CLOSED_DAY];
+
+    const start = timeToMinutes(staffDay.start)! > timeToMinutes(businessDay.open)! ? staffDay.start : businessDay.open;
+    const end = timeToMinutes(staffDay.end)! < timeToMinutes(businessDay.close)! ? staffDay.end : businessDay.close;
+    if (!validScheduleRange(start, end)) return [day, CLOSED_DAY];
+    return [day, { enabled: true, start, end, breaks: Array.isArray(staffDay.breaks) ? staffDay.breaks : [] }];
   })) as WeeklySchedule;
 }
 

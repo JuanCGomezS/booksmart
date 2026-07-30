@@ -16,9 +16,19 @@ export type BusinessType = 'barbershop' | 'hair_salon' | 'nail_studio' | 'dental
 // Roles en el sistema
 /** Canonical role values written by the application. */
 export type UserRole = 'superadmin' | 'storeadmin' | 'staff' | 'customer';
-/** Read-only rollout compatibility for documents not yet migrated. */
-export type LegacyUserRole = 'barber_admin' | 'barber' | 'client';
-export type StoredUserRole = UserRole | LegacyUserRole;
+export type StoredUserRole = UserRole;
+
+/** Safe, actionable failure categories for superadmin business creation. */
+export type BusinessCreationErrorCode =
+  | 'not-authenticated'
+  | 'owner-not-found'
+  | 'self-owner'
+  | 'owner-not-customer'
+  | 'owner-already-assigned'
+  | 'permission-denied'
+  | 'unavailable'
+  | 'conflict'
+  | 'unknown';
 
 // Estado de una cita
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'done' | 'no_show';
@@ -141,20 +151,17 @@ export interface User {
   /** Optional external-auth display name, if a profile sync has stored one. */
   displayName?: string;
   role: StoredUserRole;
-  /** Legacy primary business assignment. Kept while existing users are migrated. */
+  /** The Staff member's only business assignment. */
   barberId?: string;
-  /** Explicit multi-business assignment for a business administrator. */
+  /** Business assignments for a Storeadmin. Staff has exactly one matching entry. */
   businessIds?: string[];
-  /** Internal staff-record links resolved automatically from the selected businesses. */
-  staffAssignments?: StaffAssignment[];
-  /** Legacy primary staff binding. Kept while existing users are migrated. */
+  /** Professional profile identifier within barberId when the account has one. */
   staffId?: string;
+  /** Business that contains the linked professional profile for a Storeadmin. */
+  professionalBusinessId?: string;
+  /** Temporary enrollment proof, removed atomically when a Storeadmin activates Staff. */
+  enrollmentCode?: string;
   createdAt: Timestamp;
-}
-
-export interface StaffAssignment {
-  businessId: string;
-  staffId: string;
 }
 
 /** Name-only option used by the superadmin business-assignment control. */
@@ -193,14 +200,18 @@ export interface BarberStaff {
   id: string;
   name: string;
   role?: string;
-  /** Authenticated user automatically bound from a superadmin-selected business. */
-  userId?: string;
   photoUrl?: string;
   /** Storage metadata used by the content manager; photoUrl remains the public legacy field. */
   imageStoragePath?: string;
   /** Old immutable assets awaiting a successful client-side Storage deletion. */
   pendingImageCleanupPaths?: string[];
   active: boolean;
+  /** Authenticated account linked to this professional profile. UID exposure is an accepted tradeoff. */
+  accountUid?: string;
+  /** Historical account binding; profiles with this field are not eligible for self-linking. */
+  userId?: string;
+  /** Account-bound Staff state. Legacy account-bound documents use the account UID as their ID. */
+  accountStatus?: 'active' | 'inactive';
   /** Legacy discrete slots. New schedules should use schedule. */
   availability?: {
     [day: number]: {

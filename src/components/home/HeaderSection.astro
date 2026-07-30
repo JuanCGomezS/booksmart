@@ -26,14 +26,15 @@ const contactPath = `${baseUrl}#contact`;
       <button
         id="menu-trigger"
         type="button"
-        class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded border-2" style="border-color: var(--secondary); background: #101114;"
-        aria-haspopup="menu"
+        class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--secondary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101114]"
+        aria-label="Abrir menú de cuenta"
         aria-expanded="false"
         aria-controls="header-dropdown"
       >
-        <svg id="menu-avatar" viewBox="0 0 24 24" class="hidden h-5 w-5" style="color: var(--secondary);" aria-hidden="true">
-          <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.2 0-6 1.6-6 3.5V19h12v-1.5c0-1.9-2.8-3.5-6-3.5Z" fill="currentColor" />
-        </svg>
+        <span id="menu-avatar" class="hidden h-full w-full overflow-hidden rounded-full" style="background: color-mix(in srgb, var(--secondary) 13%, var(--surface));" aria-hidden="true">
+          <img id="menu-avatar-image" class="hidden h-full w-full object-cover" alt="" />
+          <span id="menu-avatar-initials" class="flex h-full w-full items-center justify-center text-xs font-extrabold tracking-tight text-main"></span>
+        </span>
         <svg id="menu-hamburger" viewBox="0 0 24 24" class="h-5 w-5" style="color: var(--secondary);" aria-hidden="true">
           <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
         </svg>
@@ -42,9 +43,7 @@ const contactPath = `${baseUrl}#contact`;
 
       <div
         id="header-dropdown"
-        class="surface-card invisible absolute right-0 mt-3 w-[320px] origin-top-right rounded p-5 opacity-0 transition duration-200"
-        role="menu"
-        aria-label="Menu de usuario"
+        class="surface-card invisible absolute right-0 mt-3 w-[min(320px,calc(100vw-2rem))] origin-top-right rounded p-5 opacity-0 transition duration-200"
       >
         <!-- Estado guest: branding + nav + CTA -->
         <div id="menu-guest-section">
@@ -70,6 +69,16 @@ const contactPath = `${baseUrl}#contact`;
 
         <!-- Estado auth: rol + cerrar sesion -->
         <div id="menu-auth-section" class="hidden space-y-3">
+          <section id="menu-identity-block" class="flex min-w-0 items-center gap-3 rounded-xl border p-3" style="border-color: var(--border); background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));" aria-label="Información de cuenta">
+            <span class="flex h-12 w-12 shrink-0 overflow-hidden rounded-full border" style="border-color: color-mix(in srgb, var(--secondary) 52%, var(--border)); background: color-mix(in srgb, var(--secondary) 13%, var(--surface));" aria-hidden="true">
+              <img id="menu-identity-image" class="hidden h-full w-full object-cover" alt="" />
+              <span id="menu-identity-initials" class="flex h-full w-full items-center justify-center text-sm font-extrabold tracking-tight text-main"></span>
+            </span>
+            <div class="min-w-0">
+              <p id="menu-identity-name" class="truncate text-sm font-bold text-main">Tu cuenta</p>
+              <p id="menu-identity-email" class="mt-0.5 truncate text-xs text-subtle"></p>
+            </div>
+          </section>
           <nav class="border-b pb-3" style="border-color: var(--border);">
             <ul class="space-y-1">
               <li><a href={homePath} class="accent-link block rounded-xl px-3 py-2 text-sm text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Inicio</a></li>
@@ -83,9 +92,10 @@ const contactPath = `${baseUrl}#contact`;
           <button id="menu-logout-button" type="button" class="btn-outline block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Cerrar sesion</button>
         </div>
 
-        <!-- Estado loading/guest: boton de login -->
-        <div id="menu-login-section" class="hidden pt-4 border-t" style="border-color: var(--border);">
-          <a id="menu-auth-link" href={loginPath} class="btn-outline block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Iniciar sesion / Registrarse</a>
+        <!-- Estado guest: acceso a cuenta -->
+        <div id="menu-login-section" class="hidden space-y-2 border-t pt-4" style="border-color: var(--border);">
+          <a id="menu-auth-link" href={loginPath} class="btn-outline block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Iniciar sesión</a>
+          <a id="menu-register-link" href={`${loginPath}?mode=register`} class="account-menu-option block w-full rounded-xl border px-4 py-3 text-center text-sm font-bold text-main" style="border-color: var(--border);">Crear cuenta</a>
         </div>
       </div>
     </div>
@@ -94,7 +104,8 @@ const contactPath = `${baseUrl}#contact`;
 
 <script>
   import { onAuthStateChanged, signOut } from 'firebase/auth';
-  import { auth } from '../../lib/firebase';
+  import { doc, getDoc } from 'firebase/firestore';
+  import { auth, db } from '../../lib/firebase';
   import { getUserRecord } from '../../lib/auth';
   import { normalizeUserRole } from '../../lib/roles';
 
@@ -102,8 +113,11 @@ const contactPath = `${baseUrl}#contact`;
     const trigger = document.getElementById('menu-trigger');
     const menu = document.getElementById('header-dropdown');
     const avatar = document.getElementById('menu-avatar');
+    const avatarImage = document.getElementById('menu-avatar-image');
+    const avatarInitials = document.getElementById('menu-avatar-initials');
     const hamburger = document.getElementById('menu-hamburger');
     const authLink = document.getElementById('menu-auth-link');
+    const registerLink = document.getElementById('menu-register-link');
     const logoutButton = document.getElementById('menu-logout-button');
     const roleLabel = document.getElementById('menu-role-label');
     const roleLink = document.getElementById('menu-role-link');
@@ -111,21 +125,33 @@ const contactPath = `${baseUrl}#contact`;
     const guestSection = document.getElementById('menu-guest-section');
     const authSection = document.getElementById('menu-auth-section');
     const loginSection = document.getElementById('menu-login-section');
+    const identityImage = document.getElementById('menu-identity-image');
+    const identityInitials = document.getElementById('menu-identity-initials');
+    const identityName = document.getElementById('menu-identity-name');
+    const identityEmail = document.getElementById('menu-identity-email');
 
-    if (!trigger || !menu || !avatar || !hamburger || !authLink || !logoutButton || !roleLabel || !roleLink || !roleNote || !guestSection || !authSection || !loginSection) return;
+    if (!trigger || !menu || !avatar || !avatarImage || !avatarInitials || !hamburger || !authLink || !registerLink || !logoutButton || !roleLabel || !roleLink || !roleNote || !guestSection || !authSection || !loginSection || !identityImage || !identityInitials || !identityName || !identityEmail) return;
 
     const baseUrl = import.meta.env.BASE_URL;
+    const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const loginUrl = `${baseUrl}login?returnTo=${encodeURIComponent(currentPath)}`;
+    authLink.setAttribute('href', loginUrl);
+    registerLink.setAttribute('href', `${loginUrl}&mode=register`);
 
-    const closeMenu = () => {
+    const closeMenu = (restoreFocus = false) => {
+      const shouldRestoreFocus = restoreFocus && menu.contains(document.activeElement);
       menu.classList.add('invisible', 'opacity-0');
       menu.classList.remove('visible', 'opacity-100');
       trigger.setAttribute('aria-expanded', 'false');
+      trigger.setAttribute('aria-label', 'Abrir menú de cuenta');
+      if (shouldRestoreFocus) trigger.focus();
     };
 
     const openMenu = () => {
       menu.classList.remove('invisible', 'opacity-0');
       menu.classList.add('visible', 'opacity-100');
       trigger.setAttribute('aria-expanded', 'true');
+      trigger.setAttribute('aria-label', 'Cerrar menú de cuenta');
     };
 
     const resetRoleArea = () => {
@@ -135,6 +161,43 @@ const contactPath = `${baseUrl}#contact`;
       roleLink.setAttribute('href', '#');
       roleNote.textContent = '';
     };
+
+    const initialsFor = (name: string) => {
+      const words = name.trim().split(/\s+/).filter(Boolean);
+      const initials = words.slice(0, 2).map((word) => word.charAt(0)).join('');
+      return (initials || 'TU').toLocaleUpperCase('es-CO');
+    };
+
+    const resetAvatarImage = (image: HTMLImageElement, initials: HTMLElement) => {
+      image.removeAttribute('src');
+      image.classList.add('hidden');
+      initials.classList.remove('hidden');
+    };
+
+    const setAvatarImage = (image: HTMLImageElement, initials: HTMLElement, photoUrl?: unknown) => {
+      if (typeof photoUrl !== 'string' || !photoUrl.trim()) {
+        resetAvatarImage(image, initials);
+        return;
+      }
+
+      image.src = photoUrl.trim();
+      image.classList.remove('hidden');
+      initials.classList.add('hidden');
+    };
+
+    const setIdentity = ({ name, email, photoUrl }: { name: string; email: string; photoUrl?: unknown }) => {
+      const safeName = name.trim() || 'Tu cuenta';
+      const initials = initialsFor(safeName);
+      avatarInitials.textContent = initials;
+      identityInitials.textContent = initials;
+      identityName.textContent = safeName;
+      identityEmail.textContent = email;
+      setAvatarImage(avatarImage, avatarInitials, photoUrl);
+      setAvatarImage(identityImage, identityInitials, photoUrl);
+    };
+
+    avatarImage.addEventListener('error', () => resetAvatarImage(avatarImage, avatarInitials));
+    identityImage.addEventListener('error', () => resetAvatarImage(identityImage, identityInitials));
 
     trigger.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -155,35 +218,99 @@ const contactPath = `${baseUrl}#contact`;
       if (isLoggedIn) {
         avatar.classList.remove('hidden');
         hamburger.classList.add('hidden');
+        const firebaseName = typeof user.displayName === 'string' ? user.displayName : '';
+        const firebaseEmail = typeof user.email === 'string' ? user.email : '';
+        setIdentity({ name: firebaseName || firebaseEmail.split('@')[0] || 'Tu cuenta', email: firebaseEmail });
 
-        const userRecord = await getUserRecord(user.uid);
+        try {
+          const userRecord = await getUserRecord(user.uid);
+          if (auth.currentUser?.uid !== user.uid) return;
 
-        if (userRecord) {
+          if (!userRecord) {
+            roleLabel.textContent = 'Cuenta';
+            roleNote.textContent = 'No pudimos verificar tu cuenta.';
+            roleNote.classList.remove('hidden');
+            return;
+          }
+
           const role = normalizeUserRole(userRecord.role);
+          const accountName = userRecord.name || userRecord.displayName || firebaseName || firebaseEmail.split('@')[0] || 'Tu cuenta';
+          const accountEmail = userRecord.email || firebaseEmail;
+          setIdentity({ name: accountName, email: accountEmail });
           if (role === 'superadmin') {
             roleLabel.textContent = 'Superadmin';
             roleLink.textContent = 'Ir al panel de control';
             roleLink.setAttribute('href', `${baseUrl}admin`);
             roleLink.classList.remove('hidden');
           } else if (role === 'storeadmin') {
+            let professionalProfile: Record<string, unknown> | undefined;
+            if (typeof userRecord.professionalBusinessId === 'string' && typeof userRecord.staffId === 'string') {
+              try {
+                const profileSnapshot = await getDoc(doc(db, 'barbers', userRecord.professionalBusinessId, 'barbers', userRecord.staffId));
+                if (auth.currentUser?.uid !== user.uid) return;
+                professionalProfile = profileSnapshot.exists() ? profileSnapshot.data() : undefined;
+              } catch (error) {
+                console.warn('Unable to load header professional profile:', error);
+                if (auth.currentUser?.uid !== user.uid) return;
+              }
+            }
+            const professionalName = typeof professionalProfile?.name === 'string' && professionalProfile.name.trim()
+              ? professionalProfile.name.trim()
+              : accountName;
+            setIdentity({ name: professionalName, email: accountEmail, photoUrl: professionalProfile?.photoUrl });
             roleLabel.textContent = 'Storeadmin';
             roleLink.textContent = 'Ir a administración';
             roleLink.setAttribute('href', `${baseUrl}admin`);
             roleLink.classList.remove('hidden');
           } else if (role === 'staff') {
             roleLabel.textContent = 'Staff';
-            roleLink.textContent = 'Ir a administración';
-            roleLink.setAttribute('href', `${baseUrl}admin`);
-            roleLink.classList.remove('hidden');
+            if (typeof userRecord.barberId !== 'string' || typeof userRecord.staffId !== 'string') {
+              roleNote.textContent = 'No pudimos verificar tu acceso.';
+              roleNote.classList.remove('hidden');
+              return;
+            }
+
+            try {
+              const staffSnapshot = await getDoc(doc(db, 'barbers', userRecord.barberId, 'barbers', userRecord.staffId));
+              if (auth.currentUser?.uid !== user.uid) return;
+
+              const staffProfile = staffSnapshot.data();
+              const professionalName = typeof staffProfile?.name === 'string' ? staffProfile.name : accountName;
+              setIdentity({ name: professionalName, email: accountEmail, photoUrl: staffProfile?.photoUrl });
+              if (staffSnapshot.exists() && staffProfile?.accountStatus === 'active' && staffProfile.active === true) {
+                roleLink.textContent = 'Ir a administración';
+                roleLink.setAttribute('href', `${baseUrl}admin`);
+                roleLink.classList.remove('hidden');
+              } else {
+                roleLink.textContent = 'Mi cuenta';
+                roleLink.setAttribute('href', `${baseUrl}account`);
+                roleLink.classList.remove('hidden');
+                roleNote.textContent = 'Acceso inactivo';
+                roleNote.classList.remove('hidden');
+              }
+            } catch (error) {
+              console.error('Unable to verify header staff access:', error);
+              if (auth.currentUser?.uid !== user.uid) return;
+              roleNote.textContent = 'No pudimos verificar tu acceso.';
+              roleNote.classList.remove('hidden');
+            }
           } else {
             roleLabel.textContent = 'Customer';
-            roleNote.textContent = 'Reservar por la URL pública no requiere una cuenta customer. El historial autenticado se incorporará más adelante.';
-            roleNote.classList.remove('hidden');
+            roleLink.textContent = 'Mi cuenta';
+            roleLink.setAttribute('href', `${baseUrl}account`);
+            roleLink.classList.remove('hidden');
           }
+        } catch (error) {
+          console.error('Unable to verify header account:', error);
+          if (auth.currentUser?.uid !== user.uid) return;
+          roleLabel.textContent = 'Cuenta';
+          roleNote.textContent = 'No pudimos verificar tu cuenta.';
+          roleNote.classList.remove('hidden');
         }
       } else {
         avatar.classList.add('hidden');
         hamburger.classList.remove('hidden');
+        setIdentity({ name: 'Tu cuenta', email: '' });
       }
     });
 
@@ -201,7 +328,7 @@ const contactPath = `${baseUrl}#contact`;
     });
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') closeMenu();
+      if (event.key === 'Escape') closeMenu(true);
     });
   })();
 </script>

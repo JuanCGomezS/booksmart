@@ -14,12 +14,9 @@ service firebase.storage {
     }
 
     function isBusinessAdmin(barberId) {
-      return isSignedIn() && (
-        firestore.get(/databases/(default)/documents/barbers/$(barberId)).data.ownerId == request.auth.uid ||
-        (currentUser().data.role in ['storeadmin', 'barber_admin'] &&
-          (currentUser().data.barberId == barberId ||
-            (currentUser().data.keys().hasAll(['businessIds']) && currentUser().data.businessIds.hasAny([barberId]))))
-      );
+      return isSignedIn() && currentUser().data.role == 'storeadmin' &&
+        (currentUser().data.barberId == barberId ||
+          (currentUser().data.keys().hasAll(['businessIds']) && currentUser().data.businessIds.hasAny([barberId])));
     }
 
     function isContentImage() {

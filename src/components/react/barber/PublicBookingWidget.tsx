@@ -97,6 +97,8 @@ export default function PublicBookingWidget({ business, whatsappUrl }: { busines
   const [confirmedStaff, setConfirmedStaff] = useState<BarberStaff | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [recoverTime, setRecoverTime] = useState(false);
+  const [contextAnnouncement, setContextAnnouncement] = useState('');
+  const bookingHeadingRef = useRef<HTMLHeadingElement>(null);
   const timeSectionRef = useRef<HTMLDivElement>(null);
 
   const settings = useMemo(() => policyBusiness ? getBookingSettings(policyBusiness) : null, [policyBusiness]);
@@ -204,6 +206,11 @@ export default function PublicBookingWidget({ business, whatsappUrl }: { busines
       setRecoverTime(false);
     }
   }, [loadingSlots, recoverTime]);
+
+  useEffect(() => {
+    bookingHeadingRef.current?.focus();
+    setContextAnnouncement('Sección de reservas. Reserva tu cita.');
+  }, []);
 
   const slots = useMemo((): AvailableSlot[] => {
     if (!selectedService || !bookingDate || loadingSlots || slotError || !policyBusiness || !settings) return [];
@@ -315,9 +322,11 @@ export default function PublicBookingWidget({ business, whatsappUrl }: { busines
   return <div className="booking-sheet space-y-7" aria-busy={loading || loadingSlots || submitting}>
     <div>
       <p className="press-label accent-text">Reserva en línea</p>
-      <h2 className="mt-2 text-2xl font-semibold text-main">Reserva tu cita</h2>
+      <h2 ref={bookingHeadingRef} tabIndex={-1} className="mt-2 text-2xl font-semibold text-main focus:outline-none">Reserva tu cita</h2>
       <p className="mt-2 max-w-2xl text-sm text-subtle">Elige un servicio, un profesional si lo prefieres y una hora realmente disponible. Todos los horarios están en hora de Colombia.</p>
     </div>
+
+    <div className="sr-only" aria-live="polite" aria-atomic="true">{contextAnnouncement}</div>
 
     <div className="sr-only" role="status" aria-live="polite">
       {loadingSlots ? 'Consultando horarios disponibles.' : bookingDate && !slotError ? `${slots.length} horarios disponibles para ${formatDate(bookingDate)}.` : ''}

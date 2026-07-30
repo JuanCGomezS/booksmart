@@ -4,9 +4,11 @@ export function getStaticPaths() {
 }
 
 import Layout from '../../layouts/Layout.astro';
+import HeaderSection from '../../components/home/HeaderSection.astro';
 import BarberApp from '../../components/react/barber/BarberApp';
 ---
 
 <Layout title="Negocio">
+  <HeaderSection />
   <BarberApp client:load />
 </Layout>

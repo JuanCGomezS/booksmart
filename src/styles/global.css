@@ -163,6 +163,24 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .error-notice { color: var(--feedback-danger-fg); border: 1px solid var(--feedback-danger-border); background: var(--feedback-danger-bg); }
 .success-notice { color: var(--feedback-success-fg); border: 1px solid var(--feedback-success-border); background: var(--feedback-success-bg); }
 .danger-action { color: var(--feedback-danger-fg); border: 1px solid var(--feedback-danger-border); }
+.content-row-action { display: inline-flex; min-height: 2.75rem; align-items: center; justify-content: center; padding: .5rem .75rem; border-radius: .25rem; font-size: .75rem; font-weight: 700; line-height: 1rem; }
+.floating-notifications { position: fixed; z-index: 40; top: max(5rem, calc(env(safe-area-inset-top) + 1rem)); right: max(1rem, env(safe-area-inset-right)); display: grid; width: min(26rem, calc(100vw - 2rem)); max-height: calc(100dvh - max(6rem, calc(env(safe-area-inset-top) + 2rem))); gap: .625rem; overflow-y: auto; overscroll-behavior: contain; padding: 0 .25rem .25rem 0; pointer-events: auto; scrollbar-gutter: stable; }
+.floating-notification { position: relative; display: grid; grid-template-columns: 2.25rem minmax(0, 1fr) 2.25rem; gap: .75rem; align-items: start; overflow: hidden; border: 1px solid var(--border); border-radius: .75rem; background: var(--surface); box-shadow: 5px 6px 0 color-mix(in srgb, var(--primary) 16%, transparent), 0 14px 30px color-mix(in srgb, var(--primary) 14%, transparent); padding: .875rem; pointer-events: auto; animation: notification-enter 200ms var(--motion) both; }
+.floating-notification-progress { position: absolute; right: 0; bottom: 0; left: 0; height: 3px; background: currentColor; opacity: .78; transform-origin: right center; animation: notification-lifetime var(--notification-duration) linear both; }
+.floating-notification-paused .floating-notification-progress { animation-play-state: paused; }
+.floating-notification-icon { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border: 1px solid currentColor; border-radius: .625rem; background: color-mix(in srgb, currentColor 8%, transparent); }
+.floating-notification-icon svg, .floating-notification-dismiss svg { width: 1.125rem; height: 1.125rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.75; }
+.floating-notification-content { min-width: 0; padding: .125rem 0; }
+.floating-notification p { margin: 0; }
+.floating-notification-label { font-size: .75rem; font-weight: 800; letter-spacing: .04em; line-height: 1.25; }
+.floating-notification-message { margin-top: .25rem !important; color: var(--text-primary); font-size: .875rem; font-weight: 600; line-height: 1.45; }
+.floating-notification-success { border-color: var(--feedback-success-border); color: var(--feedback-success-fg); background: var(--feedback-success-bg); }
+.floating-notification-error { border-color: var(--feedback-danger-border); color: var(--feedback-danger-fg); background: var(--feedback-danger-bg); }
+.floating-notification-dismiss { display: grid; width: 2.25rem; min-height: 2.25rem; place-items: center; border: 1px solid color-mix(in srgb, currentColor 52%, transparent); border-radius: .625rem; background: transparent; color: inherit; transition: background-color 160ms var(--motion), border-color 160ms var(--motion), transform 160ms var(--motion); }
+.floating-notification-dismiss:hover { border-color: currentColor; background: color-mix(in srgb, currentColor 10%, transparent); }
+.floating-notification-dismiss:active { transform: translateY(1px); }
+@keyframes notification-enter { from { opacity: 0; transform: translateY(-.625rem); } to { opacity: 1; transform: translateY(0); } }
+@keyframes notification-lifetime { from { opacity: .78; transform: scaleX(1); } to { opacity: .12; transform: scaleX(0); } }
 
 .press-kicker { color: inherit; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .press-kicker::before { content: '✦ '; color: var(--accent); }
@@ -190,7 +208,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   .press-panel-dark { animation: press-arrive 650ms var(--motion) both; }
   @keyframes press-arrive { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } .floating-notification-progress { animation: none !important; opacity: .5; transform: none; } }
 @media (max-width: 720px) { .section-shell::before { background: none; } .press-panel { box-shadow: 4px 4px 0 var(--primary); } }
 
 .super-admin-workspace {
@@ -338,19 +356,29 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 .login-refinement .surface-card input { box-shadow: none; }
 
 .public-booking-refinement main { max-width: 68rem; }
-.public-booking-refinement .press-panel-dark {
-  border-color: color-mix(in srgb, var(--border) 70%, transparent);
-  border-radius: 1rem;
-  background: var(--surface);
-  color: var(--text-primary);
-  box-shadow: none;
-}
-.public-booking-refinement .press-panel-dark .text-\[\#f1eee6\], .public-booking-refinement .press-panel-dark .text-\[\#d8d3c8\] { color: var(--text-primary); }
-.public-booking-refinement .press-panel-dark .press-kicker { color: var(--accent-text); }
 .public-booking-refinement .registration-mark::after { display: none; }
-.public-booking-refinement nav.surface-card { border-radius: .875rem; padding: .375rem; }
-.public-booking-refinement nav button { border-radius: .625rem !important; box-shadow: none !important; }
-.public-booking-refinement .booking-sheet { padding: 1.5rem; }
+.account-menu-option { transition: border-color 160ms var(--motion), background-color 160ms var(--motion); }
+.account-menu-option:hover { border-color: var(--secondary); background: color-mix(in srgb, var(--secondary) 7%, var(--surface)); }
+.public-business-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem; border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent); padding-bottom: 2rem; }
+.public-business-logo { width: 4.5rem; height: 4.5rem; flex: none; border: 1px solid color-mix(in srgb, var(--border) 90%, transparent); border-radius: .875rem; object-fit: cover; }
+.public-business-logo-fallback { display: grid; place-items: center; background: color-mix(in srgb, var(--secondary) 13%, var(--surface)); font-size: 1.75rem; }
+.public-business-title { margin-top: .5rem; color: var(--text-primary); font-size: clamp(2rem, 5vw, 3.25rem); font-weight: 700; letter-spacing: -.04em; line-height: 1; overflow-wrap: anywhere; }
+.public-business-intro-action { display: flex; flex: none; align-items: center; gap: 1rem; }
+.public-business-intro-action > p { max-width: 18rem; font-size: .875rem; }
+.public-business-cta { min-height: 2.75rem; padding: .625rem 1rem; white-space: nowrap; }
+.public-business-tabs { margin: 1.5rem 0 2.5rem; border-bottom: 1px solid color-mix(in srgb, var(--border) 76%, transparent); }
+.public-business-tabs ul { display: flex; gap: .25rem; overflow-x: auto; padding-bottom: .5rem; scrollbar-width: thin; }
+.public-business-tabs li { flex: 0 0 auto; }
+.public-business-tabs button { min-height: 2.75rem; border-bottom: 2px solid transparent; padding: .5rem .875rem; color: var(--text-secondary); font-size: .875rem; font-weight: 650; transition: border-color 160ms var(--motion), color 160ms var(--motion), background-color 160ms var(--motion); }
+.public-business-tabs button:hover { background: color-mix(in srgb, var(--secondary) 7%, var(--surface)); color: var(--text-primary); }
+.public-business-tabs button.is-active { border-color: var(--secondary); color: var(--text-primary); }
+.public-business-tabs button:focus-visible { outline: 2px solid var(--secondary); outline-offset: 2px; }
+.public-business-content { min-height: 24rem; }
+.public-business-overview { display: grid; gap: 2.5rem; }
+.public-business-info-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent); }
+.public-business-info-grid section { padding: 1.5rem 1.5rem 1.5rem 0; }
+.public-business-info-grid section + section { border-left: 1px solid color-mix(in srgb, var(--border) 76%, transparent); padding-right: 0; padding-left: 1.5rem; }
+.public-booking-refinement .booking-sheet { border: 1px solid color-mix(in srgb, var(--border) 76%, transparent); border-radius: .875rem; padding: 1.5rem; }
 .public-booking-refinement .booking-sheet > div:first-child { border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); padding-bottom: 1rem; }
 .public-booking-refinement [aria-pressed='true'] { box-shadow: none !important; }
 .public-booking-refinement .booking-choice, .public-booking-refinement .booking-provider, .public-booking-refinement .booking-time, .public-booking-refinement .booking-calendar-day { border: 1px solid color-mix(in srgb, var(--border) 88%, transparent); border-radius: .625rem; background: var(--surface); color: var(--text-primary); transition: border-color 160ms var(--motion), background-color 160ms var(--motion), color 160ms var(--motion); }
@@ -396,6 +424,11 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   .landing-refinement .capability-frame { min-height: auto; }
   .login-refinement .surface-card, .public-booking-refinement .booking-sheet, .business-admin-refinement .surface-card, .business-admin-quiet .business-admin-panel { padding: 1.25rem; }
   .booking-section-heading { display: block; }
+  .public-business-intro { display: grid; gap: 1.5rem; padding-bottom: 1.5rem; }
+  .public-business-intro-action { align-items: flex-start; flex-direction: column; gap: .75rem; }
+  .public-business-info-grid { grid-template-columns: 1fr; }
+  .public-business-info-grid section { padding: 1.25rem 0; }
+  .public-business-info-grid section + section { border-top: 1px solid color-mix(in srgb, var(--border) 76%, transparent); border-left: 0; }
   .booking-summary { margin-top: .75rem; }
   .booking-calendar-grid { border-spacing: .25rem; margin-right: -.25rem; margin-left: -.25rem; }
 }

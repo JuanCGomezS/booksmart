@@ -14,13 +14,34 @@ import {
   runTransaction,
   writeBatch,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import { DATA } from './data';
-import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus, BarberStaff, BusinessType, BookingSettings, CatalogItem, Product, Service, PublicBusiness } from './types';
+import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus, BarberStaff, BusinessCreationErrorCode, BusinessType, BookingSettings, CatalogItem, Product, Service, PublicBusiness } from './types';
 import { bookingSettingsUpdate, getBogotaDateTime, getBookingDate } from './booking';
 import { PUBLIC_BUSINESSES_COLLECTION, readPublicBusiness, toPublicBusiness } from './public-business';
+import { generateStaffEnrollmentCode } from './staff-enrollment';
 
 const LEGACY_BUSINESS_TYPE: BusinessType = 'barbershop';
+
+export class BusinessCreationError extends Error {
+  constructor(readonly code: BusinessCreationErrorCode) {
+    super(code);
+    this.name = 'BusinessCreationError';
+  }
+}
+
+function toBusinessCreationError(error: unknown): BusinessCreationError {
+  if (error instanceof BusinessCreationError) return error;
+
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? (error as { code?: string }).code
+    : undefined;
+
+  if (code === 'permission-denied') return new BusinessCreationError('permission-denied');
+  if (code === 'unavailable' || code === 'deadline-exceeded') return new BusinessCreationError('unavailable');
+  if (code === 'aborted' || code === 'already-exists' || code === 'failed-precondition') return new BusinessCreationError('conflict');
+  return new BusinessCreationError('unknown');
+}
 
 function toBusiness(data: Record<string, unknown>, id: string): Barber {
   return { id, businessType: LEGACY_BUSINESS_TYPE, ...data } as Barber;
@@ -180,11 +201,16 @@ export async function createBarber(
   plan: Plan = DATA.PLAN.STANDARD,
   billingCycle: BillingCycle = DATA.BILLING_CYCLE.MONTH_1,
   businessType: BusinessType = LEGACY_BUSINESS_TYPE,
-): Promise<Barber | null> {
+): Promise<Barber> {
   try {
-    const owners = await getDocs(query(collection(db, 'users'), where('email', '==', ownerEmail), limit(1)));
-    if (owners.empty) throw new Error(`Usuario no encontrado: ${ownerEmail}`);
+    const signedInUser = auth.currentUser;
+    if (!signedInUser) throw new BusinessCreationError('not-authenticated');
+
+    const normalizedOwnerEmail = ownerEmail.trim().toLowerCase();
+    const owners = await getDocs(query(collection(db, 'users'), where('email', '==', normalizedOwnerEmail), limit(1)));
+    if (owners.empty) throw new BusinessCreationError('owner-not-found');
     const ownerRef = owners.docs[0].ref;
+    if (ownerRef.id === signedInUser.uid) throw new BusinessCreationError('self-owner');
     const ownerId = ownerRef.id;
 
     const now = new Date();
@@ -207,25 +233,33 @@ export async function createBarber(
       },
     };
     const docRef = doc(collection(db, 'barbers'));
+    const enrollmentCode = generateStaffEnrollmentCode();
     await runTransaction(db, async (transaction) => {
       const ownerSnapshot = await transaction.get(ownerRef);
-      if (!ownerSnapshot.exists()) throw new Error(`Owner user document no longer exists: ${ownerEmail}`);
+      if (!ownerSnapshot.exists()) throw new BusinessCreationError('owner-not-found');
       const owner = ownerSnapshot.data();
-      const existingBusinessIds = Array.isArray(owner.businessIds)
-        ? owner.businessIds.filter((businessId): businessId is string => typeof businessId === 'string' && businessId.trim().length > 0)
-        : [];
-      const businessIds = [...new Set([...existingBusinessIds, docRef.id])];
-      const ownerUpdates: Record<string, unknown> = { businessIds, updatedAt: serverTimestamp() };
-      if (typeof owner.barberId !== 'string' || !owner.barberId.trim()) ownerUpdates.barberId = docRef.id;
-      if (owner.role === DATA.USER_ROLE.STOREADMIN || owner.role === 'barber_admin') ownerUpdates.role = DATA.USER_ROLE.STOREADMIN;
+      if (owner.role !== DATA.USER_ROLE.CUSTOMER) throw new BusinessCreationError('owner-not-customer');
+      if (typeof owner.barberId === 'string' || typeof owner.staffId === 'string' ||
+        (Array.isArray(owner.businessIds) && owner.businessIds.length > 0)) {
+        throw new BusinessCreationError('owner-already-assigned');
+      }
+
+      const ownerUpdates = {
+        role: DATA.USER_ROLE.STOREADMIN,
+        barberId: docRef.id,
+        businessIds: [docRef.id],
+        updatedAt: serverTimestamp(),
+      };
       transaction.set(docRef, barberData);
       transaction.set(doc(db, PUBLIC_BUSINESSES_COLLECTION, docRef.id), toPublicBusiness({ id: docRef.id, ...barberData } as unknown as Barber));
+      transaction.set(doc(db, 'staffEnrollmentCodes', enrollmentCode), { businessId: docRef.id, createdAt: serverTimestamp() });
+      transaction.set(doc(db, 'barbers', docRef.id, 'staffControl', 'enrollment'), { code: enrollmentCode, rotatedAt: serverTimestamp() });
       transaction.update(ownerRef, ownerUpdates);
     });
     return { id: docRef.id, ...barberData, trialEndsAt: trialEnds as any, planExpiresAt: trialEnds as any } as unknown as Barber;
   } catch (error) {
     console.error('Error creating barber:', error);
-    return null;
+    throw toBusinessCreationError(error);
   }
 }
 
@@ -290,7 +324,7 @@ export async function updateBarberBusinessDetails(
     facebook: string;
     whatsapp: string;
     primaryColor: string;
-    workingHours: Barber['workingHours'];
+    workingHours?: Barber['workingHours'];
   },
 ): Promise<boolean> {
   try {
@@ -306,7 +340,7 @@ export async function updateBarberBusinessDetails(
       'config.socialLinks.facebook': valueOrDelete(details.facebook),
       'config.socialLinks.whatsapp': valueOrDelete(details.whatsapp),
       'config.theme.primaryColor': details.primaryColor,
-      workingHours: details.workingHours,
+      ...(details.workingHours ? { workingHours: details.workingHours } : {}),
       updatedAt: serverTimestamp(),
     };
     const batch = writeBatch(db);
@@ -314,7 +348,7 @@ export async function updateBarberBusinessDetails(
     const { updatedAt: _updatedAt, ...publicUpdates } = updates;
     batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), publicUpdates);
     await batch.commit();
-    localStorage.removeItem(`barber_config_${barberId}`);
+    invalidateBarberConfigCaches(barberId);
     return true;
   } catch (error) {
     console.error('Error updating barber business details:', error);

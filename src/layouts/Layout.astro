@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import FloatingNotifications from '../components/react/FloatingNotifications';
 
 interface Props {
   title: string;
@@ -38,6 +39,7 @@ const { title, description = 'BookSmart - Plataforma de agendamiento para negoci
   </head>
   <body class="min-h-screen bg-(--bg) text-(--text-primary) transition-colors duration-300">
     <slot />
+    <FloatingNotifications client:load />
     
     <script is:inline>
       (() => {

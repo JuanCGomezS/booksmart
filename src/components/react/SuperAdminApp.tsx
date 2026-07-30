@@ -4,6 +4,7 @@ import { DATA } from '../../lib/data';
 import type { Barber } from '../../lib/types';
 import BarbersList from './admin/BarbersList';
 import CreateBarberForm from './admin/CreateBarberForm';
+import { notifySuccess } from './FloatingNotifications';
 
 export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: (barber: Barber) => void }) {
   const [barbers, setBarbers] = useState<Barber[]>([]);
@@ -32,6 +33,7 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
 
   const handleBarberCreated = () => {
     setShowCreateForm(false);
+    notifySuccess('El negocio se creó y la cuenta seleccionada ahora es Storeadmin.');
     loadBarbers();
   };
 

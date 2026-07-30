@@ -90,14 +90,9 @@ export async function isSuperAdmin(): Promise<boolean> {
  * Obtener el documento del usuario desde Firestore
  */
 export async function getUserRecord(uid: string): Promise<User | null> {
-  try {
-    const userRef = doc(db, 'users', uid);
-    const userSnap = await getDoc(userRef);
-    return userSnap.exists() ? (userSnap.data() as User) : null;
-  } catch (error) {
-    console.error('Error fetching user record:', error);
-    return null;
-  }
+  const userRef = doc(db, 'users', uid);
+  const userSnap = await getDoc(userRef);
+  return userSnap.exists() ? (userSnap.data() as User) : null;
 }
 
 /**

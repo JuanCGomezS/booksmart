@@ -17,29 +17,18 @@ service cloud.firestore {
       return isSignedIn() && currentUserRole() == 'superadmin';
     }
 
-    // Canonical roles are superadmin, storeadmin, staff, and customer. The
-    // legacy values remain readable only until the explicit migration runs.
     function isStoreAdminRole() {
-      return isSignedIn() && currentUserRole() in ['storeadmin', 'barber_admin'];
+      return isSignedIn() && currentUserRole() == 'storeadmin';
     }
 
     function isStaffRole() {
-      return isSignedIn() && currentUserRole() in ['staff', 'barber'];
-    }
-
-    function isBarberOwner(barberId) {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/barbers/$(barberId)).data.ownerId == request.auth.uid;
+      return isSignedIn() && currentUserRole() == 'staff';
     }
 
     function isBusinessAdmin(barberId) {
-      return isBarberOwner(barberId) ||
-        (isStoreAdminRole() && hasBusinessMembership(barberId));
+      return isStoreAdminRole() && hasBusinessMembership(barberId);
     }
 
-    // `barberId` is the legacy primary assignment. Storeadmins and staff now
-    // receive selected business IDs; staffAssignments remains the internal
-    // automatic account-to-staff-record binding during rollout.
     function hasBusinessMembership(barberId) {
       return currentUserDoc().data.barberId == barberId ||
         (currentUserDoc().data.keys().hasAll(['businessIds']) &&
@@ -48,17 +37,65 @@ service cloud.firestore {
 
     function isBusinessStaff(barberId) {
       return isStaffRole() &&
-        hasBusinessMembership(barberId);
+        currentUserDoc().data.barberId == barberId &&
+        currentUserDoc().data.keys().hasAll(['businessIds', 'staffId']) &&
+        currentUserDoc().data.businessIds == [barberId] &&
+        hasActiveStaffBinding(barberId, currentUserDoc().data.staffId);
     }
 
-    // A staff user must have the automatic double binding between their selected
-    // business and its matching staff record. The UI never exposes staff IDs.
+    // New Staff bindings keep UID and enrollment proof in a browser-denied
+    // sibling. A public Staff record never needs either value.
+    function hasActivePrivateStaffBinding(barberId, staffId) {
+      let privateStaff = get(/databases/$(database)/documents/barbers/$(barberId)/staffPrivate/$(staffId));
+      let publicStaff = get(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId));
+      return exists(/databases/$(database)/documents/barbers/$(barberId)/staffPrivate/$(staffId)) &&
+        exists(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId)) &&
+        privateStaff.data.uid == request.auth.uid && privateStaff.data.status == 'active' &&
+        publicStaff.data.active == true && publicStaff.data.accountStatus == 'active';
+    }
+
+    function hasActiveStaffBinding(barberId, staffId) {
+      return hasActivePrivateStaffBinding(barberId, staffId);
+    }
+
+    // This identity proof permits a Staff account to observe only its exact
+    // public profile while pending or inactive. It grants no operational access.
+    function hasOwnStaffProfileBinding(barberId, staffId) {
+      let privateStaff = get(/databases/$(database)/documents/barbers/$(barberId)/staffPrivate/$(staffId));
+      let publicStaff = get(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId));
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/barbers/$(barberId)/staffPrivate/$(staffId)) &&
+        exists(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId)) &&
+        privateStaff.data.uid == request.auth.uid && privateStaff.data.role == 'staff' &&
+        privateStaff.data.status in ['pending_activation', 'active', 'inactive'] &&
+        publicStaff.data.role == 'Staff' &&
+        publicStaff.data.accountStatus == privateStaff.data.status &&
+        publicStaff.data.active == (privateStaff.data.status == 'active');
+    }
+
+    function validBusinessOwnerAssignment(barberId) {
+      let ownerBefore = get(/databases/$(database)/documents/users/$(request.resource.data.ownerId));
+      let ownerAfter = getAfter(/databases/$(database)/documents/users/$(request.resource.data.ownerId));
+      return request.resource.data.ownerId is string &&
+        ownerBefore.data.role == 'customer' &&
+        !ownerBefore.data.keys().hasAny(['barberId', 'staffId']) &&
+        (!ownerBefore.data.keys().hasAny(['businessIds']) || ownerBefore.data.businessIds.size() == 0) &&
+        ownerAfter.data.role == 'storeadmin' &&
+        ownerAfter.data.barberId == barberId &&
+        ownerAfter.data.keys().hasAll(['businessIds']) &&
+        ownerAfter.data.businessIds == [barberId] &&
+        !ownerAfter.data.keys().hasAny(['staffId']);
+    }
+
+    function ownerAssignmentUnchangedOrValid(barberId) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerId']) ||
+        validBusinessOwnerAssignment(barberId);
+    }
+
     function isAssignedStaff(barberId, staffId) {
       return isBusinessStaff(barberId) &&
-        ((currentUserDoc().data.barberId == barberId && currentUserDoc().data.staffId == staffId) ||
-          (currentUserDoc().data.keys().hasAll(['staffAssignments']) &&
-            currentUserDoc().data.staffAssignments.hasAny([{businessId: barberId, staffId: staffId}]))) &&
-        get(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId)).data.userId == request.auth.uid;
+        currentUserDoc().data.staffId == staffId &&
+        hasActiveStaffBinding(barberId, staffId);
     }
 
     function staffCanUpdateOwnSchedule(barberId, staffId) {
@@ -72,6 +109,56 @@ service cloud.firestore {
         request.resource.data.status in ['done', 'no_show', 'cancelled'];
     }
 
+    function validStaffJoin(uid, barberId, staffId) {
+      let currentUser = get(/databases/$(database)/documents/users/$(uid));
+      let joinedUser = getAfter(/databases/$(database)/documents/users/$(uid));
+      let joinedBusinessId = joinedUser.data.barberId;
+      let joinedStaffId = joinedUser.data.staffId;
+      let publicStaff = getAfter(/databases/$(database)/documents/barbers/$(joinedBusinessId)/barbers/$(joinedStaffId));
+      let privateStaff = getAfter(/databases/$(database)/documents/barbers/$(joinedBusinessId)/staffPrivate/$(joinedStaffId));
+      let codeRecord = get(/databases/$(database)/documents/staffEnrollmentCodes/$(privateStaff.data.enrollmentCode));
+      return isSignedIn() && request.auth.uid == uid &&
+        currentUser.data.role == 'customer' &&
+        joinedUser.data.role == 'staff' && joinedBusinessId is string &&
+        joinedStaffId is string && joinedStaffId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') &&
+        barberId == joinedBusinessId && staffId == joinedStaffId &&
+        joinedUser.data.businessIds == [joinedBusinessId] &&
+        publicStaff.data.name is string && publicStaff.data.role == 'Staff' && publicStaff.data.active == false &&
+        publicStaff.data.accountStatus == 'pending_activation' &&
+        publicStaff.data.createdAt == request.time && publicStaff.data.updatedAt == request.time &&
+        publicStaff.data.keys().hasOnly(['name', 'role', 'active', 'accountStatus', 'createdAt', 'updatedAt']) &&
+        privateStaff.data.uid == uid && privateStaff.data.role == 'staff' &&
+        privateStaff.data.status == 'pending_activation' && privateStaff.data.enrollmentCode is string &&
+        privateStaff.data.createdAt == request.time && privateStaff.data.updatedAt == request.time &&
+        privateStaff.data.keys().hasOnly(['uid', 'role', 'status', 'enrollmentCode', 'createdAt', 'updatedAt']) &&
+        exists(/databases/$(database)/documents/staffEnrollmentCodes/$(privateStaff.data.enrollmentCode)) &&
+        codeRecord.data.businessId == joinedBusinessId;
+    }
+
+    function validEnrollmentStatusUpdate(barberId, staffId) {
+      let publicStaff = getAfter(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId));
+      return request.resource.data.uid == resource.data.uid && request.resource.data.role == 'staff' &&
+        request.resource.data.status in ['active', 'inactive'] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'enrollmentCode', 'updatedAt']) &&
+        publicStaff.data.active == (request.resource.data.status == 'active') &&
+        publicStaff.data.accountStatus == request.resource.data.status &&
+        getAfter(/databases/$(database)/documents/users/$(resource.data.uid)).data.role == 'staff' &&
+        getAfter(/databases/$(database)/documents/users/$(resource.data.uid)).data.barberId == barberId &&
+        getAfter(/databases/$(database)/documents/users/$(resource.data.uid)).data.staffId == staffId &&
+        (request.resource.data.status != 'active' || !request.resource.data.keys().hasAny(['enrollmentCode']));
+    }
+
+    function staffAdminCanUpdateStaffRecord(barberId, staffId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let privateStaff = getAfter(/databases/$(database)/documents/barbers/$(barberId)/staffPrivate/$(staffId));
+      return isBusinessAdmin(barberId) &&
+        (!resource.data.keys().hasAny(['accountStatus']) ||
+          !changed.hasAny(['active', 'accountStatus']) ||
+          (changed.hasOnly(['active', 'accountStatus', 'updatedAt']) &&
+            privateStaff.data.status == request.resource.data.accountStatus &&
+            request.resource.data.active == (privateStaff.data.status == 'active')));
+    }
+
     function businessIsActive(barberId) {
       return get(/databases/$(database)/documents/barbers/$(barberId)).data.active == true;
     }
@@ -81,7 +168,30 @@ service cloud.firestore {
     function businessAdminCanUpdateBusiness() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'name', 'businessType', 'config', 'workingHours', 'updatedAt'
-      ]);
+      ]) && businessWorkingHoursUnchangedOrValid();
+    }
+
+    function validWorkingHoursDay(day) {
+      return day is map && day.keys().hasAll(['open', 'close', 'enabled']) &&
+        day.keys().hasOnly(['open', 'close', 'enabled']) &&
+        day.open is string && day.close is string && day.enabled is bool &&
+        day.open.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$') &&
+        day.close.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$') &&
+        day.open < day.close;
+    }
+
+    function validWorkingHours(hours) {
+      return hours is map && hours.keys().hasAll(['0', '1', '2', '3', '4', '5', '6']) &&
+        hours.keys().hasOnly(['0', '1', '2', '3', '4', '5', '6']) &&
+        validWorkingHoursDay(hours['0']) && validWorkingHoursDay(hours['1']) &&
+        validWorkingHoursDay(hours['2']) && validWorkingHoursDay(hours['3']) &&
+        validWorkingHoursDay(hours['4']) && validWorkingHoursDay(hours['5']) &&
+        validWorkingHoursDay(hours['6']);
+    }
+
+    function businessWorkingHoursUnchangedOrValid() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['workingHours']) ||
+        validWorkingHours(request.resource.data.workingHours);
     }
 
     // This projection is the sole anonymous source for business presentation
@@ -94,7 +204,7 @@ service cloud.firestore {
         request.resource.data.businessType is string && request.resource.data.active is bool &&
         request.resource.data.config is map && request.resource.data.config.keys().hasAll(['address', 'phone']) &&
         request.resource.data.config.keys().hasOnly(['address', 'phone', 'logoUrl', 'coverUrl', 'socialLinks', 'theme', 'booking']) &&
-        request.resource.data.workingHours is map;
+        validWorkingHours(request.resource.data.workingHours);
     }
 
     // Browser bookings are deliberately an optimistic, client-only flow. Rules
@@ -153,21 +263,30 @@ service cloud.firestore {
 
       // Superadmin puede cambiar roles y vínculos de negocio/personal.
       // Usuario normal puede actualizar perfil, pero no role ni vínculos.
-      allow update: if isSuperAdmin() ||
-                       (isSignedIn() && request.auth.uid == uid &&
-                          !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'barberId', 'businessIds', 'staffId', 'staffAssignments']));
+      // A Superadmin may manage other accounts, but cannot alter their own
+      // global role through a business-creation transaction or direct update.
+      allow update: if (isSuperAdmin() &&
+                          (request.auth.uid != uid ||
+                            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))) ||
+                          (validStaffJoin(uid, request.resource.data.barberId, request.resource.data.staffId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'barberId', 'businessIds', 'staffId', 'updatedAt'])) ||
+                        (isSignedIn() && request.auth.uid == uid &&
+                            !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'barberId', 'businessIds', 'staffId']));
 
       allow delete: if isSuperAdmin();
     }
 
     // Root businesses contain owner and billing data. They are never public.
     match /barbers/{barberId} {
-      allow read, write: if isSuperAdmin();
+      allow read, delete: if isSuperAdmin();
+      // `ownerId` is descriptive metadata, never an authorization grant. A
+      // created or reassigned owner must also be a Storeadmin member.
+      allow create: if isSuperAdmin() && validBusinessOwnerAssignment(barberId) && validWorkingHours(request.resource.data.workingHours);
       
       // Root records include subscription and platform fields, so only platform
       // administrators can read them. Scoped clients may still update the
       // strictly allowlisted operational fields below.
-      allow update: if isBusinessAdmin(barberId) && businessAdminCanUpdateBusiness();
+      allow update: if (isSuperAdmin() && ownerAssignmentUnchangedOrValid(barberId) && businessWorkingHoursUnchangedOrValid()) ||
+        (isBusinessAdmin(barberId) && businessAdminCanUpdateBusiness());
       
       // Subcolecciones
       match /services/{serviceId} {
@@ -182,9 +301,27 @@ service cloud.firestore {
       match /barbers/{staffId} {
         // Lectura pública de barberos disponibles
         allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isAssignedStaff(barberId, staffId) ||
+          hasOwnStaffProfileBinding(barberId, staffId) ||
           (businessIsActive(barberId) && resource.data.active == true);
-        allow create, delete: if isSuperAdmin() || isBusinessAdmin(barberId);
-        allow update: if isSuperAdmin() || isBusinessAdmin(barberId) || staffCanUpdateOwnSchedule(barberId, staffId);
+        allow create: if (isSignedIn() && validStaffJoin(request.auth.uid, barberId, staffId)) ||
+          isSuperAdmin() || isBusinessAdmin(barberId);
+        allow delete: if isSuperAdmin() ||
+          (isBusinessAdmin(barberId) && !resource.data.keys().hasAny(['accountStatus']));
+        allow update: if isSuperAdmin() || staffAdminCanUpdateStaffRecord(barberId, staffId) || staffCanUpdateOwnSchedule(barberId, staffId);
+      }
+
+      match /staffPrivate/{staffId} {
+        // UID and the temporarily retained enrollment proof are never browser-readable.
+        allow read: if false;
+        allow create: if isSignedIn() && validStaffJoin(request.auth.uid, barberId, staffId);
+        allow update: if isSuperAdmin() ||
+          (isBusinessAdmin(barberId) && validEnrollmentStatusUpdate(barberId, staffId));
+        allow delete: if isSuperAdmin();
+      }
+
+      match /staffControl/enrollment {
+        // The current code is visible only to the business administrator who can rotate it.
+        allow read, write: if isSuperAdmin() || isBusinessAdmin(barberId);
       }
 
       match /appointments/{appointmentId} {
@@ -222,12 +359,25 @@ service cloud.firestore {
       }
     }
 
+    match /staffEnrollmentCodes/{code} {
+      // `get` permits only an exact bearer-code lookup; discovery by query is denied.
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create: if isSuperAdmin() ||
+        (request.resource.data.keys().hasOnly(['businessId', 'createdAt']) &&
+          isBusinessAdmin(request.resource.data.businessId) &&
+          getAfter(/databases/$(database)/documents/barbers/$(request.resource.data.businessId)/staffControl/enrollment).data.code == code);
+      allow delete: if isSuperAdmin() ||
+        (isBusinessAdmin(resource.data.businessId) &&
+          getAfter(/databases/$(database)/documents/barbers/$(resource.data.businessId)/staffControl/enrollment).data.code != code);
+      allow update: if false;
+    }
+
     match /publicBusinesses/{barberId} {
       // Public pages can only read active, allowlisted projections.
       // Public traffic still reads active projections only. Assigned internal
       // users may fetch an exact inactive summary for their own selector.
-      allow read: if resource.data.active == true ||
-        (isSignedIn() && hasBusinessMembership(barberId));
+      allow read: if resource.data.active == true || isBusinessAdmin(barberId) || isBusinessStaff(barberId);
       allow create: if isSuperAdmin() && validPublicBusiness();
       allow delete: if isSuperAdmin();
       // Business admins may synchronize public presentation and booking fields,

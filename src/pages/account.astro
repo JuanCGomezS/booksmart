@@ -1,0 +1,10 @@
+---
+import Layout from '../layouts/Layout.astro';
+import HeaderSection from '../components/home/HeaderSection.astro';
+import CustomerAccount from '../components/react/CustomerAccount';
+---
+
+<Layout title="Acceso a la cuenta">
+  <HeaderSection />
+  <CustomerAccount client:load />
+</Layout>
