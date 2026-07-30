@@ -5,9 +5,11 @@ import FloatingNotifications from '../components/react/FloatingNotifications';
 interface Props {
   title: string;
   description?: string;
+  autonomous?: boolean;
 }
 
-const { title, description = 'BookSmart - Plataforma de agendamiento para negocios por cita' } = Astro.props;
+const { title, description = 'BookSmart - Plataforma de agendamiento para negocios por cita', autonomous = false } = Astro.props;
+const documentTitle = autonomous ? title : `${title} | BookSmart`;
 ---
 
 <!doctype html>
@@ -32,7 +34,7 @@ const { title, description = 'BookSmart - Plataforma de agendamiento para negoci
         document.documentElement.setAttribute('data-theme', theme);
       })();
     </script>
-    <title>{title} | BookSmart</title>
+    <title>{documentTitle}</title>
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />

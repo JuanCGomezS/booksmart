@@ -43,34 +43,32 @@ service cloud.firestore {
         hasActiveStaffBinding(barberId, currentUserDoc().data.staffId);
     }
 
-    // New Staff bindings keep UID and enrollment proof in a browser-denied
-    // sibling. A public Staff record never needs either value.
-    function hasActivePrivateStaffBinding(barberId, staffId) {
-      let privateStaff = get(/databases/$(database)/documents/barbers/$(barberId)/staffPrivate/$(staffId));
+    function hasActiveStaffBinding(barberId, staffId) {
       let publicStaff = get(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId));
-      return exists(/databases/$(database)/documents/barbers/$(barberId)/staffPrivate/$(staffId)) &&
-        exists(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId)) &&
-        privateStaff.data.uid == request.auth.uid && privateStaff.data.status == 'active' &&
+      return isSignedIn() && staffId == request.auth.uid && exists(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId)) &&
+        (!publicStaff.data.keys().hasAll(['accountUid']) || publicStaff.data.accountUid == request.auth.uid) &&
         publicStaff.data.active == true && publicStaff.data.accountStatus == 'active';
     }
 
-    function hasActiveStaffBinding(barberId, staffId) {
-      return hasActivePrivateStaffBinding(barberId, staffId);
-    }
-
-    // This identity proof permits a Staff account to observe only its exact
-    // public profile while pending or inactive. It grants no operational access.
+    // This identity proof permits inactive Staff to observe only their exact
+    // public profile. It grants no operational access.
     function hasOwnStaffProfileBinding(barberId, staffId) {
-      let privateStaff = get(/databases/$(database)/documents/barbers/$(barberId)/staffPrivate/$(staffId));
       let publicStaff = get(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId));
       return isSignedIn() &&
-        exists(/databases/$(database)/documents/barbers/$(barberId)/staffPrivate/$(staffId)) &&
         exists(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId)) &&
-        privateStaff.data.uid == request.auth.uid && privateStaff.data.role == 'staff' &&
-        privateStaff.data.status in ['pending_activation', 'active', 'inactive'] &&
+        currentUserDoc().data.role == 'staff' && currentUserDoc().data.barberId == barberId &&
+        currentUserDoc().data.staffId == staffId && staffId == request.auth.uid &&
         publicStaff.data.role == 'Staff' &&
-        publicStaff.data.accountStatus == privateStaff.data.status &&
-        publicStaff.data.active == (privateStaff.data.status == 'active');
+        (!publicStaff.data.keys().hasAll(['accountUid']) || publicStaff.data.accountUid == request.auth.uid) &&
+        publicStaff.data.accountStatus in ['active', 'inactive'] &&
+        publicStaff.data.active == (publicStaff.data.accountStatus == 'active');
+    }
+
+    function hasOwnStoreadminProfileBinding(barberId, staffId) {
+      let publicStaff = get(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId));
+      return isBusinessAdmin(barberId) && exists(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId)) &&
+        currentUserDoc().data.staffId == staffId && currentUserDoc().data.professionalBusinessId == barberId &&
+        publicStaff.data.accountUid == request.auth.uid;
     }
 
     function validBusinessOwnerAssignment(barberId) {
@@ -99,7 +97,7 @@ service cloud.firestore {
     }
 
     function staffCanUpdateOwnSchedule(barberId, staffId) {
-      return isAssignedStaff(barberId, staffId) &&
+      return (isAssignedStaff(barberId, staffId) || hasOwnStoreadminProfileBinding(barberId, staffId)) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['schedule', 'updatedAt']);
     }
 
@@ -109,54 +107,121 @@ service cloud.firestore {
         request.resource.data.status in ['done', 'no_show', 'cancelled'];
     }
 
-    function validStaffJoin(uid, barberId, staffId) {
-      let currentUser = get(/databases/$(database)/documents/users/$(uid));
-      let joinedUser = getAfter(/databases/$(database)/documents/users/$(uid));
-      let joinedBusinessId = joinedUser.data.barberId;
-      let joinedStaffId = joinedUser.data.staffId;
-      let publicStaff = getAfter(/databases/$(database)/documents/barbers/$(joinedBusinessId)/barbers/$(joinedStaffId));
-      let privateStaff = getAfter(/databases/$(database)/documents/barbers/$(joinedBusinessId)/staffPrivate/$(joinedStaffId));
-      let codeRecord = get(/databases/$(database)/documents/staffEnrollmentCodes/$(privateStaff.data.enrollmentCode));
-      return isSignedIn() && request.auth.uid == uid &&
-        currentUser.data.role == 'customer' &&
-        joinedUser.data.role == 'staff' && joinedBusinessId is string &&
-        joinedStaffId is string && joinedStaffId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') &&
-        barberId == joinedBusinessId && staffId == joinedStaffId &&
-        joinedUser.data.businessIds == [joinedBusinessId] &&
-        publicStaff.data.name is string && publicStaff.data.role == 'Staff' && publicStaff.data.active == false &&
-        publicStaff.data.accountStatus == 'pending_activation' &&
-        publicStaff.data.createdAt == request.time && publicStaff.data.updatedAt == request.time &&
-        publicStaff.data.keys().hasOnly(['name', 'role', 'active', 'accountStatus', 'createdAt', 'updatedAt']) &&
-        privateStaff.data.uid == uid && privateStaff.data.role == 'staff' &&
-        privateStaff.data.status == 'pending_activation' && privateStaff.data.enrollmentCode is string &&
-        privateStaff.data.createdAt == request.time && privateStaff.data.updatedAt == request.time &&
-        privateStaff.data.keys().hasOnly(['uid', 'role', 'status', 'enrollmentCode', 'createdAt', 'updatedAt']) &&
-        exists(/databases/$(database)/documents/staffEnrollmentCodes/$(privateStaff.data.enrollmentCode)) &&
-        codeRecord.data.businessId == joinedBusinessId;
+    // A Customer atomically becomes inactive Staff using an exact business code.
+    function validDirectEnrollmentUser(currentUser, enrolledUser, uid, barberId, staff) {
+      let codeRecord = get(/databases/$(database)/documents/staffEnrollmentCodes/$(enrolledUser.enrollmentCode));
+      return isSignedIn() && request.auth.uid == uid && currentUser.role == 'customer' &&
+        !currentUser.keys().hasAny(['barberId', 'staffId', 'enrollmentCode']) &&
+        (!currentUser.keys().hasAny(['businessIds']) || currentUser.businessIds.size() == 0) &&
+        enrolledUser.role == 'staff' && enrolledUser.barberId == barberId && enrolledUser.staffId == uid && enrolledUser.businessIds == [barberId] &&
+        enrolledUser.enrollmentCode is string && codeRecord.data.businessId == barberId &&
+        enrolledUser.diff(currentUser).affectedKeys().hasOnly(['role', 'barberId', 'businessIds', 'staffId', 'enrollmentCode', 'updatedAt']) &&
+        staff.name is string && staff.name.size() > 0 && staff.name.size() <= 120 && staff.role == 'Staff' && staff.accountUid == uid && staff.active == false && staff.accountStatus == 'inactive' &&
+        staff.createdAt == request.time && staff.updatedAt == request.time && staff.keys().hasOnly(['name', 'role', 'accountUid', 'active', 'accountStatus', 'createdAt', 'updatedAt']);
     }
 
     function validEnrollmentStatusUpdate(barberId, staffId) {
-      let publicStaff = getAfter(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId));
-      return request.resource.data.uid == resource.data.uid && request.resource.data.role == 'staff' &&
-        request.resource.data.status in ['active', 'inactive'] &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'enrollmentCode', 'updatedAt']) &&
-        publicStaff.data.active == (request.resource.data.status == 'active') &&
-        publicStaff.data.accountStatus == request.resource.data.status &&
-        getAfter(/databases/$(database)/documents/users/$(resource.data.uid)).data.role == 'staff' &&
-        getAfter(/databases/$(database)/documents/users/$(resource.data.uid)).data.barberId == barberId &&
-        getAfter(/databases/$(database)/documents/users/$(resource.data.uid)).data.staffId == staffId &&
-        (request.resource.data.status != 'active' || !request.resource.data.keys().hasAny(['enrollmentCode']));
+      let enrolledUser = getAfter(/databases/$(database)/documents/users/$(staffId));
+      return isBusinessAdmin(barberId) && request.resource.data.role == 'Staff' &&
+        (!request.resource.data.keys().hasAll(['accountUid']) || request.resource.data.accountUid == staffId) && request.resource.data.accountStatus in ['active', 'inactive'] &&
+        request.resource.data.active == (request.resource.data.accountStatus == 'active') &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active', 'accountStatus', 'updatedAt']) &&
+        enrolledUser.data.role == 'staff' && enrolledUser.data.barberId == barberId && enrolledUser.data.staffId == staffId && enrolledUser.data.businessIds == [barberId] &&
+        (request.resource.data.accountStatus != 'active' || !enrolledUser.data.keys().hasAny(['enrollmentCode']));
+    }
+
+    function validDirectEnrollmentUserUpdate(uid) {
+      let staff = getAfter(/databases/$(database)/documents/barbers/$(request.resource.data.barberId)/barbers/$(uid));
+      return validDirectEnrollmentUser(resource.data, request.resource.data, uid, request.resource.data.barberId, staff.data);
+    }
+
+    function validDirectEnrollmentStaffCreate(barberId, staffId) {
+      let currentUser = get(/databases/$(database)/documents/users/$(staffId));
+      let enrolledUser = getAfter(/databases/$(database)/documents/users/$(staffId));
+      return isSignedIn() && staffId == request.auth.uid &&
+        validDirectEnrollmentUser(currentUser.data, enrolledUser.data, staffId, barberId, request.resource.data);
+    }
+
+    function validEnrollmentProofRemoval(uid) {
+      let publicStaff = getAfter(/databases/$(database)/documents/barbers/$(resource.data.barberId)/barbers/$(resource.data.staffId));
+      return isSignedIn() && request.auth.uid != uid && resource.data.role == 'staff' && resource.data.staffId == uid &&
+        isBusinessAdmin(resource.data.barberId) && resource.data.keys().hasAll(['enrollmentCode']) && !request.resource.data.keys().hasAny(['enrollmentCode']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['enrollmentCode', 'updatedAt']) &&
+        publicStaff.data.active == true && publicStaff.data.accountStatus == 'active';
+    }
+
+    function validStoreadminSelfProfileLink(uid) {
+      let profile = getAfter(/databases/$(database)/documents/barbers/$(request.resource.data.professionalBusinessId)/barbers/$(request.resource.data.staffId));
+      return isSignedIn() && request.auth.uid == uid && resource.data.role == 'storeadmin' &&
+        request.resource.data.role == 'storeadmin' && request.resource.data.barberId == resource.data.barberId &&
+        request.resource.data.businessIds == resource.data.businessIds && !resource.data.keys().hasAny(['staffId', 'professionalBusinessId']) &&
+        request.resource.data.staffId is string && request.resource.data.professionalBusinessId is string &&
+        request.resource.data.businessIds.hasAny([request.resource.data.professionalBusinessId]) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['staffId', 'professionalBusinessId', 'updatedAt']) &&
+        profile.data.active == true && profile.data.accountUid == uid &&
+        !profile.data.keys().hasAny(['accountStatus']);
+    }
+
+    function validStoreadminSelfProfileLinkProfile(barberId, staffId) {
+      let account = getAfter(/databases/$(database)/documents/users/$(request.auth.uid));
+      return isBusinessAdmin(barberId) && resource.data.active == true &&
+        !resource.data.keys().hasAny(['accountUid', 'accountStatus', 'userId']) &&
+        request.resource.data.accountUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountUid', 'updatedAt']) &&
+        account.data.role == 'storeadmin' && account.data.staffId == staffId &&
+        account.data.professionalBusinessId == barberId && account.data.businessIds.hasAny([barberId]);
+    }
+
+    function validRetirementProfilePatch() {
+      return request.resource.data.active == false && !request.resource.data.keys().hasAny(['accountUid', 'accountStatus']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active', 'accountUid', 'accountStatus', 'updatedAt']);
+    }
+
+    function validProfessionalRetirement(barberId, staffId) {
+      return isBusinessAdmin(barberId) && validRetirementProfilePatch() &&
+        (!resource.data.keys().hasAny(['accountUid', 'accountStatus']) ||
+          validLinkedStaffRetirement(staffId) || validLinkedStoreadminRetirement(barberId));
+    }
+
+    function validLinkedStaffRetirement(staffId) {
+      let account = getAfter(/databases/$(database)/documents/users/$(staffId));
+      return resource.data.keys().hasAll(['accountStatus']) && account.data.role == 'customer' &&
+        !account.data.keys().hasAny(['barberId', 'businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode']);
+    }
+
+    function validLinkedStoreadminRetirement(barberId) {
+      let account = getAfter(/databases/$(database)/documents/users/$(resource.data.accountUid));
+      return resource.data.keys().hasAll(['accountUid']) && !resource.data.keys().hasAny(['accountStatus']) &&
+        account.data.role == 'storeadmin' && account.data.barberId == barberId && account.data.businessIds.hasAny([barberId]) &&
+        !account.data.keys().hasAny(['staffId', 'professionalBusinessId']);
+    }
+
+    function validProfessionalRetirementUser(uid) {
+      let profile = getAfter(/databases/$(database)/documents/barbers/$(resource.data.barberId)/barbers/$(resource.data.staffId));
+      return isSignedIn() && request.auth.uid != uid && resource.data.role == 'staff' && resource.data.staffId == uid &&
+        profile.data.active == false && !profile.data.keys().hasAny(['accountUid', 'accountStatus']) &&
+        request.resource.data.role == 'customer' && !request.resource.data.keys().hasAny(['barberId', 'businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'barberId', 'businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode', 'updatedAt']) &&
+        isBusinessAdmin(resource.data.barberId);
+    }
+
+    function validStoreadminProfessionalUnlink(uid) {
+      let profile = getAfter(/databases/$(database)/documents/barbers/$(resource.data.professionalBusinessId)/barbers/$(resource.data.staffId));
+      return isSignedIn() && resource.data.role == 'storeadmin' && resource.data.staffId is string &&
+        profile.data.active == false && !profile.data.keys().hasAny(['accountUid', 'accountStatus']) &&
+        request.resource.data.role == 'storeadmin' && request.resource.data.barberId == resource.data.barberId &&
+        request.resource.data.businessIds == resource.data.businessIds && !request.resource.data.keys().hasAny(['staffId', 'professionalBusinessId']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['staffId', 'professionalBusinessId', 'updatedAt']) &&
+        isBusinessAdmin(resource.data.professionalBusinessId);
     }
 
     function staffAdminCanUpdateStaffRecord(barberId, staffId) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
-      let privateStaff = getAfter(/databases/$(database)/documents/barbers/$(barberId)/staffPrivate/$(staffId));
-      return isBusinessAdmin(barberId) &&
-        (!resource.data.keys().hasAny(['accountStatus']) ||
-          !changed.hasAny(['active', 'accountStatus']) ||
-          (changed.hasOnly(['active', 'accountStatus', 'updatedAt']) &&
-            privateStaff.data.status == request.resource.data.accountStatus &&
-            request.resource.data.active == (privateStaff.data.status == 'active')));
+      return validProfessionalRetirement(barberId, staffId) ||
+        (isBusinessAdmin(barberId) && !changed.hasAny(['accountUid']) &&
+          (!resource.data.keys().hasAny(['accountStatus']) ||
+            (!changed.hasAny(['active', 'accountStatus']) && !request.resource.data.keys().hasAny(['accountUid'])) ||
+            validEnrollmentStatusUpdate(barberId, staffId)));
     }
 
     function businessIsActive(barberId) {
@@ -197,13 +262,45 @@ service cloud.firestore {
     // This projection is the sole anonymous source for business presentation
     // and booking policy. Its allowlist deliberately excludes owner, billing,
     // trial, plan, limits, and every other internal field in `barbers/{id}`.
+    function validGoogleMapsUrl(url) {
+      return url is string && (
+        url.matches('^https://www\\.google\\.com/maps/place/.+') ||
+        url.matches('^https://maps\\.google\\.com/maps/place/.+')
+      );
+    }
+
+    function validBusinessLocation(location) {
+      return location is map && location.keys().hasAll(['latitude', 'longitude']) &&
+        location.keys().hasOnly(['latitude', 'longitude']) &&
+        location.latitude is number && location.longitude is number &&
+        location.latitude >= -90 && location.latitude <= 90 &&
+        location.longitude >= -180 && location.longitude <= 180;
+    }
+
+    function publicBusinessSlugMatchesRoot(barberId) {
+      return request.resource.data.slug == getAfter(/databases/$(database)/documents/barbers/$(barberId)).data.slug;
+    }
+
+    function validBrandingAssetPath(barberId, slot, path) {
+      return path is string && path.matches('^barbers/' + barberId + '/branding/' + slot + '/assets/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)$');
+    }
+
+    function validBrandingMetadata(barberId) {
+      return request.resource.data.keys().hasOnly(['logoStoragePath', 'coverStoragePath', 'pendingImageCleanupPaths', 'updatedAt']) &&
+        (!request.resource.data.keys().hasAny(['logoStoragePath']) || validBrandingAssetPath(barberId, 'logo', request.resource.data.logoStoragePath)) &&
+        (!request.resource.data.keys().hasAny(['coverStoragePath']) || validBrandingAssetPath(barberId, 'cover', request.resource.data.coverStoragePath)) &&
+        (!request.resource.data.keys().hasAny(['pendingImageCleanupPaths']) || request.resource.data.pendingImageCleanupPaths is list);
+    }
+
     function validPublicBusiness() {
       return request.resource.data.keys().hasAll(['name', 'slug', 'businessType', 'active', 'config', 'workingHours']) &&
         request.resource.data.keys().hasOnly(['name', 'slug', 'businessType', 'active', 'config', 'workingHours']) &&
         request.resource.data.name is string && request.resource.data.slug is string &&
         request.resource.data.businessType is string && request.resource.data.active is bool &&
         request.resource.data.config is map && request.resource.data.config.keys().hasAll(['address', 'phone']) &&
-        request.resource.data.config.keys().hasOnly(['address', 'phone', 'logoUrl', 'coverUrl', 'socialLinks', 'theme', 'booking']) &&
+        request.resource.data.config.keys().hasOnly(['address', 'phone', 'logoUrl', 'coverUrl', 'placeUrl', 'location', 'socialLinks', 'theme', 'booking']) &&
+        (!request.resource.data.config.keys().hasAny(['placeUrl']) || validGoogleMapsUrl(request.resource.data.config.placeUrl)) &&
+        (!request.resource.data.config.keys().hasAny(['location']) || validBusinessLocation(request.resource.data.config.location)) &&
         validWorkingHours(request.resource.data.workingHours);
     }
 
@@ -268,9 +365,10 @@ service cloud.firestore {
       allow update: if (isSuperAdmin() &&
                           (request.auth.uid != uid ||
                             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))) ||
-                          (validStaffJoin(uid, request.resource.data.barberId, request.resource.data.staffId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'barberId', 'businessIds', 'staffId', 'updatedAt'])) ||
-                        (isSignedIn() && request.auth.uid == uid &&
-                            !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'barberId', 'businessIds', 'staffId']));
+                            validDirectEnrollmentUserUpdate(uid) || validEnrollmentProofRemoval(uid) ||
+                            validStoreadminSelfProfileLink(uid) || validProfessionalRetirementUser(uid) || validStoreadminProfessionalUnlink(uid) ||
+                            (isSignedIn() && request.auth.uid == uid &&
+                              !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'barberId', 'businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode']));
 
       allow delete: if isSuperAdmin();
     }
@@ -303,25 +401,24 @@ service cloud.firestore {
         allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isAssignedStaff(barberId, staffId) ||
           hasOwnStaffProfileBinding(barberId, staffId) ||
           (businessIsActive(barberId) && resource.data.active == true);
-        allow create: if (isSignedIn() && validStaffJoin(request.auth.uid, barberId, staffId)) ||
-          isSuperAdmin() || isBusinessAdmin(barberId);
-        allow delete: if isSuperAdmin() ||
-          (isBusinessAdmin(barberId) && !resource.data.keys().hasAny(['accountStatus']));
-        allow update: if isSuperAdmin() || staffAdminCanUpdateStaffRecord(barberId, staffId) || staffCanUpdateOwnSchedule(barberId, staffId);
-      }
-
-      match /staffPrivate/{staffId} {
-        // UID and the temporarily retained enrollment proof are never browser-readable.
-        allow read: if false;
-        allow create: if isSignedIn() && validStaffJoin(request.auth.uid, barberId, staffId);
-        allow update: if isSuperAdmin() ||
-          (isBusinessAdmin(barberId) && validEnrollmentStatusUpdate(barberId, staffId));
-        allow delete: if isSuperAdmin();
+        allow create: if validDirectEnrollmentStaffCreate(barberId, staffId) ||
+          ((isSuperAdmin() || isBusinessAdmin(barberId)) && !request.resource.data.keys().hasAny(['accountUid', 'accountStatus']));
+        allow delete: if false;
+        allow update: if isSuperAdmin() || validStoreadminSelfProfileLinkProfile(barberId, staffId) ||
+          staffAdminCanUpdateStaffRecord(barberId, staffId) || staffCanUpdateOwnSchedule(barberId, staffId);
       }
 
       match /staffControl/enrollment {
         // The current code is visible only to the business administrator who can rotate it.
         allow read, write: if isSuperAdmin() || isBusinessAdmin(barberId);
+      }
+
+      // Private replacement metadata lets Storeadmins clean up immutable branding
+      // assets without ever exposing Storage paths through the public projection.
+      match /brandingMetadata/assets {
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId);
+        allow create, update: if (isSuperAdmin() || isBusinessAdmin(barberId)) && validBrandingMetadata(barberId);
+        allow delete: if false;
       }
 
       match /appointments/{appointmentId} {
@@ -378,12 +475,13 @@ service cloud.firestore {
       // Public traffic still reads active projections only. Assigned internal
       // users may fetch an exact inactive summary for their own selector.
       allow read: if resource.data.active == true || isBusinessAdmin(barberId) || isBusinessStaff(barberId);
-      allow create: if isSuperAdmin() && validPublicBusiness();
+      allow create: if isSuperAdmin() && validPublicBusiness() && publicBusinessSlugMatchesRoot(barberId);
       allow delete: if isSuperAdmin();
       // Business admins may synchronize public presentation and booking fields,
       // but cannot reactivate a business through the projection.
-      allow update: if validPublicBusiness() &&
-        (isSuperAdmin() || (isBusinessAdmin(barberId) && request.resource.data.active == resource.data.active));
+      allow update: if validPublicBusiness() && publicBusinessSlugMatchesRoot(barberId) &&
+        (isSuperAdmin() || (isBusinessAdmin(barberId) &&
+          request.resource.data.active == resource.data.active && request.resource.data.slug == resource.data.slug));
     }
 
     // Denegar acceso por defecto

@@ -12,6 +12,7 @@ BookSmart es una plataforma de agendamiento para negocios que atienden por cita:
 | --- | --- |
 | Sitio y rutas | Astro 7 |
 | UI interactiva | React 19 |
+| Mapas | React Leaflet + OpenStreetMap |
 | Estilos | Tailwind CSS 4 |
 | Datos y autenticación | Firebase / Firestore / Firebase Auth |
 | Despliegue | GitHub Pages |
@@ -87,6 +88,10 @@ npx firebase-tools deploy --only firestore:rules
 ```
 
 La reserva sigue siendo una transacción optimista de cliente: protege las colisiones entre clientes normales de la aplicación, pero no constituye una defensa autoritativa contra clientes maliciosos que llamen Firestore directamente.
+
+### Ubicación pública del negocio
+
+El administrador selecciona directamente el punto exacto del negocio en el mapa de OpenStreetMap desde Administración → Negocio. Se almacenan `config.location.latitude` y `config.location.longitude`; la dirección es texto complementario. La página `/b/<slug>` muestra el mismo marcador en modo de solo lectura. Los registros heredados con `placeUrl` se conservan, pero la interfaz ya no depende de Google Maps ni de claves, URLs de lugar o facturación de Google.
 
 ### Verificación actual
 

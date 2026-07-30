@@ -61,7 +61,7 @@ const BARBER_CACHE_TTL = 60 * 60 * 1000; // 1 hora
 const BARBER_CATALOG_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 horas
 const BARBER_PRODUCTS_CACHE_TTL = 30 * 60 * 1000; // 30 minutos
 
-function invalidateBarberConfigCaches(barberId: string): void {
+export function invalidatePublicBusinessCaches(barberId: string): void {
   localStorage.removeItem(`barber_config_${barberId}`);
 
   for (let index = localStorage.length - 1; index >= 0; index -= 1) {
@@ -148,7 +148,7 @@ export async function getBarberConfigBySlug(slug: string): Promise<PublicBusines
     return data;
   } catch (error) {
     console.error('Error fetching barber config by slug:', error);
-    return null;
+    throw error;
   }
 }
 
@@ -298,7 +298,7 @@ export async function updateBarberBookingSettings(barberId: string, settings: Bo
     // so the existing allowlisted projection keeps its sibling config fields.
     batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), bookingSettingsUpdate(settings));
     await batch.commit();
-    invalidateBarberConfigCaches(barberId);
+    invalidatePublicBusinessCaches(barberId);
     return true;
   } catch (error) {
     console.error('Error updating barber booking settings:', error);
@@ -348,7 +348,7 @@ export async function updateBarberBusinessDetails(
     const { updatedAt: _updatedAt, ...publicUpdates } = updates;
     batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), publicUpdates);
     await batch.commit();
-    invalidateBarberConfigCaches(barberId);
+    invalidatePublicBusinessCaches(barberId);
     return true;
   } catch (error) {
     console.error('Error updating barber business details:', error);
@@ -598,7 +598,7 @@ export async function getBarberCatalog(barberId: string): Promise<CatalogItem[]>
     return items;
   } catch (error) {
     console.error('Error fetching barber catalog:', error);
-    return [];
+    throw error;
   }
 }
 
@@ -633,7 +633,7 @@ export async function getBarberProducts(barberId: string): Promise<Product[]> {
     return products;
   } catch (error) {
     console.error('Error fetching barber products:', error);
-    return [];
+    throw error;
   }
 }
 

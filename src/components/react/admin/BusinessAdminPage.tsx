@@ -1,6 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { deleteBarber, toggleBarberActive, updateBarberBusinessDetails, updateBarberPlanSettings } from '../../../lib/barbers';
+import React, { useEffect, useRef, useState } from 'react';
+import type { UploadTask } from 'firebase/storage';
+import { deleteBarber, toggleBarberActive, updateBarberPlanSettings } from '../../../lib/barbers';
+import { saveBusinessDetails, validateBusinessBrandingImage } from '../../../lib/business-branding';
+import { normalizeWorkingHours } from '../../../lib/public-business';
 import type { Barber, BillingCycle, Plan, PublicBusiness, UserRole } from '../../../lib/types';
+import { BusinessLocationPicker } from '../business/BusinessLocationMap';
+import { PUBLIC_THEMES, resolvePublicThemeId } from '../../../lib/public-theme';
 import { BILLING_CYCLE_LABEL, DATA, PLAN_LABEL } from '../../../lib/data';
 import AgendaPanel from './AgendaPanel';
 import BookingConfiguration from './BookingConfiguration';
@@ -12,99 +17,82 @@ import { notifyError, notifySuccess } from '../FloatingNotifications';
 
 type Business = Barber | PublicBusiness;
 type Tab = 'agenda' | 'horario' | 'negocio' | 'contenido' | 'reservas' | 'suscripcion' | 'peligro';
+type BrandingSlot = 'logo' | 'cover';
+type BusinessFormState = {
+  name: string; businessType: Barber['businessType']; address: string; location?: Barber['config']['location']; phone: string;
+  instagram: string; facebook: string; whatsapp: string; publicThemeId: ReturnType<typeof resolvePublicThemeId>; workingHours: Barber['workingHours'];
+};
+
 const PLAN_OPTIONS: FancySelectOption<string>[] = Object.values(DATA.PLAN).map((value) => ({ value, label: PLAN_LABEL[value] }));
 const BILLING_OPTIONS: FancySelectOption<string>[] = Object.values(DATA.BILLING_CYCLE).map((value) => ({ value, label: BILLING_CYCLE_LABEL[value] }));
 const BUSINESS_DAYS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-const DEFAULT_WORKING_HOURS: Barber['workingHours'] = Object.fromEntries(Array.from({ length: 7 }, (_, day) => [day, { open: '09:00', close: '18:00', enabled: false }])) as Barber['workingHours'];
 const VALID_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DEFAULT_WORKING_HOURS = normalizeWorkingHours(undefined);
 
-function getSafeWorkingHours(workingHours: unknown): { value: Barber['workingHours']; isComplete: boolean } {
-  const source = workingHours && typeof workingHours === 'object' ? workingHours as Record<number, unknown> : {};
-  let isComplete = true;
-  const value = Object.fromEntries(Array.from({ length: 7 }, (_, day) => {
-    const value = source[day];
-    if (!value || typeof value !== 'object') {
-      isComplete = false;
-      return [day, DEFAULT_WORKING_HOURS[day]];
-    }
-    const schedule = value as Partial<Barber['workingHours'][number]>;
-    if (typeof schedule.open !== 'string' || typeof schedule.close !== 'string' || !VALID_TIME.test(schedule.open) || !VALID_TIME.test(schedule.close) || schedule.open >= schedule.close) {
-      isComplete = false;
-      return [day, DEFAULT_WORKING_HOURS[day]];
-    }
-    return [day, {
-      open: typeof schedule.open === 'string' ? schedule.open : DEFAULT_WORKING_HOURS[day].open,
-      close: typeof schedule.close === 'string' ? schedule.close : DEFAULT_WORKING_HOURS[day].close,
-      enabled: typeof schedule.enabled === 'boolean' ? schedule.enabled : DEFAULT_WORKING_HOURS[day].enabled,
-    }];
-  })) as Barber['workingHours'];
-  return { value, isComplete };
-}
-
-type BusinessFormState = {
-  name: string;
-  businessType: Barber['businessType'];
-  address: string;
-  phone: string;
-  logoUrl: string;
-  coverUrl: string;
-  instagram: string;
-  facebook: string;
-  whatsapp: string;
-  primaryColor: string;
-  workingHours: Barber['workingHours'];
-};
 
 export default function BusinessAdminPage({ business, role, staffId, onBack, onRefresh }: { business: Business; role: UserRole; staffId?: string; onBack: () => void; onRefresh: () => void | Promise<void> }) {
   const global = role === DATA.USER_ROLE.SUPERADMIN;
   const hasOwnProfessionalProfile = Boolean(staffId);
-  const [tab, setTab] = useState<Tab>('agenda'); const [contentActivated, setContentActivated] = useState(false); const [saving, setSaving] = useState(false); const message: null = null; const [confirm, setConfirm] = useState<null | { title: string; text: string; dangerous?: boolean; run: () => Promise<void> }>(null);
-  const isStaff = role === DATA.USER_ROLE.STAFF || (hasOwnProfessionalProfile && tab === 'horario');
-  useEffect(() => { if (!hasOwnProfessionalProfile && tab === 'horario') setTab('agenda'); }, [hasOwnProfessionalProfile, tab]);
-  const initialWorkingHours = getSafeWorkingHours(business.workingHours);
-  const [workingHoursEdited, setWorkingHoursEdited] = useState(false);
-  const [form, setForm] = useState(() => ({ name: business.name, businessType: business.businessType, address: business.config.address || '', phone: business.config.phone || '', logoUrl: business.config.logoUrl || '', coverUrl: business.config.coverUrl || '', instagram: business.config.socialLinks?.instagram || '', facebook: business.config.socialLinks?.facebook || '', whatsapp: business.config.socialLinks?.whatsapp || '', primaryColor: business.config.theme?.primaryColor || '#000000', workingHours: initialWorkingHours.value }));
-  const full = business as Barber; const [plan, setPlan] = useState<Plan>(full.plan || DATA.PLAN.STANDARD); const [billingCycle, setBillingCycle] = useState<BillingCycle>(full.billingCycle || DATA.BILLING_CYCLE.MONTH_1);
-  const tabs: Array<[Tab, string]> = isStaff ? [['agenda', 'Agenda'], ['horario', 'Mi horario']] : [['agenda', 'Agenda'], ...(hasOwnProfessionalProfile ? [['horario', 'Mi horario']] as Array<[Tab, string]> : []), ['negocio', 'Negocio'], ['contenido', 'Contenido'], ['reservas', 'Reservas'], ...(global ? [['suscripcion', 'Suscripción'], ['peligro', 'Peligro']] as Array<[Tab, string]> : [])];
-  const run = async (action: () => Promise<boolean>) => { setSaving(true); try { if (!await action()) throw new Error('No se pudo guardar el cambio.'); await onRefresh(); notifySuccess('Cambios guardados.'); } catch (cause) { notifyError(cause instanceof Error ? cause.message : 'No se pudo guardar el cambio.'); } finally { setSaving(false); } };
-  return <main className="section-shell min-h-screen"><div className="mx-auto max-w-6xl px-4 py-8"><header className="mb-7 flex flex-wrap items-start justify-between gap-4"><div><button type="button" className="mb-3 text-sm font-semibold text-subtle hover:text-main" onClick={onBack}>← Cambiar negocio</button><p className="text-xs font-semibold uppercase tracking-widest text-subtle">Administración del negocio</p><h1 className="text-3xl font-bold text-main">{business.name}</h1><p className="mt-1 text-sm text-subtle">{isStaff ? 'Personal · agenda y horario propio' : global ? 'Superadministración · operación y controles globales' : 'Storeadmin · operación del negocio'}</p></div><a href={`${import.meta.env.BASE_URL}b/${encodeURIComponent(business.slug)}`} className="btn-outline rounded-lg px-3 py-2 text-sm">Ver página pública</a></header><nav className="mb-6 border-b" aria-label="Secciones de administración"><div role="tablist" className="flex gap-1 overflow-x-auto">{tabs.map(([key, label]) => <button key={key} role="tab" type="button" aria-selected={tab === key} onClick={() => { setTab(key); if (key === 'contenido') setContentActivated(true); }} className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold ${tab === key ? 'border-(--secondary) text-(--secondary)' : 'border-transparent text-subtle'}`}>{label}</button>)}</div></nav>{message && <p className="mb-4 rounded-lg p-3 text-sm surface-soft">{message}</p>}{tab === 'agenda' && <AgendaPanel businessId={business.id} staffId={isStaff ? staffId : undefined} />}{isStaff && tab === 'horario' && staffId && <OwnSchedulePanel businessId={business.id} staffId={staffId} />}{tab === 'negocio' && <BusinessForm form={form} setForm={setForm} saving={saving} onWorkingHoursChange={() => setWorkingHoursEdited(true)} onSave={() => void run(() => updateBarberBusinessDetails(business.id, { ...form, workingHours: initialWorkingHours.isComplete || workingHoursEdited ? form.workingHours : undefined }))} />}{contentActivated && <div hidden={tab !== 'contenido'}><ContentManagement barberId={business.id} onChange={onRefresh} /></div>}{tab === 'reservas' && <BookingConfiguration business={business} />}{global && tab === 'suscripcion' && <section className="surface-card max-w-2xl space-y-4 rounded-2xl p-6"><h2 className="text-xl font-bold text-main">Plan y estado</h2><FancySelect value={plan} options={PLAN_OPTIONS} onChange={(value) => setPlan(value as Plan)} /><FancySelect value={billingCycle} options={BILLING_OPTIONS} onChange={(value) => setBillingCycle(value as BillingCycle)} /><button type="button" disabled={saving} className="btn-primary rounded-lg px-4 py-2 disabled:opacity-50" onClick={() => setConfirm({ title: 'Actualizar suscripción', text: `Aplicar ${PLAN_LABEL[plan]} a ${business.name}.`, run: async () => run(() => updateBarberPlanSettings(business.id, plan, billingCycle)) })}>Guardar suscripción</button><button type="button" disabled={saving} className="btn-outline ml-3 rounded-lg px-4 py-2" onClick={() => setConfirm({ title: business.active ? 'Desactivar negocio' : 'Activar negocio', text: `¿Confirmás este cambio para ${business.name}?`, run: async () => run(() => toggleBarberActive(business.id, !business.active)) })}>{business.active ? 'Desactivar' : 'Activar'}</button></section>}{global && tab === 'peligro' && <section className="max-w-2xl rounded-xl border p-5"><h2 className="text-xl font-bold text-main">Zona de peligro</h2><p className="mt-2 text-sm text-subtle">Eliminar el documento principal no elimina automáticamente sus subcolecciones.</p><button type="button" className="mt-4 rounded-lg bg-red-700 px-4 py-2 text-white" onClick={() => setConfirm({ title: 'Eliminar negocio', text: `¿Eliminar ${business.name}? Esta acción no se puede deshacer.`, dangerous: true, run: async () => { await run(() => deleteBarber(business.id)); onBack(); } })}>Eliminar negocio</button></section>}</div><ConfirmModal isOpen={Boolean(confirm)} title={confirm?.title || ''} message={confirm?.text || ''} isDangerous={confirm?.dangerous} confirmText="Confirmar" cancelText="Cancelar" onConfirm={() => { if (confirm) void confirm.run().then(() => setConfirm(null)); }} onCancel={() => setConfirm(null)} /></main>;
-}
-function BusinessForm({ form, setForm, saving, onWorkingHoursChange, onSave }: { form: BusinessFormState; setForm: React.Dispatch<React.SetStateAction<BusinessFormState>>; saving: boolean; onWorkingHoursChange: () => void; onSave: () => void }) {
-  const updateWorkingDay = (day: number, changes: Partial<Barber['workingHours'][number]>) => {
-    const current = form.workingHours[day] || { open: '09:00', close: '18:00', enabled: false };
-    setForm({ ...form, workingHours: { ...form.workingHours, [day]: { ...current, ...changes } } });
-    onWorkingHoursChange();
-  };
-  const save = () => {
-    if (invalidWorkingDays.some(Boolean)) {
-      notifyError('En los días activos, la hora de apertura debe ser anterior a la de cierre.');
-      return;
-    }
-    onSave();
-  };
-  const invalidWorkingDays = BUSINESS_DAYS.map((_, day) => {
-    const current = form.workingHours[day];
-    return current?.enabled && (!VALID_TIME.test(current.open) || !VALID_TIME.test(current.close) || current.open >= current.close);
-  });
+  const [tab, setTab] = useState<Tab>('agenda');
+  const [contentActivated, setContentActivated] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState<null | { title: string; text: string; dangerous?: boolean; run: () => Promise<void> }>(null);
+  const isStaff = role === DATA.USER_ROLE.STAFF;
+  const canManageOwnSchedule = isStaff || hasOwnProfessionalProfile;
+  const [form, setForm] = useState<BusinessFormState>(() => ({ name: business.name, businessType: business.businessType, address: business.config.address || '', location: business.config.location, phone: business.config.phone || '', instagram: business.config.socialLinks?.instagram || '', facebook: business.config.socialLinks?.facebook || '', whatsapp: business.config.socialLinks?.whatsapp || '', publicThemeId: resolvePublicThemeId(business.config.theme?.id), workingHours: normalizeWorkingHours(business.workingHours) }));
+  const full = business as Barber;
+  const [plan, setPlan] = useState<Plan>(full.plan || DATA.PLAN.STANDARD);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>(full.billingCycle || DATA.BILLING_CYCLE.MONTH_1);
+  const tabs: Array<[Tab, string]> = isStaff ? [['agenda', 'Agenda'], ['horario', 'Mi horario']] : [['agenda', 'Agenda'], ...(canManageOwnSchedule ? [['horario', 'Mi horario']] as Array<[Tab, string]> : []), ['negocio', 'Negocio'], ['contenido', 'Contenido'], ['reservas', 'Reservas'], ...(global ? [['suscripcion', 'Suscripción'], ['peligro', 'Peligro']] as Array<[Tab, string]> : [])];
 
-  return <section className="surface-card max-w-3xl rounded-2xl p-6">
-    <h2 className="mb-4 text-xl font-bold text-main">Datos del negocio</h2>
-    <div className="grid gap-3 md:grid-cols-2">{[['Nombre', 'name'], ['Dirección', 'address'], ['Teléfono', 'phone'], ['Logo URL', 'logoUrl'], ['Portada URL', 'coverUrl'], ['Instagram', 'instagram'], ['Facebook', 'facebook'], ['WhatsApp', 'whatsapp']].map(([label, key]) => <label key={key} className="field-label">{label}<input className="field-input mt-1" value={form[key as keyof BusinessFormState] as string} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>)}</div>
-    <fieldset className="mt-8 border-t border-(--border) pt-6">
-      <legend className="text-lg font-bold text-main">Horario de atención</legend>
-       <p className="mt-1 text-sm text-subtle">El horario del negocio limita las reservas. El personal puede tener una disponibilidad más restringida.</p>
-      <div className="mt-5 space-y-2">{BUSINESS_DAYS.map((day, index) => {
-        const current = form.workingHours[index] || { open: '09:00', close: '18:00', enabled: false };
-         const invalid = Boolean(invalidWorkingDays[index]);
-         const errorId = `working-hours-${index}-error`;
-         return <div key={day} className={`surface-soft grid gap-3 rounded-lg p-3 sm:grid-cols-[minmax(9rem,1fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center ${invalid ? 'border-[var(--danger)]' : ''}`}>
-            <label className="flex min-h-10 items-center gap-2 text-sm font-semibold text-main"><input type="checkbox" checked={current.enabled} onChange={(event) => updateWorkingDay(index, { enabled: event.target.checked })} />{day}</label>
-            <label className="grid gap-1 text-xs font-semibold text-subtle">Apertura<input className="field-input" type="time" disabled={!current.enabled} value={current.open} aria-invalid={invalid || undefined} aria-describedby={invalid ? errorId : undefined} onChange={(event) => updateWorkingDay(index, { open: event.target.value })} /></label>
-            <label className="grid gap-1 text-xs font-semibold text-subtle">Cierre<input className="field-input" type="time" disabled={!current.enabled} value={current.close} aria-invalid={invalid || undefined} aria-describedby={invalid ? errorId : undefined} onChange={(event) => updateWorkingDay(index, { close: event.target.value })} /></label>
-            {invalid && <p id={errorId} className="sr-only">La hora de apertura debe ser anterior a la de cierre.</p>}
-          </div>;
-      })}</div>
-    </fieldset>
-    <button type="button" disabled={saving} className="btn-primary mt-6 rounded-lg px-4 py-2 disabled:opacity-50" onClick={save}>{saving ? 'Guardando...' : 'Guardar negocio'}</button>
+  useEffect(() => { if (!hasOwnProfessionalProfile && tab === 'horario') setTab('agenda'); }, [hasOwnProfessionalProfile, tab]);
+  const run = async (action: () => Promise<boolean>) => { setSaving(true); try { if (!await action()) throw new Error('No se pudo guardar el cambio.'); await onRefresh(); notifySuccess('Cambios guardados.'); } catch (cause) { notifyError(cause instanceof Error ? cause.message : 'No se pudo guardar el cambio.'); } finally { setSaving(false); } };
+  const saveBusiness = (files: Record<BrandingSlot, File | null>, onProgress: (progress: Partial<Record<BrandingSlot, number>>) => void, onTask: (task: UploadTask | null) => void) => void run(async () => { await saveBusinessDetails(business.id, form, files, onProgress, onTask); return true; });
+
+  return <main className="section-shell min-h-screen">
+    <div className="mx-auto max-w-6xl px-4 py-8">
+      <header className="mb-7 flex flex-wrap items-start justify-between gap-4"><div><button type="button" className="mb-3 text-sm font-semibold text-subtle hover:text-main" onClick={onBack}>← Cambiar negocio</button><p className="text-xs font-semibold uppercase tracking-widest text-subtle">Administración del negocio</p><h1 className="text-3xl font-bold text-main">{business.name}</h1><p className="mt-1 text-sm text-subtle">{isStaff ? 'Personal · agenda y horario personal' : global ? 'Superadministración · operación y controles globales' : 'Administración · operación del negocio'}</p></div><a href={`${import.meta.env.BASE_URL}b/${encodeURIComponent(business.slug)}`} className="btn-outline rounded-lg px-3 py-2 text-sm">Ver página pública</a></header>
+        <nav className="mb-6 border-b" aria-label="Secciones de administración"><div className="flex gap-1 overflow-x-auto">{tabs.map(([key, label]) => <button key={key} type="button" aria-current={tab === key ? 'page' : undefined} onClick={() => { setTab(key); if (key === 'contenido') setContentActivated(true); }} className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold ${tab === key ? 'border-(--secondary) text-(--secondary)' : 'border-transparent text-subtle'}`}>{label}</button>)}</div></nav>
+      {tab === 'agenda' && <AgendaPanel businessId={business.id} staffId={isStaff ? staffId : undefined} />}
+      {canManageOwnSchedule && tab === 'horario' && staffId && <OwnSchedulePanel businessId={business.id} staffId={staffId} />}
+       {tab === 'negocio' && <BusinessForm form={form} setForm={setForm} saving={saving} logoUrl={business.config.logoUrl} coverUrl={business.config.coverUrl} onWorkingHoursChange={() => undefined} onSave={saveBusiness} />}
+      {contentActivated && <div hidden={tab !== 'contenido'}><ContentManagement barberId={business.id} onChange={onRefresh} /></div>}
+      {tab === 'reservas' && <BookingConfiguration business={business} />}
+      {tab === 'suscripcion' && global && <section className="surface-card max-w-xl rounded-2xl p-6"><h2 className="text-xl font-bold text-main">Suscripción</h2><div className="mt-4 grid gap-3"><label className="field-label">Plan<FancySelect value={plan} options={PLAN_OPTIONS} onChange={(value) => setPlan(value as Plan)} /></label><label className="field-label">Ciclo de facturación<FancySelect value={billingCycle} options={BILLING_OPTIONS} onChange={(value) => setBillingCycle(value as BillingCycle)} /></label><button type="button" disabled={saving} className="btn-primary mt-2 rounded-lg px-4 py-2 disabled:opacity-50" onClick={() => void run(() => updateBarberPlanSettings(business.id, plan, billingCycle))}>{saving ? 'Guardando...' : 'Guardar suscripción'}</button></div></section>}
+      {tab === 'peligro' && global && <section className="surface-card max-w-xl rounded-2xl p-6"><h2 className="text-xl font-bold text-main">Zona de peligro</h2><p className="mt-2 text-sm text-subtle">Estas acciones modifican la disponibilidad pública del negocio.</p><div className="mt-5 flex flex-wrap gap-3"><button type="button" disabled={saving} className="btn-outline rounded-lg px-4 py-2" onClick={() => setConfirm({ title: business.active ? 'Desactivar negocio' : 'Activar negocio', text: business.active ? 'La página pública dejará de estar disponible.' : 'La página pública volverá a estar disponible.', run: async () => { await run(() => toggleBarberActive(business.id, !business.active)); } })}>{business.active ? 'Desactivar' : 'Activar'}</button><button type="button" disabled={saving} className="danger-action rounded-lg px-4 py-2" onClick={() => setConfirm({ title: 'Eliminar negocio', text: 'Esta acción elimina el negocio y su proyección pública.', dangerous: true, run: async () => { await run(() => deleteBarber(business.id)); onBack(); } })}>Eliminar negocio</button></div></section>}
+    </div>
+    {confirm && <ConfirmModal isOpen title={confirm.title} message={confirm.text} isDangerous={confirm.dangerous} onCancel={() => setConfirm(null)} onConfirm={() => { const action = confirm.run; setConfirm(null); void action(); }} />}
+  </main>;
+}
+
+function LegacyBusinessForm({ form, setForm, saving, logoUrl, coverUrl, onWorkingHoursChange, onSave }: { form: BusinessFormState; setForm: React.Dispatch<React.SetStateAction<BusinessFormState>>; saving: boolean; logoUrl?: string; coverUrl?: string; onWorkingHoursChange: () => void; onSave: (files: Record<BrandingSlot, File | null>, onProgress: (progress: Partial<Record<BrandingSlot, number>>) => void, onTask: (task: UploadTask | null) => void) => void }) {
+  const [files, setFiles] = useState<Record<BrandingSlot, File | null>>({ logo: null, cover: null });
+  const [previews, setPreviews] = useState<Record<BrandingSlot, string>>({ logo: '', cover: '' });
+  const [progress, setProgress] = useState<Partial<Record<BrandingSlot, number>>>({});
+  const [imageError, setImageError] = useState('');
+  const uploadTask = useRef<UploadTask | null>(null);
+  useEffect(() => () => { uploadTask.current?.cancel(); Object.values(previews).forEach((url) => { if (url) URL.revokeObjectURL(url); }); }, [previews]);
+  const chooseImage = (slot: BrandingSlot, file: File | null) => { if (!file) return; const error = validateBusinessBrandingImage(file); if (error) { setImageError(error); return; } setImageError(''); setFiles((current) => ({ ...current, [slot]: file })); setPreviews((current) => { if (current[slot]) URL.revokeObjectURL(current[slot]); return { ...current, [slot]: URL.createObjectURL(file) }; }); };
+  const removeImage = (slot: BrandingSlot) => { setFiles((current) => ({ ...current, [slot]: null })); setPreviews((current) => { if (current[slot]) URL.revokeObjectURL(current[slot]); return { ...current, [slot]: '' }; }); };
+  const updateWorkingDay = (day: number, changes: Partial<Barber['workingHours'][number]>) => { const current = form.workingHours[day] || DEFAULT_WORKING_HOURS[day]; setForm({ ...form, workingHours: { ...form.workingHours, [day]: { ...current, ...changes } } }); onWorkingHoursChange(); };
+  const invalidWorkingDays = BUSINESS_DAYS.map((_, day) => { const current = form.workingHours[day]; return current?.enabled && (!VALID_TIME.test(current.open) || !VALID_TIME.test(current.close) || current.open >= current.close); });
+  const save = () => { if (invalidWorkingDays.some(Boolean)) return notifyError('En los días activos, la hora de apertura debe ser anterior a la de cierre.'); setProgress({}); onSave(files, setProgress, (task) => { uploadTask.current = task; }); };
+  const field = (label: string, key: keyof Pick<BusinessFormState, 'name' | 'address' | 'phone' | 'instagram' | 'facebook' | 'whatsapp'>, hint?: string) => {
+    return <div className={key === 'address' ? 'md:col-span-2' : undefined}><label className="field-label">{label}<input className="field-input mt-1" value={form[key]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} />{hint && <span className="field-hint mt-1 block text-xs">{hint}</span>}</label>{key === 'address' && <BusinessLocationPicker value={form.location} onChange={(location) => setForm({ ...form, location })} />}</div>;
+  };
+  return <section className="surface-card max-w-4xl rounded-2xl p-6"><h2 className="text-xl font-bold text-main">Datos del negocio</h2><p className="mt-1 text-sm text-subtle">Personalice la página pública autónoma del negocio. La ubicación actual se muestra con el punto seleccionado en el mapa; la dirección es una referencia adicional.</p><div className="mt-6 grid gap-3 md:grid-cols-2">{field('Nombre', 'name')}{field('Dirección', 'address', 'Se muestra como referencia y mantiene compatibilidad con negocios existentes.')}{field('Teléfono', 'phone')}{field('Instagram', 'instagram')}{field('Facebook', 'facebook')}{field('WhatsApp', 'whatsapp')}</div><fieldset className="mt-8 border-t border-(--border) pt-6"><legend className="text-lg font-bold text-main">Tema de la página pública</legend><p className="mt-1 text-sm text-subtle">Elija un tema exclusivo para este negocio.</p><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{PUBLIC_THEMES.map((theme) => <button key={theme.id} type="button" className={`public-theme-choice ${form.publicThemeId === theme.id ? 'is-selected' : ''}`} aria-pressed={form.publicThemeId === theme.id} onClick={() => setForm({ ...form, publicThemeId: theme.id })}><span className="public-theme-swatches">{theme.swatches.map((color) => <span key={color} style={{ backgroundColor: color }} />)}</span><span><strong>{theme.name}</strong><small>{theme.mode === 'dark' ? 'Oscuro' : 'Claro'}</small></span></button>)}</div></fieldset><fieldset className="mt-8 border-t border-(--border) pt-6"><legend className="text-lg font-bold text-main">Logo y portada</legend><p className="mt-1 text-sm text-subtle">Cargue imágenes directamente a Storage. JPEG, PNG o WebP; máximo 5 MiB.</p><div className="mt-4 grid gap-4 md:grid-cols-2">{(['logo', 'cover'] as BrandingSlot[]).map((slot) => { const source = previews[slot] || (slot === 'logo' ? logoUrl : coverUrl); return <div key={slot} className="business-brand-image-picker"><p className="font-semibold text-main">{slot === 'logo' ? 'Logo' : 'Portada'}</p>{source ? <img src={source} alt={`Vista previa de ${slot === 'logo' ? 'logo' : 'portada'}`} className={`mt-3 ${slot === 'logo' ? 'business-brand-logo-preview' : 'business-brand-cover-preview'}`} /> : <div className={`mt-3 business-brand-image-empty ${slot === 'logo' ? 'business-brand-logo-preview' : 'business-brand-cover-preview'}`}>Sin imagen</div>}<label className="btn-outline mt-3 inline-flex cursor-pointer rounded-lg px-3 py-2 text-sm font-semibold">Seleccionar imagen<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => chooseImage(slot, event.target.files?.[0] || null)} /></label>{previews[slot] && <button type="button" className="ml-2 text-sm font-semibold text-subtle underline" onClick={() => removeImage(slot)}>Quitar selección</button>}{progress[slot] !== undefined && <p className="mt-2 text-sm text-subtle">Subiendo {progress[slot]}%</p>}</div>; })}</div>{imageError && <p className="error-message mt-3 text-sm" role="alert">{imageError}</p>} {saving && uploadTask.current && <button type="button" className="btn-outline mt-4 rounded-lg px-3 py-2 text-sm" onClick={() => uploadTask.current?.cancel()}>Cancelar carga</button>}</fieldset><fieldset className="mt-8 border-t border-(--border) pt-6"><legend className="text-lg font-bold text-main">Horario de atención</legend><p className="mt-1 text-sm text-subtle">El horario del negocio limita las reservas. El personal puede tener una disponibilidad más restringida.</p><div className="mt-5 space-y-2">{BUSINESS_DAYS.map((day, index) => { const current = form.workingHours[index] || DEFAULT_WORKING_HOURS[index]; const invalid = Boolean(invalidWorkingDays[index]); return <div key={day} className={`surface-soft grid gap-3 rounded-lg p-3 sm:grid-cols-[minmax(9rem,1fr)_minmax(0,1fr)_minmax(0,1fr)] sm:items-center ${invalid ? 'border-[var(--danger)]' : ''}`}><label className="flex min-h-10 items-center gap-2 text-sm font-semibold text-main"><input type="checkbox" checked={current.enabled} onChange={(event) => updateWorkingDay(index, { enabled: event.target.checked })} />{day}</label><label className="grid gap-1 text-xs font-semibold text-subtle">Apertura<input className="field-input" type="time" disabled={!current.enabled} value={current.open} onChange={(event) => updateWorkingDay(index, { open: event.target.value })} /></label><label className="grid gap-1 text-xs font-semibold text-subtle">Cierre<input className="field-input" type="time" disabled={!current.enabled} value={current.close} onChange={(event) => updateWorkingDay(index, { close: event.target.value })} /></label></div>; })}</div></fieldset><button type="button" disabled={saving} className="btn-primary mt-6 rounded-lg px-4 py-2 disabled:opacity-50" onClick={save}>{saving ? 'Guardando...' : 'Guardar negocio'}</button></section>;
+}
+
+function BusinessForm(props: { form: BusinessFormState; setForm: React.Dispatch<React.SetStateAction<BusinessFormState>>; saving: boolean; logoUrl?: string; coverUrl?: string; onWorkingHoursChange: () => void; onSave: (files: Record<BrandingSlot, File | null>, onProgress: (progress: Partial<Record<BrandingSlot, number>>) => void, onTask: (task: UploadTask | null) => void) => void }) {
+  return <><PublicThemePreview form={props.form} logoUrl={props.logoUrl} coverUrl={props.coverUrl} /><LegacyBusinessForm {...props} /></>;
+}
+
+function PublicThemePreview({ form, logoUrl, coverUrl }: { form: BusinessFormState; logoUrl?: string; coverUrl?: string }) {
+  return <section className="surface-card mb-6 max-w-4xl rounded-2xl p-6" aria-labelledby="public-theme-preview-title">
+    <div className="flex flex-wrap items-baseline justify-between gap-2"><div><h2 id="public-theme-preview-title" className="text-xl font-bold text-main">Vista previa de la página pública</h2><p className="mt-1 text-sm text-subtle">Así se verá <span className="font-semibold">/b/:slug</span> con el tema seleccionado.</p></div><p className="text-sm font-semibold text-main">Se aplicará al guardar</p></div>
+    <div className={`public-business public-theme-${form.publicThemeId} public-business-preview mt-5`} aria-label={`Vista previa del tema ${PUBLIC_THEMES.find((theme) => theme.id === form.publicThemeId)?.name || ''}`}>
+      <section className={`public-business-hero public-business-preview-hero ${coverUrl ? 'has-cover' : ''}`}>{coverUrl && <img className="public-business-cover" src={coverUrl} alt="" />}<div className="public-business-hero-overlay" /><div className="public-business-hero-content"><p className="public-business-kicker">Reservas en línea</p><div className="public-business-identity">{logoUrl ? <img src={logoUrl} alt="" className="public-business-logo" /> : <div className="public-business-logo public-business-logo-fallback" aria-hidden="true">BS</div>}<div><h3>{form.name.trim() || 'Nombre del negocio'}</h3><p className="public-business-address">{form.address.trim() || 'Tu dirección aparecerá aquí'}</p></div></div><div className="public-business-hero-actions"><button type="button" className="btn-primary public-business-hero-cta">Reservar una cita</button></div></div></section>
+      <div className="public-business-preview-surface"><nav className="public-business-tabs" aria-label="Secciones de ejemplo"><ul><li><span className="is-active">Inicio</span></li><li><span>Reservar</span></li><li><span>Ubicación</span></li></ul></nav><div className="public-business-preview-copy"><p className="public-business-kicker">Planifica tu visita</p><h4>Todo lo necesario para reservar.</h4><p>Superficies, tipografía y acentos del tema público.</p></div></div>
+    </div>
   </section>;
 }

@@ -6,5 +6,5 @@ import HeaderSection from '../components/home/HeaderSection.astro';
 
 <Layout title="Panel administrativo">
   <HeaderSection />
-  <AdminRoute client:load />
+  <AdminRoute client:only="react" />
 </Layout>

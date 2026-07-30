@@ -43,5 +43,14 @@ service firebase.storage {
         isContentImage();
       allow delete: if isSuperAdmin() || isBusinessAdmin(barberId);
     }
+
+    match /barbers/{barberId}/branding/{slot}/assets/{assetName} {
+      allow read: if firestore.get(/databases/(default)/documents/barbers/$(barberId)).data.active == true;
+      allow create: if (isSuperAdmin() || isBusinessAdmin(barberId)) &&
+        slot in ['logo', 'cover'] &&
+        assetName.matches('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)') &&
+        isContentImage();
+      allow delete: if isSuperAdmin() || isBusinessAdmin(barberId);
+    }
   }
 }

@@ -22,16 +22,16 @@ const contactPath = `${baseUrl}#contact`;
       <span class="text-2xl font-extrabold tracking-tight text-[#f1eee6]">BookSmart</span>
     </a>
 
-    <div class="relative">
+    <div class="relative account-menu-wrap">
       <button
         id="menu-trigger"
         type="button"
-        class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--secondary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101114]"
+        class="account-menu-trigger inline-flex h-11 w-11 items-center justify-center overflow-hidden focus-visible:outline-none"
         aria-label="Abrir menú de cuenta"
         aria-expanded="false"
         aria-controls="header-dropdown"
       >
-        <span id="menu-avatar" class="hidden h-full w-full overflow-hidden rounded-full" style="background: color-mix(in srgb, var(--secondary) 13%, var(--surface));" aria-hidden="true">
+        <span id="menu-avatar" class="account-menu-avatar hidden h-full w-full overflow-hidden" aria-hidden="true">
           <img id="menu-avatar-image" class="hidden h-full w-full object-cover" alt="" />
           <span id="menu-avatar-initials" class="flex h-full w-full items-center justify-center text-xs font-extrabold tracking-tight text-main"></span>
         </span>
@@ -43,7 +43,7 @@ const contactPath = `${baseUrl}#contact`;
 
       <div
         id="header-dropdown"
-        class="surface-card invisible absolute right-0 mt-3 w-[min(320px,calc(100vw-2rem))] origin-top-right rounded p-5 opacity-0 transition duration-200"
+        class="account-menu-popover surface-card invisible absolute right-0 mt-3 w-[min(320px,calc(100vw-2rem))] origin-top-right opacity-0 transition duration-200"
       >
         <!-- Estado guest: branding + nav + CTA -->
         <div id="menu-guest-section">
@@ -53,7 +53,7 @@ const contactPath = `${baseUrl}#contact`;
             <p class="text-sm text-subtle">Infraestructura 100% gratuita para iniciar</p>
           </div>
 
-          <nav class="py-4" aria-label="Navegacion principal">
+          <nav class="py-4" aria-label="Navegación principal">
             <ul class="space-y-2">
               <li><a href={homePath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Inicio</a></li>
               <li><a href={featuresPath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Lo que ofrecemos</a></li>
@@ -69,8 +69,8 @@ const contactPath = `${baseUrl}#contact`;
 
         <!-- Estado auth: rol + cerrar sesion -->
         <div id="menu-auth-section" class="hidden space-y-3">
-          <section id="menu-identity-block" class="flex min-w-0 items-center gap-3 rounded-xl border p-3" style="border-color: var(--border); background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));" aria-label="Información de cuenta">
-            <span class="flex h-12 w-12 shrink-0 overflow-hidden rounded-full border" style="border-color: color-mix(in srgb, var(--secondary) 52%, var(--border)); background: color-mix(in srgb, var(--secondary) 13%, var(--surface));" aria-hidden="true">
+          <section id="menu-identity-block" class="account-menu-identity flex min-w-0 items-center gap-3 border p-3" aria-label="Información de cuenta">
+            <span class="account-menu-identity-avatar flex h-12 w-12 shrink-0 overflow-hidden border" aria-hidden="true">
               <img id="menu-identity-image" class="hidden h-full w-full object-cover" alt="" />
               <span id="menu-identity-initials" class="flex h-full w-full items-center justify-center text-sm font-extrabold tracking-tight text-main"></span>
             </span>
@@ -84,18 +84,18 @@ const contactPath = `${baseUrl}#contact`;
               <li><a href={homePath} class="accent-link block rounded-xl px-3 py-2 text-sm text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Inicio</a></li>
             </ul>
           </nav>
-          <div id="menu-role-box" class="rounded-xl px-4 py-3" style="background: color-mix(in srgb, var(--surface-soft) 82%, var(--bg)); border: 1px solid var(--border);">
+          <div id="menu-role-box" class="account-menu-role px-4 py-3">
             <p id="menu-role-label" class="text-xs font-semibold uppercase tracking-[0.18em] text-subtle">Rol</p>
             <a id="menu-role-link" href="#" class="accent-link mt-2 hidden text-sm font-bold text-main transition"></a>
             <p id="menu-role-note" class="mt-2 hidden text-sm text-subtle"></p>
           </div>
-          <button id="menu-logout-button" type="button" class="btn-outline block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Cerrar sesion</button>
+          <button id="menu-logout-button" type="button" class="account-menu-button btn-outline block w-full px-4 py-3 text-center text-sm font-bold">Cerrar sesión</button>
         </div>
 
         <!-- Estado guest: acceso a cuenta -->
         <div id="menu-login-section" class="hidden space-y-2 border-t pt-4" style="border-color: var(--border);">
-          <a id="menu-auth-link" href={loginPath} class="btn-outline block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Iniciar sesión</a>
-          <a id="menu-register-link" href={`${loginPath}?mode=register`} class="account-menu-option block w-full rounded-xl border px-4 py-3 text-center text-sm font-bold text-main" style="border-color: var(--border);">Crear cuenta</a>
+          <a id="menu-auth-link" href={loginPath} class="account-menu-button btn-outline block w-full px-4 py-3 text-center text-sm font-bold">Iniciar sesión</a>
+          <a id="menu-register-link" href={`${loginPath}?mode=register`} class="account-menu-button account-menu-option block w-full border px-4 py-3 text-center text-sm font-bold text-main">Crear cuenta</a>
         </div>
       </div>
     </div>

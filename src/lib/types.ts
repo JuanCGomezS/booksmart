@@ -101,13 +101,19 @@ export interface Barber {
     phone: string;
     logoUrl?: string;
     coverUrl?: string;
+    logoStoragePath?: string;
+    coverStoragePath?: string;
+    pendingBrandingCleanupPaths?: string[];
+    placeUrl?: string;
+    location?: BusinessCoordinates;
     socialLinks?: {
       instagram?: string;
       facebook?: string;
       whatsapp?: string;
     };
     theme?: {
-      primaryColor: string;
+      id?: import('./public-theme').PublicThemeId;
+      primaryColor?: string;
     };
     /** Optional until a business configures public booking. */
     booking?: BookingSettings;
@@ -135,9 +141,14 @@ export interface PublicBusiness {
   slug: string;
   businessType: BusinessType;
   active: boolean;
-  config: Pick<Barber['config'], 'address' | 'phone' | 'logoUrl' | 'coverUrl' | 'socialLinks' | 'theme' | 'booking'>;
+  config: Pick<Barber['config'], 'address' | 'phone' | 'logoUrl' | 'coverUrl' | 'placeUrl' | 'location' | 'socialLinks' | 'theme' | 'booking'>;
   workingHours: Barber['workingHours'];
 }
+
+export type BusinessCoordinates = {
+  latitude: number;
+  longitude: number;
+};
 
 /**
  * Documento de usuario (auth)
