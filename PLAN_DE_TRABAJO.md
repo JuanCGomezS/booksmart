@@ -68,9 +68,9 @@ Esta es la lista operativa para marcar el avance real. Cada elemento se marca s�
 | Proyección `publicBusinesses/{id}` | Las páginas públicas y reservas no leen el documento raíz: evita exponer propietario, facturación, prueba, límites o configuración interna. |
 | Usar `businessType` | Generaliza el producto sin una migración destructiva. Valores: `barbershop`, `hair_salon`, `nail_studio`, `dental_clinic`, `other`. |
 | Mantener rutas `/b/<slug>` | Las URLs públicas existentes no se rompen. El slug sigue siendo una identidad de negocio, no de una vertical. |
-| Roles canónicos con transición | Los valores persistidos y visibles son `superadmin`, `storeadmin`, `staff` y `customer`. Las Rules leen temporalmente `barber_admin`, `barber`, `client`, `barberId` y `staffId` hasta completar la migración explícita. |
+| Roles canónicos | Los valores persistidos y visibles son únicamente `superadmin`, `storeadmin`, `staff` y `customer`. |
 | Administración unificada | Todos los roles internos entran por `/admin`, seleccionan sólo negocios autorizados y comparten la misma página por negocio; los controles globales se reservan para superadministración. |
-| Vínculo automático de staff | Superadministración selecciona los negocios de `staff` por nombre. Para cada negocio se conserva el vínculo existente, se reutiliza un registro con el mismo `userId` o se crea `user-{uid}` con nombre editable; no hay entrada manual `businessId:staffId`. |
+| Vínculo de staff | Cada Staff se incorpora por código a una única tienda mediante `barbers/{businessId}/barbers/{uid}`. El UID autenticado es el ID del documento y puede ser legible en navegador junto con perfiles Staff activos; este tradeoff está aceptado para simplificar el flujo directo. |
 | Cache con TTL | Las lecturas puntuales y el cache local reducen el consumo del plan gratuito de Firebase. |
 | Reservas por servicio primero | La duración y el buffer del servicio determinan qué personal y horarios son realmente válidos. |
 | Hora de Colombia para reservas | Todas las fechas y horas de reserva usan `America/Bogota`. La configuración por negocio y el soporte multi-país se difieren hasta necesitarlos explícitamente. |
@@ -80,18 +80,18 @@ Esta es la lista operativa para marcar el avance real. Cada elemento se marca s�
 
 ```text
 barbers/{businessId}                    # nombre histórico de colección, no cambiar
-  businessType: BusinessType             # nuevo; fallback: barbershop
+  businessType: BusinessType
   services/{serviceId}
-  barbers/{staffId}                      # nombre heredado del equipo
+  barbers/{uid}                          # Staff; UID autenticado como ID de documento
   appointments/{appointmentId}
   catalog/{itemId}
   products/{productId}
 
 users/{uid}
   role: superadmin | storeadmin | staff | customer
-  barberId?: string                      # referencia heredada/primaria al negocio
-  businessIds?: string[]                 # negocios seleccionados para Storeadmin y Personal
-  staffAssignments?: [{ businessId, staffId }] # vínculo interno automático de Personal
+  barberId?: string                      # tienda única de Staff
+  businessIds?: string[]                 # asignaciones de Storeadmin; Staff contiene sólo barberId
+  staffId?: string                       # Staff document within the assigned business
 ```
 
 ```text
@@ -167,7 +167,6 @@ La base actual valida negocio, servicio, profesional, horario, descansos, cierre
 - [ ] Mantener los secretos `PUBLIC_FIREBASE_*` en el repositorio renombrado.
 - [ ] Configurar canales finales de email e Instagram para BookSmart.
 - [ ] Ejecutar `npm run build` antes de publicar.
-- [ ] Ejecutar `npm run migrate:user-roles -- --apply`, `npx tsx scripts/backfill-public-businesses.ts` y desplegar reglas antes de publicar cambios de roles.
 - [ ] Probar una URL pública existente `/b/<slug>` después del despliegue.
 
 ## Fuera de alcance de este rebrand

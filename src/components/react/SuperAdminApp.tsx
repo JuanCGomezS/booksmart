@@ -55,7 +55,7 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
         <div className="super-admin-header mb-10">
           <p className="super-admin-eyebrow">Control de plataforma</p>
           <h1 className="mt-2 text-3xl font-bold">BookSmart Admin</h1>
-          <p className="mt-2 text-sm">Control de negocios por cita</p>
+          <p className="mt-2 text-sm">Control de negocios</p>
         </div>
 
         {error && (
@@ -85,9 +85,9 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
               </p>
             </div>
             <div>
-              <p className="text-subtle text-sm">Expiradas</p>
+              <p className="text-subtle text-sm">Inactivas</p>
               <p className="text-xl font-semibold" style={{ color: 'var(--danger)' }}>
-                {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.EXPIRED).length}
+                {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.DISABLED).length}
               </p>
             </div>
           </div>

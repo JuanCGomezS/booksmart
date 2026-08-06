@@ -15,8 +15,7 @@ service firebase.storage {
 
     function isBusinessAdmin(barberId) {
       return isSignedIn() && currentUser().data.role == 'storeadmin' &&
-        (currentUser().data.barberId == barberId ||
-          (currentUser().data.keys().hasAll(['businessIds']) && currentUser().data.businessIds.hasAny([barberId])));
+        currentUser().data.keys().hasAll(['businessIds']) && currentUser().data.businessIds.hasAny([barberId]);
     }
 
     function isContentImage() {
@@ -24,11 +23,49 @@ service firebase.storage {
         request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
     }
 
-    // Legacy deterministic paths remain deletable so replacements do not leave
-    // already-published objects behind. New uploads must use immutable assets.
+    // Storage Rules can read Firestore directly. Keep public asset visibility
+    // aligned with the canonical callable predicate, including trial dates.
+    function isOperationalBusiness(barberId) {
+      let business = firestore.get(/databases/(default)/documents/barbers/$(barberId));
+      return business.data.active == true &&
+        (!business.data.keys().hasAll(['subscriptionStatus']) || business.data.subscriptionStatus in ['active', 'trial']) &&
+        (!business.data.keys().hasAll(['subscriptionStatus']) ||
+          !business.data.keys().hasAll(['subscriptionStartsAt']) ||
+          (business.data.subscriptionStartsAt is timestamp && business.data.subscriptionStartsAt <= request.time)) &&
+        (!business.data.keys().hasAll(['subscriptionStatus']) ||
+          !business.data.keys().hasAll(['planExpiresAt']) ||
+          (business.data.planExpiresAt is timestamp && business.data.planExpiresAt >= request.time));
+    }
+
+    function ownsProfessionalProfile(barberId, staffId) {
+      return isSignedIn() && staffId == request.auth.uid &&
+        ((currentUser().data.role == 'staff' && currentUser().data.businessIds == [barberId] && currentUser().data.staffId == staffId) ||
+          (currentUser().data.role == 'customer' && currentUser().data.professionalBusinessId == barberId && currentUser().data.staffId == staffId) ||
+          (currentUser().data.role == 'storeadmin' && currentUser().data.businessIds.hasAny([barberId]) && currentUser().data.professionalBusinessId == barberId && currentUser().data.staffId == staffId));
+    }
+
+    function isRetiredUnlinkedProfessionalProfile(barberId, staffId) {
+      let profile = firestore.get(/databases/(default)/documents/barbers/$(barberId)/barbers/$(staffId));
+      return profile.data.active == false &&
+        !profile.data.keys().hasAny(['accountUid', 'accountStatus']) &&
+        profile.data.keys().hasAll(['pendingImageCleanupPaths']) &&
+        profile.data.pendingImageCleanupPaths is list;
+    }
+
+    function canCleanRetiredProfessionalPhoto(barberId, staffId, path) {
+      let profile = firestore.get(/databases/(default)/documents/barbers/$(barberId)/barbers/$(staffId));
+      return (isSuperAdmin() || isBusinessAdmin(barberId)) &&
+        isRetiredUnlinkedProfessionalProfile(barberId, staffId) &&
+        profile.data.pendingImageCleanupPaths.hasAny([path]);
+    }
+
+    // Legacy professional paths can only be deleted through the retired-profile
+    // cleanup flow. New uploads must use immutable assets.
     match /barbers/{barberId}/{collectionName}/{recordId}/{imageName} {
-      allow read: if firestore.get(/databases/(default)/documents/barbers/$(barberId)).data.active == true;
-      allow delete: if (isSuperAdmin() || isBusinessAdmin(barberId)) &&
+      allow read: if isOperationalBusiness(barberId);
+      allow delete: if ((collectionName != 'barbers' && (isSuperAdmin() || isBusinessAdmin(barberId))) ||
+          (collectionName == 'barbers' &&
+            canCleanRetiredProfessionalPhoto(barberId, recordId, 'barbers/' + barberId + '/barbers/' + recordId + '/' + imageName))) &&
         collectionName in ['catalog', 'products', 'services', 'barbers'] &&
         imageName.matches('image\\.(jpg|png|webp)');
     }
@@ -36,16 +73,19 @@ service firebase.storage {
     // Every replacement is a new object. `create` deliberately excludes update
     // so a client cannot overwrite a currently referenced image.
     match /barbers/{barberId}/{collectionName}/{recordId}/assets/{assetName} {
-      allow read: if firestore.get(/databases/(default)/documents/barbers/$(barberId)).data.active == true;
-      allow create: if (isSuperAdmin() || isBusinessAdmin(barberId)) &&
+      allow read: if isOperationalBusiness(barberId);
+      allow create: if (isSuperAdmin() || (collectionName != 'barbers' && isBusinessAdmin(barberId)) ||
+          (collectionName == 'barbers' && ownsProfessionalProfile(barberId, recordId))) &&
         collectionName in ['catalog', 'products', 'services', 'barbers'] &&
         assetName.matches('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)') &&
         isContentImage();
-      allow delete: if isSuperAdmin() || isBusinessAdmin(barberId);
+      allow delete: if (collectionName != 'barbers' && (isSuperAdmin() || isBusinessAdmin(barberId))) ||
+        (collectionName == 'barbers' &&
+          canCleanRetiredProfessionalPhoto(barberId, recordId, 'barbers/' + barberId + '/barbers/' + recordId + '/assets/' + assetName));
     }
 
     match /barbers/{barberId}/branding/{slot}/assets/{assetName} {
-      allow read: if firestore.get(/databases/(default)/documents/barbers/$(barberId)).data.active == true;
+      allow read: if isOperationalBusiness(barberId);
       allow create: if (isSuperAdmin() || isBusinessAdmin(barberId)) &&
         slot in ['logo', 'cover'] &&
         assetName.matches('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)') &&

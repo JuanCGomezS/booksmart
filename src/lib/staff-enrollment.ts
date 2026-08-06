@@ -1,5 +1,7 @@
-import { deleteField, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { arrayRemove, deleteField, doc, getDoc, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { deleteObject, ref } from 'firebase/storage';
+import { auth, db, storage } from './firebase';
+import { isAlreadyMissingStorageObject, uniqueStoragePaths } from './content-cleanup';
 
 const BASE32_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ234567';
 const CODE_LENGTH = 26;
@@ -42,7 +44,7 @@ export async function joinBusinessWithCode(enteredCode: string): Promise<void> {
 
       transaction.set(staffRef, { name, role: 'Staff', accountUid: user.uid, active: false, accountStatus: 'inactive', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
       // The code remains only on the account document until a Storeadmin activates Staff.
-      transaction.update(userRef, { role: 'staff', barberId: businessId, businessIds: [businessId], staffId: user.uid, enrollmentCode: code, updatedAt: serverTimestamp() });
+      transaction.update(userRef, { role: 'staff', businessIds: [businessId], staffId: user.uid, enrollmentCode: code, updatedAt: serverTimestamp() });
     });
   } catch {
     // Do not disclose whether a code exists, is rotated, or belongs to a business.
@@ -83,34 +85,24 @@ export async function setEnrollmentStaffStatus(
   });
 }
 
-/** Links the authenticated Storeadmin to one existing, unlinked professional profile. */
-export async function linkStoreadminToProfessional(businessId: string, staffId: string): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Tu sesión expiró. Ingresa nuevamente para vincular tu perfil.');
-
-  const profileRef = doc(db, 'barbers', businessId, 'barbers', staffId);
-  await runTransaction(db, async (transaction) => {
-    const profileSnapshot = await transaction.get(profileRef);
-    const profile = profileSnapshot.data();
-    if (!profileSnapshot.exists() || profile?.accountUid || profile?.accountStatus || profile?.userId || profile?.active !== true) {
-      throw new Error('Este perfil ya no está disponible para vincularlo a tu cuenta.');
-    }
-
-    transaction.update(profileRef, { accountUid: user.uid, updatedAt: serverTimestamp() });
-    transaction.update(doc(db, 'users', user.uid), { staffId, professionalBusinessId: businessId, updatedAt: serverTimestamp() });
-  });
-}
-
 /** Retires a profile without deleting booking, schedule, lock, or service references. */
 export async function retireProfessional(businessId: string, staffId: string): Promise<void> {
   const user = auth.currentUser;
   if (!user) throw new Error('Tu sesión expiró. Ingresa nuevamente para retirar el perfil.');
 
   const profileRef = doc(db, 'barbers', businessId, 'barbers', staffId);
-  await runTransaction(db, async (transaction) => {
+  const cleanupPaths = await runTransaction(db, async (transaction) => {
     const profileSnapshot = await transaction.get(profileRef);
     if (!profileSnapshot.exists()) throw new Error('El perfil profesional ya no existe. Actualiza la lista e inténtalo nuevamente.');
     const profile = profileSnapshot.data();
+    const legacyPhotoPaths = typeof profile.photoUrl === 'string'
+      ? ['jpg', 'png', 'webp'].map((extension) => `barbers/${businessId}/barbers/${staffId}/image.${extension}`)
+      : [];
+    const paths = uniqueStoragePaths([
+      typeof profile.imageStoragePath === 'string' ? profile.imageStoragePath : undefined,
+      ...(Array.isArray(profile.pendingImageCleanupPaths) ? profile.pendingImageCleanupPaths.filter((path): path is string => typeof path === 'string') : []),
+      ...legacyPhotoPaths,
+    ]);
     const accountUid = typeof profile.accountUid === 'string'
       ? profile.accountUid
       : typeof profile.accountStatus === 'string' ? staffId : null;
@@ -118,24 +110,76 @@ export async function retireProfessional(businessId: string, staffId: string): P
     transaction.update(profileRef, {
       active: false,
       ...(accountUid ? { accountUid: deleteField(), accountStatus: deleteField() } : {}),
+      pendingImageCleanupPaths: paths,
       updatedAt: serverTimestamp(),
     });
 
-    if (!accountUid) return;
+    if (!accountUid) return paths;
     const accountRef = doc(db, 'users', accountUid);
     if (profile.accountStatus === 'active' || profile.accountStatus === 'inactive') {
       transaction.update(accountRef, {
         role: 'customer',
-        barberId: deleteField(),
         businessIds: deleteField(),
         staffId: deleteField(),
         professionalBusinessId: deleteField(),
         enrollmentCode: deleteField(),
         updatedAt: serverTimestamp(),
       });
-      return;
+      return paths;
     }
 
     transaction.update(accountRef, { staffId: deleteField(), professionalBusinessId: deleteField(), updatedAt: serverTimestamp() });
+    return paths;
+  });
+
+  try {
+    await retryRetiredProfessionalPhotoCleanup(businessId, staffId, cleanupPaths);
+  } catch {
+    throw new Error('El perfil fue retirado, pero no se pudieron eliminar todas sus fotos. Reintenta el retiro para completar la limpieza.');
+  }
+}
+
+function isRetiredUnlinkedProfile(profile: Record<string, unknown>) {
+  return profile.active === false && typeof profile.accountUid !== 'string' && typeof profile.accountStatus !== 'string';
+}
+
+/** Deletes only the cleanup paths durably recorded when a profile was retired. */
+export async function retryRetiredProfessionalPhotoCleanup(businessId: string, staffId: string, initialPaths?: string[]): Promise<void> {
+  const profileRef = doc(db, 'barbers', businessId, 'barbers', staffId);
+  const paths = initialPaths || await runTransaction(db, async (transaction) => {
+    const profileSnapshot = await transaction.get(profileRef);
+    if (!profileSnapshot.exists() || !isRetiredUnlinkedProfile(profileSnapshot.data())) {
+      throw new Error('La limpieza solo está disponible para perfiles retirados y desvinculados.');
+    }
+    const pendingPaths = profileSnapshot.data().pendingImageCleanupPaths;
+    return uniqueStoragePaths(Array.isArray(pendingPaths) ? pendingPaths.filter((path): path is string => typeof path === 'string') : []);
+  });
+
+  let firstError: unknown;
+  for (const path of paths) {
+    try {
+      try {
+        await deleteObject(ref(storage, path));
+      } catch (error) {
+        if (!isAlreadyMissingStorageObject(error)) throw error;
+      }
+      await updateDoc(profileRef, { pendingImageCleanupPaths: arrayRemove(path), updatedAt: serverTimestamp() });
+    } catch (error) {
+      firstError ||= error;
+    }
+  }
+  if (firstError) throw firstError;
+
+  const profileSnapshot = await getDoc(profileRef);
+  if (!profileSnapshot.exists() || !isRetiredUnlinkedProfile(profileSnapshot.data())) {
+    throw new Error('La limpieza solo está disponible para perfiles retirados y desvinculados.');
+  }
+  const pendingPaths = profileSnapshot.data().pendingImageCleanupPaths;
+  if (Array.isArray(pendingPaths) && pendingPaths.length > 0) throw new Error('Aún quedan fotos pendientes de eliminación.');
+  await updateDoc(profileRef, {
+    photoUrl: deleteField(),
+    imageStoragePath: deleteField(),
+    pendingImageCleanupPaths: deleteField(),
+    updatedAt: serverTimestamp(),
   });
 }

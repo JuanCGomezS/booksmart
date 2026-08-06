@@ -1,29 +1,22 @@
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
-import { PUBLIC_BUSINESSES_COLLECTION, readPublicBusiness } from './public-business';
-import type { BarberStaff, PublicBusiness, Service } from './types';
+import { isPublicBookingAvailable } from './booking';
+import type { PublicBookingProduct, PublicBookingService, PublicBookingStaff, PublicBusiness } from './types';
 
-/** Public booking configuration is queried only after the visitor opens booking. */
-export async function loadPublicBookingConfiguration(businessId: string): Promise<{
+/** Loads booking-only records after the server-authorized page bootstrap. */
+export function loadPublicBookingConfiguration(business: PublicBusiness, products: PublicBookingProduct[], services: PublicBookingService[], staff: PublicBookingStaff[]): {
   business: PublicBusiness;
-  services: Service[];
-  staff: BarberStaff[];
-}> {
-  const [businessSnapshot, servicesSnapshot, staffSnapshot] = await Promise.all([
-    getDoc(doc(db, PUBLIC_BUSINESSES_COLLECTION, businessId)),
-    getDocs(query(collection(db, 'barbers', businessId, 'services'), where('active', '==', true))),
-    getDocs(query(collection(db, 'barbers', businessId, 'barbers'), where('active', '==', true))),
-  ]);
-
-  if (!businessSnapshot.exists()) throw new Error('Public booking policy is unavailable.');
-
-  const business = readPublicBusiness(businessSnapshot.data(), businessSnapshot.id);
-  if (!business.active) throw new Error('Business is not accepting public bookings.');
+  services: PublicBookingService[];
+  staff: PublicBookingStaff[];
+  products: PublicBookingProduct[];
+} {
+  if (!isPublicBookingAvailable(business)) throw new Error('Business is not accepting public bookings.');
 
   return {
     business,
-    services: servicesSnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() } as Service)),
-    staff: staffSnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() } as BarberStaff)),
+    services,
+    staff,
+    products,
   };
 }
 

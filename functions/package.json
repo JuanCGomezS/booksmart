@@ -1,0 +1,12 @@
+{
+  "name": "booksmart-functions",
+  "private": true,
+  "engines": { "node": "20" },
+  "main": "lib/index.js",
+  "scripts": { "build": "tsc -p tsconfig.json" },
+  "dependencies": {
+    "firebase-admin": "^13.8.0",
+    "firebase-functions": "^7.0.0"
+  },
+  "devDependencies": { "typescript": "^5.9.3" }
+}

@@ -14,7 +14,7 @@ export const DATA = {
   BARBER_STATUS: {
     ACTIVE: 'active',
     TRIAL: 'trial',
-    EXPIRED: 'expired',
+    DISABLED: 'disabled',
   } as const,
   USER_ROLE: {
     CUSTOMER: 'customer',
@@ -42,9 +42,9 @@ export const PLAN_LABEL: Record<Plan, string> = {
 };
 
 export const BARBER_STATUS_LABEL: Record<BarberStatus, string> = {
-  [DATA.BARBER_STATUS.ACTIVE]: 'Activa',
-  [DATA.BARBER_STATUS.TRIAL]: 'Prueba',
-  [DATA.BARBER_STATUS.EXPIRED]: 'Expirada',
+  [DATA.BARBER_STATUS.ACTIVE]: 'Activada',
+  [DATA.BARBER_STATUS.TRIAL]: 'En prueba',
+  [DATA.BARBER_STATUS.DISABLED]: 'Desactivada',
 };
 
 export const BUSINESS_TYPE_LABEL: Record<BusinessType, string> = {
@@ -52,7 +52,7 @@ export const BUSINESS_TYPE_LABEL: Record<BusinessType, string> = {
   hair_salon: 'Salón de belleza',
   nail_studio: 'Estudio de uñas',
   dental_clinic: 'Clínica dental',
-  other: 'Otro negocio por cita',
+  other: 'Otro negocio de servicios',
 };
 
 export const USER_ROLE_LABEL: Record<UserRole, string> = {

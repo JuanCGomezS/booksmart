@@ -1,0 +1,57 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  label: string;
+}
+
+const { title, description, label } = Astro.props;
+const baseUrl = import.meta.env.BASE_URL;
+const homePath = `${baseUrl}#inicio`;
+---
+
+<Layout title={title} description={description}>
+  <main id="contenido" class="legal-page min-h-screen px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <div class="mx-auto max-w-4xl">
+      <header class="legal-nav flex items-center justify-between gap-4 border-b pb-5">
+        <a href={homePath} class="inline-flex items-center gap-3 font-extrabold text-main no-underline">
+          <img src={`${baseUrl}images/logo.png`} alt="" class="h-10 w-10 object-contain" width="40" height="40" />
+          <span>BookSmart</span>
+        </a>
+        <a href={homePath} class="legal-back text-sm font-bold text-main">Volver al inicio</a>
+      </header>
+
+      <article class="legal-content py-12 sm:py-16" aria-labelledby="legal-title">
+        <p class="legal-kicker">{label}</p>
+        <h1 id="legal-title" class="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight text-main sm:text-6xl">{title}</h1>
+        <p class="mt-5 max-w-2xl text-base leading-7 text-subtle sm:text-lg">{description}</p>
+        <div class="legal-body mt-10 max-w-3xl space-y-10 text-base leading-7 text-subtle">
+          <slot />
+        </div>
+      </article>
+
+      <nav class="legal-links border-t py-7 text-sm" aria-label="Documentos legales relacionados">
+        <p class="font-bold text-main">Documentos relacionados</p>
+        <ul class="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+          <li><a href={`${baseUrl}terminos-de-uso`} class="accent-link">Términos de uso</a></li>
+          <li><a href={`${baseUrl}tratamiento-de-datos`} class="accent-link">Tratamiento de datos</a></li>
+          <li><a href={`${baseUrl}privacidad`} class="accent-link">Privacidad</a></li>
+        </ul>
+      </nav>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .legal-page { background: var(--bg); }
+  .legal-nav, .legal-links { border-color: var(--border); }
+  .legal-nav a:hover, .legal-back:hover { color: var(--accent-text); }
+  .legal-kicker { color: var(--accent-text); font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  .legal-notice { border-color: var(--border); background: var(--surface); }
+  .legal-body :global(h2) { color: var(--text-primary); font-size: clamp(1.35rem, 2vw, 1.7rem); font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
+  .legal-body :global(h3) { color: var(--text-primary); font-size: 1rem; font-weight: 800; }
+  .legal-body :global(ul) { padding-left: 1.25rem; list-style: disc; }
+  .legal-body :global(a) { color: var(--accent-text); font-weight: 700; text-decoration: underline; text-underline-offset: .18em; }
+</style>

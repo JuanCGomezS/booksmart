@@ -15,6 +15,22 @@
         { "fieldPath": "barberId", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assignmentState", "order": "ASCENDING" },
+        { "fieldPath": "bookingDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "publicBusinesses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "slug", "order": "ASCENDING" },
+        { "fieldPath": "active", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

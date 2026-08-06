@@ -16,7 +16,7 @@ export function isWorkspaceAgendaIndexError(error: unknown): boolean {
   const { code, message } = error as { code?: unknown; message?: unknown };
   return code === 'failed-precondition'
     && typeof message === 'string'
-    && /requires an index|create (?:a |the )?index|index.*(?:create|configuration)/i.test(message);
+    && /the query requires an index\.\s+you can create it here:\s+https:\/\/console\.firebase\.google\.com\//i.test(message);
 }
 
 type LegacyAppointment = Appointment & { durationMinutes?: number };
@@ -103,9 +103,10 @@ export async function getWorkspaceAgenda(
 
   // Keep the migration read bounded: one modern date equality query and one
   // legacy Timestamp range query. Prefer the modern shape when a document has both.
-  const [modernSnapshot, legacySnapshot] = await Promise.all([
+  const [modernSnapshot, legacySnapshot, unassignedSnapshot] = await Promise.all([
     getDocs(query(appointments, ...modernConstraints)),
     getDocs(query(appointments, ...legacyConstraints)),
+    staffId ? getDocs(query(appointments, where('assignmentState', '==', 'unassigned'), where('bookingDate', '==', bookingDate))) : Promise.resolve(null),
   ]);
   const agenda = new Map<string, WorkspaceAppointment>();
   modernSnapshot.docs.forEach((item) => {
@@ -116,6 +117,7 @@ export async function getWorkspaceAgenda(
     const normalized = normalizeLegacyAppointment(item.id, item.data() as LegacyAppointment, bookingDate);
     if (normalized) agenda.set(item.id, normalized);
   });
+  unassignedSnapshot?.docs.forEach((item) => agenda.set(item.id, { id: item.id, ...item.data() } as WorkspaceAppointment));
 
   return [...agenda.values()]
     .sort((left, right) => left.startTime.localeCompare(right.startTime));
@@ -143,9 +145,10 @@ export async function getWorkspaceMonthAgenda(
     legacyConstraints.push(staffConstraint);
   }
 
-  const [modernSnapshot, legacySnapshot] = await Promise.all([
+  const [modernSnapshot, legacySnapshot, unassignedSnapshot] = await Promise.all([
     getDocs(query(appointments, ...modernConstraints)),
     getDocs(query(appointments, ...legacyConstraints)),
+    staffId ? getDocs(query(appointments, where('assignmentState', '==', 'unassigned'), where('bookingDate', '>=', range.start), where('bookingDate', '<', range.end))) : Promise.resolve(null),
   ]);
   const agenda = new Map<string, WorkspaceAppointment>();
   modernSnapshot.docs.forEach((item) => {
@@ -156,6 +159,7 @@ export async function getWorkspaceMonthAgenda(
     const normalized = normalizeLegacyAppointment(item.id, item.data() as LegacyAppointment);
     if (normalized) agenda.set(item.id, normalized);
   });
+  unassignedSnapshot?.docs.forEach((item) => agenda.set(item.id, { id: item.id, ...item.data() } as WorkspaceAppointment));
 
   return [...agenda.values()].sort((left, right) =>
     left.bookingDate.localeCompare(right.bookingDate) || left.startTime.localeCompare(right.startTime),

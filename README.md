@@ -15,7 +15,8 @@ BookSmart es una plataforma de agendamiento para negocios que atienden por cita:
 | Mapas | React Leaflet + OpenStreetMap |
 | Estilos | Tailwind CSS 4 |
 | Datos y autenticación | Firebase / Firestore / Firebase Auth |
-| Despliegue | GitHub Pages |
+| Despliegue web | GitHub Pages |
+| Backend público | Firebase Functions + Rules |
 
 ## Producto
 
@@ -56,38 +57,39 @@ La configuración de Astro usa `/booksmart/` como `base` solo en producción y `
 
 Si el repositorio conserva otro nombre, se debe ajustar `base` en `astro.config.mjs` al nombre real antes de desplegar. No se debe publicar con `/barberflow/`, porque los enlaces y assets generados usarán `/booksmart/`.
 
-### Prerrequisito para imágenes y permisos de Firebase
+### Backend público, imágenes y permisos de Firebase
 
-**La función de imágenes no está lista para producción hasta desplegar las reglas.** El workflow de GitHub Pages solo publica el sitio estático: no despliega `firestore.rules` ni `storage.rules` y no debe asumir un proyecto o credenciales de Firebase.
+La página pública carga el negocio, productos, servicios, profesionales y política de agenda desde la callable `getPublicBusinessBySlug`. La callable consulta las fuentes canónicas autorizadas y devuelve sólo el DTO público allowlisted; la página y `createPublicBooking` no requieren una proyección ni un backfill manual para funcionar.
+
+El workflow de GitHub Pages solo publica el sitio estático. **No despliega Functions ni Rules de Firebase** y no debe asumir un proyecto o credenciales de Firebase.
 
 El propietario con acceso al proyecto Firebase debe ejecutar, desde este repositorio y con el proyecto correcto seleccionado:
 
 ```bash
-npx firebase-tools deploy --only firestore:rules,storage
+npm run deploy:backend
 ```
 
-`firebase.json` apunta explícitamente a ambos archivos. Para automatizarlo después, el propietario debe configurar autenticación de Firebase y el identificador de proyecto en CI; no se deben inventar secretos ni IDs. Hasta entonces, cualquier error de autorización de imágenes debe tratarse como un bloqueo de lanzamiento.
+Este script ejecuta `npx firebase-tools deploy --only functions,firestore:rules,storage`. `firebase.json` compila Functions con su hook `predeploy` antes de empaquetar. Para automatizarlo después, el propietario debe configurar autenticación de Firebase y el identificador de proyecto en CI; no se deben inventar secretos ni IDs. Hasta entonces, cualquier error de autorización de imágenes debe tratarse como un bloqueo de lanzamiento.
 
 Las imágenes de Catálogo y Productos se guardan como assets inmutables bajo el registro (`.../{recordId}/assets/{uuid}.{ext}`). Al reemplazar una imagen, la anterior se conserva hasta que la nueva carga y su referencia de Firestore se confirman; después se intenta limpiarla. Las rutas históricas `image.{ext}` se mantienen legibles y eliminables para compatibilidad, pero no aceptan cargas nuevas.
 
-Los servicios públicos requieren `active: true`; así una consulta pública ni las reglas pueden devolver servicios inactivos. Antes de desplegar estas reglas, el propietario debe migrar los servicios heredados (sin `active`) con las mismas credenciales administrativas y después desplegar reglas:
+Las imágenes públicas de marca, catálogo, productos y profesionales sólo se sirven cuando el negocio canónico está operativo: `active: true`, suscripción `active` o `trial`, inicio efectivo alcanzado y expiración vigente. Las escrituras privadas conservan sus roles actuales.
 
-```bash
-npx tsx scripts/migrate-service-active.ts
-npx firebase-tools deploy --only firestore:rules,storage
-```
+Los servicios y profesionales de agenda no son legibles anónimamente desde Firestore. La callable filtra los activos y emite sólo los campos necesarios: servicio (`id`, `name`, `duration`, `bufferMinutes`, `staffIds`) y profesional (`id`, `name`, `schedule`). Los locks de disponibilidad permanecen sin PII y se leen sólo para la fecha/profesional que el visitante consulta.
 
 La limpieza de Storage ya no depende de `localStorage`: al reemplazar una imagen, el registro conserva `pendingImageCleanupPaths` hasta que el cliente elimina el asset anterior, y el cliente reintenta esas rutas al cargar o modificar esa colección. Al eliminar un registro, primero se eliminan sus assets; si Storage falla, el documento se conserva para reintentar. Esto reduce huérfanos en la arquitectura actual, pero **no sustituye un worker server-side**: una función programada o cola con privilegios administrativos sigue siendo el siguiente endurecimiento para garantizar limpieza si ningún cliente vuelve a abrir el contenido.
 
-El widget público permite solicitar una reserva desde `/b/<slug>` y mantiene WhatsApp como contacto alternativo. Antes de recibir reservas reales, el propietario debe ejecutar las migraciones con credenciales administrativas y desplegar las reglas actuales:
+La callable emite productos activos con sus campos comerciales (nombre, descripción, precio, imagen y etiquetas), nunca `stock`. Crear, editar, activar, desactivar o cambiar la imagen o el precio se refleja en la siguiente carga pública desde la escritura canónica normal; no existe una proyección pública, sincronización, scheduler ni backfill requerido.
+
+Las reservas públicas se crean exclusivamente mediante la Function callable `createPublicBooking`; las reglas rechazan escrituras públicas directas de citas y locks. La Function valida servicios, profesional, cierres, locks, productos y la regla de una solicitud activa por teléfono normalizado, negocio y fecha local de Colombia. Los estados `pending` y `confirmed` ocupan esa regla; una reserva `cancelled`, `done` o `no_show` no bloquea una nueva solicitud para el mismo día.
+
+El despliegue de esta frontera debe ser atómico: `firebase.json` ejecuta obligatoriamente `npm --prefix functions run build` mediante el hook `predeploy` antes de empaquetar cualquier despliegue que incluya Functions. Así, `functions/package.json` siempre carga un `lib/index.js` recién generado desde `functions/src/index.ts`. Despliega Function y ambas Rules en el mismo comando. GitHub Pages no realiza este despliegue.
 
 ```bash
-npx tsx scripts/backfill-public-businesses.ts
-npx tsx scripts/migrate-service-active.ts
-npx firebase-tools deploy --only firestore:rules
+npm run deploy:backend
 ```
 
-La reserva sigue siendo una transacción optimista de cliente: protege las colisiones entre clientes normales de la aplicación, pero no constituye una defensa autoritativa contra clientes maliciosos que llamen Firestore directamente.
+No se habilitó App Check ni se usa IP como identificador de la regla. App Check requiere configuración explícita separada antes de activarse.
 
 ### Ubicación pública del negocio
 

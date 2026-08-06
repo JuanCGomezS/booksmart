@@ -1,0 +1,112 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const baseUrl = import.meta.env.BASE_URL;
+const homePath = `${baseUrl}#inicio`;
+const loginPath = `${baseUrl}login`;
+
+const faqs = [
+  {
+    question: '¿Qué es BookSmart?',
+    answer: 'BookSmart es una plataforma de agendamiento para negocios de servicios. Reúne la página pública del negocio y las herramientas para organizar su operación.',
+  },
+  {
+    question: '¿Qué tipos de negocio pueden usar BookSmart?',
+    answer: 'Está pensado para barberías, salones de belleza, estudios de uñas, clínicas dentales y otros negocios de servicios. Dentro de la plataforma se usa el término “negocio” para todos ellos.',
+  },
+  {
+    question: '¿Cómo agendan las personas con un negocio?',
+    answer: `Cada negocio puede tener una página pública en la ruta ${baseUrl}b/<slug>. Desde allí, las personas pueden elegir un servicio, una fecha y un horario disponibles para solicitar su agendamiento.`,
+  },
+  {
+    question: '¿Qué puede organizar un negocio desde BookSmart?',
+    answer: 'La operación incluye agenda, servicios, catálogo, productos y equipo. Estas secciones ayudan a mantener ordenada la información que se muestra y se gestiona para el negocio.',
+  },
+  {
+    question: '¿BookSmart permite personalizar la identidad del negocio?',
+    answer: 'Sí. La plataforma incluye temas configurables para que cada negocio pueda usar una identidad visual acorde con su marca.',
+  },
+  {
+    question: '¿Dónde ingreso a mi cuenta?',
+    answer: 'Usa la página de inicio de sesión para acceder a tu cuenta o crear una cuenta nueva.',
+  },
+];
+---
+
+<Layout
+  title="Centro de ayuda"
+  description="Preguntas frecuentes sobre BookSmart y el agendamiento para negocios de servicios."
+>
+  <main id="contenido" class="help-center min-h-screen px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <div class="mx-auto max-w-5xl">
+      <header class="help-nav flex items-center justify-between gap-4 border-b pb-5">
+        <a href={homePath} class="inline-flex items-center gap-3 font-extrabold text-main no-underline">
+          <img
+            src={`${baseUrl}images/logo.png`}
+            alt=""
+            class="h-10 w-10 object-contain"
+            width="40"
+            height="40"
+          />
+          <span>BookSmart</span>
+        </a>
+        <a href={homePath} class="help-back text-sm font-bold text-main">Volver al inicio</a>
+      </header>
+
+      <section class="help-intro py-12 sm:py-16" aria-labelledby="help-title">
+        <p class="help-kicker">Centro de ayuda</p>
+        <h1 id="help-title" class="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight text-main sm:text-6xl">Respuestas claras para usar BookSmart.</h1>
+        <p class="mt-5 max-w-2xl text-base leading-7 text-subtle sm:text-lg">
+          Encuentra lo esencial sobre la plataforma, la página pública de cada negocio y las herramientas de operación.
+        </p>
+      </section>
+
+      <section class="help-faq border-t py-8 sm:py-10" aria-labelledby="faq-title">
+        <div class="max-w-2xl">
+          <h2 id="faq-title" class="text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Preguntas frecuentes</h2>
+          <p class="mt-2 text-sm leading-6 text-subtle">Selecciona una pregunta para ver la respuesta.</p>
+        </div>
+
+        <div class="mt-7 divide-y border-y" style="border-color: var(--border);">
+          {faqs.map((faq) => (
+            <details class="help-question group py-1">
+              <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-5 py-4 text-left font-bold text-main">
+                <span>{faq.question}</span>
+                <span class="help-question-icon" aria-hidden="true"></span>
+              </summary>
+              <div class="max-w-3xl pb-5 pr-10 text-sm leading-7 text-subtle sm:text-base">
+                {faq.answer}
+              </div>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      <section class="help-next mt-4 border p-6 sm:flex sm:items-center sm:justify-between sm:gap-8 sm:p-8" aria-labelledby="next-title">
+        <div class="max-w-xl">
+          <h2 id="next-title" class="text-xl font-extrabold tracking-tight text-main">¿Listo para entrar?</h2>
+          <p class="mt-2 text-sm leading-6 text-subtle">Accede a tu cuenta o crea una nueva para comenzar a organizar tu negocio.</p>
+        </div>
+        <a href={loginPath} class="btn-primary mt-5 w-full px-5 py-3 text-center text-sm no-underline sm:mt-0 sm:w-auto">Ir a iniciar sesión</a>
+      </section>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .help-center { background: var(--bg); }
+  .help-nav { border-color: var(--border); }
+  .help-nav a:hover, .help-back:hover { color: var(--accent-text); }
+  .help-kicker { color: var(--accent-text); font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  .help-question { border-color: var(--border); }
+  .help-question summary::-webkit-details-marker { display: none; }
+  .help-question-icon { position: relative; width: 1.25rem; height: 1.25rem; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 50%; }
+  .help-question-icon::before, .help-question-icon::after { position: absolute; top: 50%; left: 50%; width: .55rem; height: 1px; background: currentColor; content: ''; transform: translate(-50%, -50%); }
+  .help-question-icon::after { transform: translate(-50%, -50%) rotate(90deg); transition: transform 160ms var(--motion); }
+  .help-question[open] .help-question-icon { border-color: var(--secondary); color: var(--secondary); }
+  .help-question[open] .help-question-icon::after { transform: translate(-50%, -50%); }
+  .help-question summary:hover { color: var(--accent-text); }
+  .help-next { border-color: var(--border); background: var(--surface); box-shadow: var(--shadow); }
+  @media (max-width: 639px) { .help-next { box-shadow: 3px 3px 0 color-mix(in srgb, var(--primary) 26%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { .help-question-icon::after { transition: none; } }
+</style>

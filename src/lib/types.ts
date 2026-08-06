@@ -8,8 +8,11 @@ export type Plan = 'standard' | 'plus' | 'extra';
 // Ciclos de facturación
 export type BillingCycle = 'month_1' | 'month_3' | 'month_12';
 
+/** Canonical subscription state managed exclusively by Superadmin. */
+export type SubscriptionStatus = 'active' | 'trial' | 'disabled';
+
 // Estados del negocio
-export type BarberStatus = 'active' | 'trial' | 'expired';
+export type BarberStatus = SubscriptionStatus;
 
 export type BusinessType = 'barbershop' | 'hair_salon' | 'nail_studio' | 'dental_clinic' | 'other';
 
@@ -33,6 +36,9 @@ export type BusinessCreationErrorCode =
 // Estado de una cita
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'done' | 'no_show';
 
+/** A booking can either name its professional or reserve compatible capacity pending assignment. */
+export type AppointmentAssignmentState = 'assigned' | 'unassigned';
+
 /** Appointment states that block staff availability. */
 export type BookingBlockingAppointmentStatus = Extract<AppointmentStatus, 'pending' | 'confirmed'>;
 
@@ -52,14 +58,58 @@ export type WeeklySchedule = Record<number, ScheduleDay>;
 
 export interface ExceptionalClosure {
   date: string; // YYYY-MM-DD in Colombia local time
+  /** Administrative-only; omitted from the public business projection. */
   reason?: string;
+}
+
+export interface WeeklyClosureRule {
+  id: string;
+  kind: 'weekly';
+  weekday: number;
+  /** Omit both bounds for a full-day closure. */
+  startTime?: string;
+  endTime?: string;
+  /** Administrative-only; omitted from the public business projection. */
+  reason?: string;
+}
+
+export interface DateClosureRule {
+  id: string;
+  kind: 'date';
+  date: string; // YYYY-MM-DD in Colombia local time
+  /** Omit both bounds for a full-day closure. */
+  startTime?: string;
+  endTime?: string;
+  /** Administrative-only; omitted from the public business projection. */
+  reason?: string;
+}
+
+export type ClosureRule = WeeklyClosureRule | DateClosureRule;
+
+/** Business-controlled state for the fixed optional customer booking fields. */
+export type BookingCustomerFieldState = 'disabled' | 'optional' | 'required';
+
+/**
+ * Fixed public-booking customer fields. Names and phone remain mandatory and
+ * are deliberately not configurable.
+ */
+export interface BookingCustomerFields {
+  email: BookingCustomerFieldState;
+  address: BookingCustomerFieldState;
 }
 
 export interface BookingSettings {
   minimumNoticeMinutes: number;
   bookingHorizonDays: number;
   slotIntervalMinutes: number;
+  /** Recurring or date-specific closures used by public availability. */
+  closureRules: ClosureRule[];
+  /** Legacy full-day date closures. Retained without data migration. */
   exceptionalClosures: ExceptionalClosure[];
+  /** Optional customer data requested by this business during public booking. */
+  customerFields: BookingCustomerFields;
+  /** Whether clients can add public product interest to an appointment request. */
+  productSelectionEnabled: boolean;
 }
 
 /**
@@ -81,7 +131,12 @@ export interface Barber {
   trialStartedAt: Timestamp;
   trialEndsAt: Timestamp;
   trialUsed: boolean;
-  planExpiresAt: Timestamp; // vencimiento del plan pago
+  /** Canonical subscription activation date. */
+  subscriptionStartsAt: Timestamp;
+  /** Canonical subscription state. `active` remains its derived operational mirror. */
+  subscriptionStatus: SubscriptionStatus;
+  /** Effective end date for the selected plan and billing cycle. */
+  planExpiresAt: Timestamp;
   
   // Estado
   active: boolean;
@@ -134,6 +189,8 @@ export interface Barber {
  * Path: publicBusinesses/{businessId}
  *
  * Never add owner, plan, trial, limits, or other operational fields here.
+ * `bookingEnabledUntil` is the non-sensitive effective booking cutoff used by
+ * public clients; it does not expose subscription metadata.
  */
 export interface PublicBusiness {
   id: string;
@@ -141,6 +198,7 @@ export interface PublicBusiness {
   slug: string;
   businessType: BusinessType;
   active: boolean;
+  bookingEnabledUntil?: Timestamp;
   config: Pick<Barber['config'], 'address' | 'phone' | 'logoUrl' | 'coverUrl' | 'placeUrl' | 'location' | 'socialLinks' | 'theme' | 'booking'>;
   workingHours: Barber['workingHours'];
 }
@@ -162,16 +220,19 @@ export interface User {
   /** Optional external-auth display name, if a profile sync has stored one. */
   displayName?: string;
   role: StoredUserRole;
-  /** The Staff member's only business assignment. */
-  barberId?: string;
-  /** Business assignments for a Storeadmin. Staff has exactly one matching entry. */
+  /** Canonical business assignments. Staff has exactly one entry. */
   businessIds?: string[];
-  /** Professional profile identifier within barberId when the account has one. */
+  /** Professional profile identifier when the account has one. */
   staffId?: string;
-  /** Business that contains the linked professional profile for a Storeadmin. */
+  /** Business containing a Storeadmin's optional professional profile; not an authorization assignment. */
   professionalBusinessId?: string;
   /** Temporary enrollment proof, removed atomically when a Storeadmin activates Staff. */
   enrollmentCode?: string;
+  /** Minimal evidence that the customer accepted the current legal documents at registration. */
+  legalConsent?: {
+    version: string;
+    acceptedAt: Timestamp;
+  };
   createdAt: Timestamp;
 }
 
@@ -242,7 +303,21 @@ export interface Appointment {
   id: string;
   clientName: string;
   clientPhone: string;
-  barberId: string;
+  /** Stored only when the business requests this fixed optional field. */
+  clientEmail?: string;
+  /** Stored only when the business requests this fixed optional field. */
+  clientAddress?: string;
+  /** Evidence of privacy-document acceptance when additional data is requested. */
+  bookingPrivacyConsent?: {
+    version: string;
+    acceptedAt: Timestamp;
+  };
+  /** Omitted only while the business still needs to assign the appointment. */
+  barberId?: string;
+  /** Legacy assigned appointments omit this field and remain assigned. */
+  assignmentState?: AppointmentAssignmentState;
+  /** Private capacity holder for an unassigned appointment; never exposed publicly. */
+  capacityStaffId?: string;
   serviceId: string;
   extraServices: string[];
   date: Timestamp;
@@ -251,12 +326,46 @@ export interface Appointment {
   startTime?: string;
   endTime?: string;
   status: AppointmentStatus;
+  /** Optional private booking note visible only in authorized operational views. */
   notes?: string;
+  /** Optional, informational product request; it never reserves inventory or price. */
+  requestedProducts?: AppointmentProductRequest[];
   /** Present only when an authenticated customer made the booking. */
   customerUid?: string;
   createdAt: Timestamp;
   updatedAt?: Timestamp;
 }
+
+/** Immutable product name and requested quantity captured with a private appointment. */
+export interface AppointmentProductRequest {
+  productId: string;
+  name: string;
+  quantity: number;
+}
+
+/** Commercial fields selected from an active canonical product for public UI. */
+export interface PublicBookingProduct {
+  id: string;
+  name: string;
+  /** Public optional commercial description. */
+  description?: string;
+  /** Public catalog price. It is never copied into appointment requests. */
+  price: number;
+  /** Optional commercial image. */
+  imageUrl?: string;
+  /** Optional commercial labels. */
+  tags?: string[];
+}
+
+/** Strict booking-only service fields returned by the public callable. */
+export type PublicBookingService = Pick<Service, 'id' | 'name' | 'duration' | 'bufferMinutes' | 'staffIds'> & {
+  active: true;
+};
+
+/** Strict booking-only professional fields returned by the public callable. */
+export type PublicBookingStaff = Pick<BarberStaff, 'id' | 'name' | 'schedule'> & {
+  active: true;
+};
 
 /** Minimal, non-PII occupancy record used by public availability reads. */
 export interface BookingLock {
@@ -276,6 +385,8 @@ export interface BookingLock {
 export interface CatalogItem {
   id: string;
   title: string;
+  /** Optional so catalog documents created before descriptions remain valid. */
+  description?: string;
   imageUrl: string;
   imageStoragePath?: string;
   pendingImageCleanupPaths?: string[];
@@ -290,10 +401,12 @@ export interface CatalogItem {
 export interface Product {
   id: string;
   name: string;
-  description: string;
+  /** Optional so product documents created before descriptions remain valid. */
+  description?: string;
   price: number;
   stock: number;
   imageUrl?: string;
+  tags?: string[];
   imageStoragePath?: string;
   pendingImageCleanupPaths?: string[];
   active: boolean;

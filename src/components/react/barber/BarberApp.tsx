@@ -1,20 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { getBarberCatalog, getBarberConfigBySlug, getBarberProducts } from '../../../lib/barbers';
+import { getBarberCatalog } from '../../../lib/barbers';
 import { getUserRecord, signOut } from '../../../lib/auth';
 import { auth, db } from '../../../lib/firebase';
 import { resolvePublicThemeId } from '../../../lib/public-theme';
 import { normalizeUserRole } from '../../../lib/roles';
-import type { CatalogItem, Product, PublicBusiness } from '../../../lib/types';
+import { isPublicBookingAvailable } from '../../../lib/booking';
+import { loadPublicBusinessBySlug } from '../../../lib/public-business';
+import type { CatalogItem, PublicBookingProduct, PublicBookingService, PublicBookingStaff, PublicBusiness } from '../../../lib/types';
 import PublicBusinessLocationMap from '../business/PublicBusinessLocationMap';
 import PublicBookingWidget from './PublicBookingWidget';
+import PublicFlipCard from './PublicFlipCard';
 
 type BarberTab = 'inicio' | 'agendar' | 'catalogo' | 'productos' | 'ubicacion';
 type DeferredResource<T> = { status: 'idle' | 'loading' | 'ready' | 'error'; data: T[]; error: string };
+type PublicBusinessLoadFailure = { title: string; description: string; retry: boolean };
 type AccountMenu = { name: string; email: string; photoUrl?: string; roleLabel: string; roleLink?: { label: string; href: string }; note?: string };
 const emptyDeferredResource = <T,>(): DeferredResource<T> => ({ status: 'idle', data: [], error: '' });
-const TAB_LABELS: Record<BarberTab, string> = { inicio: 'Inicio', agendar: 'Reservar', catalogo: 'Catálogo', productos: 'Productos', ubicacion: 'Ubicación' };
+const TAB_LABELS: Record<BarberTab, string> = { inicio: 'Inicio', agendar: 'Agendar', catalogo: 'Catálogo', productos: 'Productos', ubicacion: 'Ubicación' };
 const DAYS: Record<number, string> = { 0: 'Domingo', 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado' };
 
 function getBarberIdFromPath(pathname: string) { const parts = pathname.split('/').filter(Boolean); const index = parts.indexOf('b'); return index === -1 || !parts[index + 1] ? null : decodeURIComponent(parts[index + 1]); }
@@ -24,42 +28,109 @@ function getOpenStreetMapUrl(address?: string) { return address?.trim() ? `https
 function formatPrice(price: number) { return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(price); }
 function currentBusinessUrl() { return `${window.location.pathname}${window.location.search}${window.location.hash}`; }
 function initialsFor(name: string) { return name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join('').toLocaleUpperCase('es-CO') || 'TU'; }
+function publicBusinessLoadFailure(cause: unknown): PublicBusinessLoadFailure {
+  const code = typeof cause === 'object' && cause !== null && 'code' in cause
+    ? (cause as { code?: unknown }).code
+    : undefined;
+
+  if (code === 'permission-denied') {
+    return { title: 'Negocio no disponible', description: 'Este negocio no está disponible para visitas públicas en este momento.', retry: false };
+  }
+  if (code === 'not-found') {
+    return { title: 'Negocio no encontrado', description: 'No encontramos un negocio disponible para esta URL.', retry: false };
+  }
+  if (code === 'unavailable' || code === 'deadline-exceeded') {
+    return { title: 'Servicio no disponible', description: 'No pudimos conectar con el servicio. Verifica tu conexión e inténtalo nuevamente.', retry: true };
+  }
+  return { title: 'No pudimos cargar el negocio', description: 'No podemos mostrar este negocio en este momento.', retry: false };
+}
+function resolvePublicFaviconUrl(logoUrl?: string) {
+  if (!logoUrl?.trim()) return null;
+  try {
+    const url = new URL(logoUrl.trim(), window.location.href);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function usePublicBookingAvailability(business: PublicBusiness | null): boolean {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    setNow(new Date());
+    const cutoff = business?.bookingEnabledUntil && typeof business.bookingEnabledUntil.toDate === 'function'
+      ? business.bookingEnabledUntil.toDate()
+      : null;
+    if (!cutoff || !Number.isFinite(cutoff.getTime())) return undefined;
+
+    const delay = Math.min(Math.max(cutoff.getTime() - Date.now() + 1, 1_000), 2_147_483_647);
+    const timer = window.setTimeout(() => setNow(new Date()), delay);
+    return () => window.clearTimeout(timer);
+  }, [business?.bookingEnabledUntil]);
+
+  return Boolean(business && isPublicBookingAvailable(business, now));
+}
 
 export default function BarberApp() {
   const [barberSlug, setBarberSlug] = useState<string | null>(null);
   const [barber, setBarber] = useState<PublicBusiness | null>(null);
   const [catalog, setCatalog] = useState<DeferredResource<CatalogItem>>(emptyDeferredResource);
-  const [products, setProducts] = useState<DeferredResource<Product>>(emptyDeferredResource);
+  const [products, setProducts] = useState<DeferredResource<PublicBookingProduct>>(emptyDeferredResource);
+  const [services, setServices] = useState<PublicBookingService[]>([]);
+  const [staff, setStaff] = useState<PublicBookingStaff[]>([]);
   const [tab, setTab] = useState<BarberTab>('inicio');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<PublicBusinessLoadFailure | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
   const [coverFailed, setCoverFailed] = useState(false);
   const [reloadVersion, setReloadVersion] = useState(0);
+  const canBook = usePublicBookingAvailability(barber);
 
   useEffect(() => setBarberSlug(getBarberIdFromPath(window.location.pathname)), []);
   useEffect(() => {
     if (!barberSlug) { setLoading(false); return; }
-    void (async () => { setLoading(true); setError(''); setBarber(null); try { const data = await getBarberConfigBySlug(barberSlug); setBarber(data); setCatalog(emptyDeferredResource()); setProducts(emptyDeferredResource()); } catch (cause) { console.error(cause); setError('No pudimos cargar el negocio. Revisa tu conexión e inténtalo nuevamente.'); } finally { setLoading(false); } })();
+    void (async () => { setLoading(true); setError(null); setBarber(null); try { const data = await loadPublicBusinessBySlug(barberSlug); setBarber(data.business); setCatalog(emptyDeferredResource()); setProducts({ status: 'ready', data: data.products, error: '' }); setServices(data.services); setStaff(data.staff); } catch (cause) { console.error(cause); setError(publicBusinessLoadFailure(cause)); } finally { setLoading(false); } })();
   }, [barberSlug, reloadVersion]);
   useEffect(() => { setLogoFailed(false); setCoverFailed(false); }, [barber?.config?.logoUrl, barber?.config?.coverUrl]);
   useEffect(() => {
     if (!barber) return;
     const address = barber.config.address?.trim();
-    const pageContext = `Reservas en ${barber.name}`;
-    const pageDescription = address ? `Reserva tu cita en ${barber.name}, ${address}.` : `Reserva tu cita directamente con ${barber.name}.`;
+    const pageContext = canBook ? `Agendamiento en ${barber.name}` : barber.name;
+    const pageDescription = canBook
+      ? (address ? `Agenda con ${barber.name}, ${address}.` : `Agenda directamente con ${barber.name}.`)
+      : (address ? `Consulta la información de ${barber.name}, ${address}.` : `Consulta la información de ${barber.name}.`);
     document.title = pageContext;
     document.querySelector('meta[name="description"]')?.setAttribute('content', pageDescription);
     document.querySelector('meta[property="og:title"]')?.setAttribute('content', pageContext);
     document.querySelector('meta[property="og:description"]')?.setAttribute('content', pageDescription);
+  }, [barber, canBook]);
+  useEffect(() => {
+    if (!canBook && tab === 'agendar') setTab('inicio');
+  }, [canBook, tab]);
+  useEffect(() => {
+    if (!barber) return;
+    const favicon = document.querySelector<HTMLLinkElement>('#site-favicon');
+    if (!favicon) return;
+
+    const fallbackUrl = `${import.meta.env.BASE_URL}images/logo.png`;
+    const logoUrl = resolvePublicFaviconUrl(barber.config.logoUrl);
+    favicon.href = fallbackUrl;
+    if (!logoUrl) return;
+
+    let active = true;
+    const logo = new Image();
+    logo.onload = () => { if (active) favicon.href = logoUrl; };
+    logo.onerror = () => { if (active) favicon.href = fallbackUrl; };
+    logo.src = logoUrl;
+    return () => { active = false; };
   }, [barber]);
 
   const loadCatalog = async (force = false) => { if (!barber || (!force && catalog.status !== 'idle')) return; setCatalog((current) => ({ ...current, status: 'loading', error: '' })); try { setCatalog({ status: 'ready', data: await getBarberCatalog(barber.id), error: '' }); } catch (cause) { console.error(cause); setCatalog((current) => ({ ...current, status: 'error', error: 'No pudimos cargar el catálogo. Inténtalo nuevamente.' })); } };
-  const loadProducts = async (force = false) => { if (!barber || (!force && products.status !== 'idle')) return; setProducts((current) => ({ ...current, status: 'loading', error: '' })); try { setProducts({ status: 'ready', data: await getBarberProducts(barber.id), error: '' }); } catch (cause) { console.error(cause); setProducts((current) => ({ ...current, status: 'error', error: 'No pudimos cargar los productos. Inténtalo nuevamente.' })); } };
-  useEffect(() => { if (tab === 'catalogo') void loadCatalog(); if (tab === 'productos') void loadProducts(); }, [tab, barber?.id]);
+  useEffect(() => { if (tab === 'catalogo') void loadCatalog(); }, [tab, barber?.id]);
 
   if (loading) return <PublicState title="Cargando negocio..." />;
-  if (error) return <PublicState title="Error de carga" description={error} action="Reintentar" onAction={() => setReloadVersion((value) => value + 1)} />;
+  if (error) return <PublicState title={error.title} description={error.description} action={error.retry ? 'Reintentar' : undefined} onAction={error.retry ? () => setReloadVersion((value) => value + 1) : undefined} />;
   if (!barberSlug || !barber) return <PublicState title="Negocio no encontrado" description="No encontramos un negocio activo para esta URL." />;
 
   const themeId = resolvePublicThemeId(barber.config.theme?.id);
@@ -82,22 +153,22 @@ export default function BarberApp() {
           <div className="public-business-hero-identity">
             <div className="public-business-identity">
               {barber.config.logoUrl && !logoFailed ? <img src={barber.config.logoUrl} alt={`Logo de ${barber.name}`} className="public-business-logo" onError={() => setLogoFailed(true)} /> : <div className="public-business-logo public-business-logo-fallback" aria-hidden="true">{barber.name.slice(0, 2).toUpperCase()}</div>}
-              <div><p className="public-business-kicker">Reservas en línea</p><h1>{barber.name}</h1>{address && <p className="public-business-address">{address}</p>}</div>
+              <div><p className="public-business-kicker">{canBook ? 'Agendamiento en línea' : 'Información del negocio'}</p><h1>{barber.name}</h1>{address && <p className="public-business-address">{address}</p>}{!canBook && <p className="public-business-address" role="status">El agendamiento en línea no está disponible en este momento.</p>}</div>
             </div>
           </div>
           <div className="public-business-hero-actions">
-            <button type="button" className="btn-primary public-business-hero-cta" onClick={() => showTab('agendar')}>Reservar una cita</button>
+            {canBook && <button type="button" className="btn-primary public-business-hero-cta" onClick={() => showTab('agendar')}>Agendar</button>}
             {hasMapMarker && <button type="button" className="public-business-location-cta" onClick={() => showTab('ubicacion')}>Ver ubicación</button>}
             {!hasMapMarker && openStreetMapUrl && <a className="public-business-location-cta" href={openStreetMapUrl} target="_blank" rel="noreferrer">Buscar en OpenStreetMap</a>}
           </div>
         </div>
       </section>
-      <nav className="public-business-tabs" aria-label="Secciones del negocio"><ul>{(Object.keys(TAB_LABELS) as BarberTab[]).map((key) => <li key={key}><button type="button" className={tab === key ? 'is-active' : ''} aria-current={tab === key ? 'page' : undefined} onClick={() => showTab(key)}>{TAB_LABELS[key]}</button></li>)}</ul></nav>
+      <nav className="public-business-tabs" aria-label="Secciones del negocio"><ul>{(Object.keys(TAB_LABELS) as BarberTab[]).filter((key) => (canBook || key !== 'agendar') && (products.status !== 'ready' || products.data.length > 0 || key !== 'productos')).map((key) => <li key={key}><button type="button" className={tab === key ? 'is-active' : ''} aria-current={tab === key ? 'page' : undefined} onClick={() => showTab(key)}>{TAB_LABELS[key]}</button></li>)}</ul></nav>
       <section id="public-business-content" tabIndex={-1} className="public-business-content">
-        {tab === 'inicio' && <BusinessOverview business={barber} address={address} telephoneUrl={telephoneUrl} whatsappUrl={whatsappUrl} openStreetMapUrl={openStreetMapUrl} hasMapMarker={hasMapMarker} onReserve={() => showTab('agendar')} onLocation={() => showTab('ubicacion')} />}
-        {tab === 'agendar' && <PublicBookingWidget business={barber} whatsappUrl={whatsappUrl} />}
+        {tab === 'inicio' && <BusinessOverview business={barber} address={address} telephoneUrl={telephoneUrl} whatsappUrl={whatsappUrl} openStreetMapUrl={openStreetMapUrl} hasMapMarker={hasMapMarker} canBook={canBook} onReserve={() => showTab('agendar')} onLocation={() => showTab('ubicacion')} />}
+        {tab === 'agendar' && canBook && <PublicBookingWidget business={barber} products={products.data} services={services} staff={staff} whatsappUrl={whatsappUrl} />}
         {tab === 'catalogo' && <CatalogContent state={catalog} reload={() => void loadCatalog(true)} />}
-        {tab === 'productos' && <ProductsContent state={products} whatsappUrl={whatsappUrl} reload={() => void loadProducts(true)} />}
+        {tab === 'productos' && <ProductsContent state={products} retry={() => setReloadVersion((value) => value + 1)} whatsappUrl={whatsappUrl} />}
         {tab === 'ubicacion' && <PublicLocationContent address={address} coordinates={barber.config.location} openStreetMapUrl={openStreetMapUrl} />}
       </section>
     </main>
@@ -189,8 +260,9 @@ async function resolveAccountMenu(user: FirebaseUser, baseUrl: string): Promise<
     if (role === 'superadmin') return { name, email, roleLabel: 'Superadministrador', roleLink: { label: 'Ir al panel de control', href: `${baseUrl}admin` } };
     if (role === 'storeadmin') return accountWithProfessionalProfile(userRecord.professionalBusinessId, userRecord.staffId, name, email, 'Administrador del negocio', { label: 'Ir a administración', href: `${baseUrl}admin` });
     if (role === 'staff') {
-      if (!userRecord.barberId || !userRecord.staffId) return { name, email, roleLabel: 'Personal', note: 'No pudimos verificar tu acceso.' };
-      const profile = await getDoc(doc(db, 'barbers', userRecord.barberId, 'barbers', userRecord.staffId));
+      const businessId = userRecord.businessIds?.length === 1 ? userRecord.businessIds[0] : undefined;
+      if (!businessId || !userRecord.staffId) return { name, email, roleLabel: 'Personal', note: 'No pudimos verificar tu acceso.' };
+      const profile = await getDoc(doc(db, 'barbers', businessId, 'barbers', userRecord.staffId));
       if (auth.currentUser?.uid !== user.uid) return fallback;
       const data = profile.data();
       const profileName = typeof data?.name === 'string' && data.name.trim() ? data.name.trim() : name;
@@ -212,13 +284,13 @@ async function accountWithProfessionalProfile(businessId: string | undefined, st
 }
 
 function PublicState({ title, description, action, onAction }: { title: string; description?: string; action?: string; onAction?: () => void }) { return <div className="public-business public-booking-refinement"><main className="public-business-shell public-business-state"><div><h1>{title}</h1>{description && <p>{description}</p>}{action && onAction && <button type="button" className="btn-primary mt-5 px-4 py-2" onClick={onAction}>{action}</button>}</div></main></div>; }
-function BusinessOverview({ business, address, telephoneUrl, whatsappUrl, openStreetMapUrl, hasMapMarker, onReserve, onLocation }: { business: PublicBusiness; address?: string; telephoneUrl: string | null; whatsappUrl: string | null; openStreetMapUrl: string | null; hasMapMarker: boolean; onReserve: () => void; onLocation: () => void }) {
+function BusinessOverview({ business, address, telephoneUrl, whatsappUrl, openStreetMapUrl, hasMapMarker, canBook, onReserve, onLocation }: { business: PublicBusiness; address?: string; telephoneUrl: string | null; whatsappUrl: string | null; openStreetMapUrl: string | null; hasMapMarker: boolean; canBook: boolean; onReserve: () => void; onLocation: () => void }) {
   return <div className="public-business-overview">
     <section className="public-business-intro-copy">
-      <p className="public-business-kicker">Planifica tu visita</p>
-      <h2>Elige tu cita con claridad.</h2>
-      <p>Consulta horarios, datos de contacto y disponibilidad antes de elegir tu cita.</p>
-      <button type="button" className="btn-primary public-business-overview-cta" onClick={onReserve}>Reservar una cita</button>
+      <p className="public-business-kicker">{canBook ? 'Planifica tu visita' : 'Conoce el negocio'}</p>
+      <h2>{canBook ? 'Agenda con claridad.' : 'Información para tu visita.'}</h2>
+      <p>{canBook ? 'Consulta horarios, datos de contacto y disponibilidad antes de enviar tu solicitud.' : 'Consulta horarios, ubicación y datos de contacto.'}</p>
+      {canBook && <button type="button" className="btn-primary public-business-overview-cta" onClick={onReserve}>Agendar</button>}
     </section>
     <aside className="public-business-details" aria-label="Información del negocio">
       <section className="public-business-detail-row">
@@ -240,8 +312,55 @@ function BusinessOverview({ business, address, telephoneUrl, whatsappUrl, openSt
     </aside>
   </div>;
 }
-function CatalogContent({ state, reload }: { state: DeferredResource<CatalogItem>; reload: () => void }) { if (state.status === 'loading') return <p className="public-business-message" role="status">Cargando catálogo...</p>; if (state.status === 'error') return <ErrorMessage message={state.error} retry={reload} />; if (!state.data.length) return <p className="public-business-message">Todavía no hay fotos publicadas.</p>; return <div><header className="public-business-section-heading"><p className="public-business-kicker">Inspiración</p><h2>Catálogo</h2></header><div className="public-business-catalog-grid">{state.data.map((item) => <article key={item.id}><img src={item.imageUrl} alt={item.title} loading="lazy" onError={(event) => { event.currentTarget.style.display = 'none'; }} /><div><h3>{item.title}</h3>{item.tags?.length > 0 && <p>{item.tags.map((tag) => `#${tag}`).join(' · ')}</p>}</div></article>)}</div></div>; }
-function ProductsContent({ state, whatsappUrl, reload }: { state: DeferredResource<Product>; whatsappUrl: string | null; reload: () => void }) { if (state.status === 'loading') return <p className="public-business-message" role="status">Cargando productos...</p>; if (state.status === 'error') return <ErrorMessage message={state.error} retry={reload} />; if (!state.data.length) return <p className="public-business-message">No hay productos disponibles por ahora.</p>; return <div><header className="public-business-section-heading"><p className="public-business-kicker">Para llevar</p><h2>Productos</h2></header><div className="public-business-product-list">{state.data.map((product) => <article key={product.id}><div><h3>{product.name}</h3><p>{product.description}</p></div><div><strong>{formatPrice(product.price)}</strong>{whatsappUrl && <a href={whatsappUrl} target="_blank" rel="noreferrer">Consultar por WhatsApp</a>}</div></article>)}</div></div>; }
+function CatalogContent({ state, reload }: { state: DeferredResource<CatalogItem>; reload: () => void }) {
+  if (state.status === 'loading') return <PublicCollectionState kind="loading" label="Cargando catálogo..." />;
+  if (state.status === 'error') return <ErrorMessage message={state.error} retry={reload} />;
+  if (!state.data.length) return <PublicCollectionState kind="empty" label="Todavía no hay fotos publicadas." />;
+
+  return <div>
+    <header className="public-business-section-heading"><p className="public-business-kicker">Inspiración</p><h2>Catálogo</h2></header>
+    <div className="public-business-catalog-grid">{state.data.map((item) => <CatalogCard key={item.id} item={item} />)}</div>
+  </div>;
+}
+
+function CatalogCard({ item }: { item: CatalogItem }) {
+  const description = typeof item.description === 'string' && item.description.trim()
+    ? item.description.trim()
+    : 'Este elemento aún no tiene una descripción disponible.';
+  return <PublicFlipCard title={item.title}
+    className="public-business-catalog-card"
+    front={() => <><CatalogVisual item={item} /><div className="public-business-flip-card-content"><div className="public-business-card-heading"><h3>{item.title}</h3></div>{item.tags?.length > 0 && <ul className="public-business-card-tags" aria-label={`Etiquetas de ${item.title}`}>{item.tags.slice(0, 3).map((tag) => <li key={tag}>{tag}</li>)}</ul>}</div></>}
+    back={() => <div className="public-business-card-back-content"><div><h3>{item.title}</h3><p>{description}</p></div></div>}
+  />;
+}
+function ProductsContent({ state, retry, whatsappUrl }: { state: DeferredResource<PublicBookingProduct>; retry: () => void; whatsappUrl: string | null }) {
+  if (state.status === 'loading' || state.status === 'idle') return <PublicCollectionState kind="loading" label="Cargando productos..." />;
+  if (state.status === 'error') return <ErrorMessage message={state.error} retry={retry} />;
+  if (!state.data.length) return <PublicCollectionState kind="empty" label="Todavía no hay productos publicados." />;
+  return <div><header className="public-business-section-heading"><h2>Productos</h2><p>Explora cada producto, conoce sus detalles y consulta su disponibilidad al agendar.</p></header><ul className="public-business-products-grid">{state.data.map((product) => <li key={product.id}><ProductCard product={product} whatsappUrl={whatsappUrl} /></li>)}</ul></div>;
+}
+function ProductCard({ product, whatsappUrl }: { product: PublicBookingProduct; whatsappUrl: string | null }) {
+  const description = product.description || 'Este producto aún no tiene una descripción disponible.';
+  return <PublicFlipCard title={product.name} className="public-business-product-card"
+    front={() => <><ProductVisual product={product} /><div className="public-business-flip-card-content"><p className="public-business-product-label">Producto disponible</p><div className="public-business-card-heading"><h3>{product.name}</h3><p className="public-business-product-price">{formatPrice(product.price)}</p></div>{product.tags?.length ? <ul className="public-business-card-tags" aria-label={`Etiquetas de ${product.name}`}>{product.tags.slice(0, 3).map((tag) => <li key={tag}>{tag}</li>)}</ul> : <div className="public-business-product-meta"></div>}</div></>}
+    back={() => <div className="public-business-card-back-content public-business-product-back"><div><h3>{product.name}</h3><p>{description}</p><p className="public-business-product-back-price">{formatPrice(product.price)}</p></div><div className="public-business-card-back-actions">{whatsappUrl && <a className="public-business-flip-card-toggle public-business-product-contact" href={whatsappUrl} target="_blank" rel="noreferrer">Consultar por WhatsApp <span aria-hidden="true">↗</span></a>}</div></div>}
+  />;
+}
+function CatalogVisual({ item }: { item: CatalogItem }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [item.imageUrl]);
+  if (!failed) return <img className="public-business-card-image" src={item.imageUrl} alt={item.title} loading="lazy" onError={() => setFailed(true)} />;
+  return <div className="public-business-card-placeholder" aria-label={`Imagen no disponible para ${item.title}`}><span aria-hidden="true">✦</span><strong>{item.title.slice(0, 1).toLocaleUpperCase('es-CO')}</strong><small>Catálogo del negocio</small></div>;
+}
+function ProductVisual({ product }: { product: PublicBookingProduct }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [product.imageUrl]);
+  if (product.imageUrl && !failed) return <img className="public-business-card-image" src={product.imageUrl} alt={product.name} loading="lazy" onError={() => setFailed(true)} />;
+  return <div className="public-business-product-placeholder" aria-label={`Imagen no disponible para ${product.name}`}><span className="public-business-product-placeholder-orbit" aria-hidden="true" /><span className="public-business-product-placeholder-mark" aria-hidden="true">✦</span><strong>{product.name.slice(0, 1).toLocaleUpperCase('es-CO')}</strong><small>Selección especial</small></div>;
+}
+function PublicCollectionState({ kind, label }: { kind: 'loading' | 'empty'; label: string }) {
+  return <div className={`public-business-collection-state is-${kind}`} role={kind === 'loading' ? 'status' : undefined}><span className="public-business-collection-state-mark" aria-hidden="true">{kind === 'loading' ? '◌' : '✦'}</span><p>{label}</p>{kind === 'loading' && <span className="sr-only">Espera mientras preparamos esta selección.</span>}</div>;
+}
 function ErrorMessage({ message, retry }: { message: string; retry: () => void }) { return <div className="public-business-message" role="alert"><p>{message}</p><button type="button" className="btn-outline mt-3 px-3 py-2 text-sm" onClick={retry}>Reintentar</button></div>; }
 
 function PublicLocationContent({ address, coordinates, openStreetMapUrl }: { address?: string; coordinates?: PublicBusiness['config']['location']; openStreetMapUrl: string | null }) {

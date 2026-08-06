@@ -1,10 +1,10 @@
-import { arrayRemove, arrayUnion, deleteField, doc, getDoc, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { deleteField, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref, uploadBytesResumable, type UploadTask } from 'firebase/storage';
 import { db, storage } from './firebase';
 import { invalidatePublicBusinessCaches } from './barbers';
-import { isAlreadyMissingStorageObject, retryPendingCleanup } from './content-cleanup';
-import { normalizeBusinessCoordinates, normalizeLegacyPlaceUrl, normalizeWorkingHours, PUBLIC_BUSINESSES_COLLECTION } from './public-business';
-import type { Barber, BusinessCoordinates, BusinessType } from './types';
+import { isAlreadyMissingStorageObject } from './content-cleanup';
+import { normalizeBusinessCoordinates, PUBLIC_BUSINESSES_COLLECTION } from './public-business';
+import type { BusinessCoordinates, BusinessType } from './types';
 import type { PublicThemeId } from './public-theme';
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -24,16 +24,9 @@ type BusinessDetails = {
   facebook: string;
   whatsapp: string;
   publicThemeId: PublicThemeId;
-  workingHours?: Barber['workingHours'];
 };
 
 type BrandingFiles = Partial<Record<BrandingSlot, File | null>>;
-type BrandingAssetMetadata = {
-  logoStoragePath?: string;
-  coverStoragePath?: string;
-  pendingImageCleanupPaths?: string[];
-};
-
 export function validateBusinessBrandingImage(file: File) {
   if (!IMAGE_TYPES.has(file.type)) return 'Elija una imagen JPEG, PNG o WebP.';
   if (file.size > MAX_IMAGE_BYTES) return 'La imagen no puede superar 5 MiB.';
@@ -83,41 +76,8 @@ async function uploadBrandingImage(barberId: string, slot: BrandingSlot, file: F
   }
 }
 
-function brandingMetadataRef(barberId: string) {
-  return doc(db, 'barbers', barberId, 'brandingMetadata', 'assets');
-}
-
-function readBrandingAssetMetadata(data: Record<string, unknown> | undefined): BrandingAssetMetadata {
-  return {
-    ...(typeof data?.logoStoragePath === 'string' ? { logoStoragePath: data.logoStoragePath } : {}),
-    ...(typeof data?.coverStoragePath === 'string' ? { coverStoragePath: data.coverStoragePath } : {}),
-    ...(Array.isArray(data?.pendingImageCleanupPaths)
-      ? { pendingImageCleanupPaths: data.pendingImageCleanupPaths.filter((path): path is string => typeof path === 'string') }
-      : {}),
-  };
-}
-
-async function retryPendingBrandingCleanup(barberId: string): Promise<void> {
-  const metadataRef = brandingMetadataRef(barberId);
-  const snapshot = await getDoc(metadataRef);
-  if (!snapshot.exists()) return;
-
-  try {
-    await retryPendingCleanup([{ id: snapshot.id, ...readBrandingAssetMetadata(snapshot.data()) }], {
-      deletePath: deleteBrandingObject,
-      clearPath: (_recordId, path) => updateDoc(metadataRef, {
-        pendingImageCleanupPaths: arrayRemove(path),
-        updatedAt: serverTimestamp(),
-      }),
-    });
-  } catch (error) {
-    console.warn('No se pudo completar toda la limpieza pendiente de imágenes de marca.', error);
-  }
-}
-
 /**
- * Updates private branding metadata and the public projection atomically.
- * Storeadmins read the projection and dedicated branding metadata only.
+ * Updates the canonical business and its public projection in one atomic batch.
  */
 export async function saveBusinessDetails(
   barberId: string,
@@ -128,7 +88,6 @@ export async function saveBusinessDetails(
 ): Promise<void> {
   const barberRef = doc(db, 'barbers', barberId);
   const publicRef = doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId);
-  await retryPendingBrandingCleanup(barberId);
   const location = normalizeBusinessCoordinates(details.location);
 
   const uploaded: Partial<Record<BrandingSlot, { url: string; path: string }>> = {};
@@ -152,7 +111,6 @@ export async function saveBusinessDetails(
       'config.theme.id': details.publicThemeId,
       ...(uploaded.logo ? { 'config.logoUrl': uploaded.logo.url } : {}),
       ...(uploaded.cover ? { 'config.coverUrl': uploaded.cover.url } : {}),
-      workingHours: normalizeWorkingHours(details.workingHours),
     };
     const rootUpdates = {
       name: details.name.trim(),
@@ -166,37 +124,13 @@ export async function saveBusinessDetails(
       'config.theme.id': details.publicThemeId,
       ...(uploaded.logo ? { 'config.logoUrl': uploaded.logo.url } : {}),
       ...(uploaded.cover ? { 'config.coverUrl': uploaded.cover.url } : {}),
-      workingHours: normalizeWorkingHours(details.workingHours),
       updatedAt: serverTimestamp(),
     };
-    await runTransaction(db, async (transaction) => {
-      const metadataRef = brandingMetadataRef(barberId);
-      const [publicSnapshot, metadataSnapshot] = await Promise.all([
-        transaction.get(publicRef),
-        transaction.get(metadataRef),
-      ]);
-      if (!publicSnapshot.exists()) throw new Error('No se encontró la información pública del negocio. Actualice la página e inténtelo nuevamente.');
-
-      const metadata = readBrandingAssetMetadata(metadataSnapshot.data());
-      const replacedPaths = [
-        ...(uploaded.logo && metadata.logoStoragePath ? [metadata.logoStoragePath] : []),
-        ...(uploaded.cover && metadata.coverStoragePath ? [metadata.coverStoragePath] : []),
-      ];
-      const placeUrl = normalizeLegacyPlaceUrl(publicSnapshot.data().config?.placeUrl);
-      transaction.update(barberRef, rootUpdates);
-      transaction.update(publicRef, {
-        ...publicUpdates,
-        'config.placeUrl': placeUrl || deleteField(),
-      });
-      transaction.set(metadataRef, {
-        ...(uploaded.logo ? { logoStoragePath: uploaded.logo.path } : {}),
-        ...(uploaded.cover ? { coverStoragePath: uploaded.cover.path } : {}),
-        ...(replacedPaths.length ? { pendingImageCleanupPaths: arrayUnion(...replacedPaths) } : {}),
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-    });
+    const batch = writeBatch(db);
+    batch.update(barberRef, rootUpdates);
+    batch.update(publicRef, publicUpdates);
+    await batch.commit();
     invalidatePublicBusinessCaches(barberId);
-    await retryPendingBrandingCleanup(barberId);
   } catch (error) {
     await Promise.all(Object.values(uploaded).map(async (image) => {
       if (!image) return;

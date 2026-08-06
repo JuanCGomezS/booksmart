@@ -2,6 +2,7 @@
 
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -11,6 +12,24 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { DATA } from './data';
 import type { User } from './types';
+
+export const LEGAL_CONSENT_VERSION = '2026-07-31';
+
+export type LegalConsent = {
+  version: typeof LEGAL_CONSENT_VERSION;
+};
+
+export class RegistrationRecoveryError extends Error {
+  constructor(code: 'registration/profile-creation-reverted' | 'registration/profile-creation-recovery-failed') {
+    super(code === 'registration/profile-creation-reverted'
+      ? 'No se pudo crear el perfil y se revirtió la cuenta.'
+      : 'No se pudo crear el perfil ni revertir completamente la cuenta.');
+    this.name = 'RegistrationRecoveryError';
+    this.code = code;
+  }
+
+  readonly code: 'registration/profile-creation-reverted' | 'registration/profile-creation-recovery-failed';
+}
 
 /**
  * Login con email y contraseña
@@ -23,17 +42,46 @@ export async function signIn(email: string, password: string): Promise<FirebaseU
 /**
  * Registro público: siempre crea el rol customer. No se requiere para reservar.
  */
-export async function signUpClient(name: string, email: string, password: string): Promise<FirebaseUser> {
+export async function signUpClient(
+  name: string,
+  email: string,
+  password: string,
+  legalConsent: LegalConsent,
+): Promise<FirebaseUser> {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
   const user = credential.user;
 
-  await setDoc(doc(db, 'users', user.uid), {
-    uid: user.uid,
-    name,
-    email: user.email,
-    role: DATA.USER_ROLE.CUSTOMER,
-    createdAt: serverTimestamp(),
-  });
+  try {
+    await setDoc(doc(db, 'users', user.uid), {
+      uid: user.uid,
+      name,
+      email: user.email,
+      role: DATA.USER_ROLE.CUSTOMER,
+      legalConsent: {
+        version: legalConsent.version,
+        acceptedAt: serverTimestamp(),
+      },
+      createdAt: serverTimestamp(),
+    });
+  } catch (profileError) {
+    console.error('Error creating customer profile; attempting account recovery:', profileError);
+
+    try {
+      await deleteUser(user);
+    } catch (deleteError) {
+      console.error('Unable to delete account after profile creation failure:', deleteError);
+
+      try {
+        await firebaseSignOut(auth);
+      } catch (signOutError) {
+        console.error('Unable to sign out after failed account recovery:', signOutError);
+      }
+
+      throw new RegistrationRecoveryError('registration/profile-creation-recovery-failed');
+    }
+
+    throw new RegistrationRecoveryError('registration/profile-creation-reverted');
+  }
 
   return user;
 }

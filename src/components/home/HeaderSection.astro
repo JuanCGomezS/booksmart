@@ -48,8 +48,7 @@ const contactPath = `${baseUrl}#contact`;
         <!-- Estado guest: branding + nav + CTA -->
         <div id="menu-guest-section">
           <div class="border-b pb-4" style="border-color: var(--border);">
-            <p class="text-sm text-subtle">BookSmart</p>
-            <p class="text-lg font-bold text-main">Plataforma para negocios por cita</p>
+            <p class="text-lg font-bold text-main">Gestiona tu negocio</p>
             <p class="text-sm text-subtle">Infraestructura 100% gratuita para iniciar</p>
           </div>
 
@@ -57,14 +56,14 @@ const contactPath = `${baseUrl}#contact`;
             <ul class="space-y-2">
               <li><a href={homePath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Inicio</a></li>
               <li><a href={featuresPath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Lo que ofrecemos</a></li>
-              <li><a href={pricingPath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Planes</a></li>
+              <!-- <li><a href={pricingPath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Planes</a></li> -->
               <li><a href={contactPath} class="accent-link block rounded-xl px-3 py-2 text-main transition hover:bg-[color-mix(in_srgb,var(--secondary)_14%,transparent)]">Contacto</a></li>
             </ul>
           </nav>
 
-          <div class="border-t pt-4" style="border-color: var(--border);">
+          <!-- <div class="border-t pt-4" style="border-color: var(--border);">
             <a href={pricingPath} class="btn-primary block w-full rounded-xl px-4 py-3 text-center text-sm font-bold">Probar 1 mes gratis</a>
-          </div>
+          </div> -->
         </div>
 
         <!-- Estado auth: rol + cerrar sesion -->
@@ -264,14 +263,17 @@ const contactPath = `${baseUrl}#contact`;
             roleLink.classList.remove('hidden');
           } else if (role === 'staff') {
             roleLabel.textContent = 'Staff';
-            if (typeof userRecord.barberId !== 'string' || typeof userRecord.staffId !== 'string') {
+            const businessId = Array.isArray(userRecord.businessIds) && userRecord.businessIds.length === 1
+              ? userRecord.businessIds[0]
+              : undefined;
+            if (typeof businessId !== 'string' || typeof userRecord.staffId !== 'string') {
               roleNote.textContent = 'No pudimos verificar tu acceso.';
               roleNote.classList.remove('hidden');
               return;
             }
 
             try {
-              const staffSnapshot = await getDoc(doc(db, 'barbers', userRecord.barberId, 'barbers', userRecord.staffId));
+              const staffSnapshot = await getDoc(doc(db, 'barbers', businessId, 'barbers', userRecord.staffId));
               if (auth.currentUser?.uid !== user.uid) return;
 
               const staffProfile = staffSnapshot.data();

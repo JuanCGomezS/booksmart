@@ -16,9 +16,9 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { DATA } from './data';
-import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus, BarberStaff, BusinessCreationErrorCode, BusinessType, BookingSettings, CatalogItem, Product, Service, PublicBusiness } from './types';
-import { bookingSettingsUpdate, getBogotaDateTime, getBookingDate } from './booking';
-import { PUBLIC_BUSINESSES_COLLECTION, readPublicBusiness, toPublicBusiness } from './public-business';
+import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus, BarberStaff, BusinessCreationErrorCode, BusinessType, BookingSettings, CatalogItem, Product, Service, PublicBusiness, SubscriptionStatus } from './types';
+import { bookingSettingsUpdate, getBogotaDateTime, getBookingDate, isValidBookingSettings } from './booking';
+import { isPublicBusinessOperational, loadPublicBusinessBySlug, normalizeWorkingHours, PUBLIC_BUSINESSES_COLLECTION, readPublicBusiness, toPublicBusiness } from './public-business';
 import { generateStaffEnrollmentCode } from './staff-enrollment';
 
 const LEGACY_BUSINESS_TYPE: BusinessType = 'barbershop';
@@ -28,6 +28,18 @@ export class BusinessCreationError extends Error {
     super(code);
     this.name = 'BusinessCreationError';
   }
+}
+
+/** Maps Firestore write failures to safe, actionable UI copy without exposing backend details. */
+export function getFirestoreWriteErrorMessage(error: unknown, fallback: string): string {
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? (error as { code?: unknown }).code
+    : undefined;
+
+  if (code === 'permission-denied') return 'No tienes permisos para guardar este cambio.';
+  if (code === 'failed-precondition') return 'Firestore rechazó la operación por una precondición. Actualiza la página e inténtalo de nuevo.';
+  if (code === 'unavailable' || code === 'deadline-exceeded') return 'Firestore no está disponible en este momento. Inténtalo de nuevo.';
+  return fallback;
 }
 
 function toBusinessCreationError(error: unknown): BusinessCreationError {
@@ -54,6 +66,29 @@ function toDate(value: unknown): Date {
   }
 
   return new Date(value as string | number | Date);
+}
+
+function getSubscriptionEndDate(startsAt: Date, billingCycle: BillingCycle): Date {
+  const months = billingCycle === DATA.BILLING_CYCLE.MONTH_3 ? 3 : billingCycle === DATA.BILLING_CYCLE.MONTH_12 ? 12 : 1;
+  const nextCycleStart = new Date(startsAt.getFullYear(), startsAt.getMonth() + months, 1);
+  const lastDay = new Date(nextCycleStart.getFullYear(), nextCycleStart.getMonth() + 1, 0).getDate();
+  nextCycleStart.setDate(Math.min(startsAt.getDate(), lastDay));
+  nextCycleStart.setDate(nextCycleStart.getDate() - 1);
+  nextCycleStart.setHours(23, 59, 59, 999);
+  return nextCycleStart;
+}
+
+function isSubscriptionOperational(status: SubscriptionStatus | undefined, planExpiresAt: unknown, subscriptionStartsAt?: unknown, now = new Date()): boolean {
+  if (status === undefined) return true;
+  if (status !== 'active' && status !== 'trial') return false;
+
+  const startsAt = toDate(subscriptionStartsAt);
+  if (subscriptionStartsAt !== undefined && (!Number.isFinite(startsAt.getTime()) || startsAt > now)) return false;
+
+  const expiresAt = toDate(planExpiresAt);
+  // Legacy records may not have a usable end date yet. Keep their existing
+  // activation contract until a subscription save writes the canonical range.
+  return !Number.isFinite(expiresAt.getTime()) || now <= expiresAt;
 }
 
 // Cache de configuración de barbería
@@ -86,7 +121,7 @@ export async function getBarberConfig(barberId: string): Promise<PublicBusiness 
 
   if (cached) {
     const { data, expiresAt } = JSON.parse(cached);
-    if (Date.now() < expiresAt) {
+    if (Date.now() < expiresAt && isPublicBusinessOperational(data)) {
       return data;
     }
   }
@@ -100,6 +135,7 @@ export async function getBarberConfig(barberId: string): Promise<PublicBusiness 
     }
 
     const data = readPublicBusiness(barberSnap.data(), barberSnap.id);
+    if (!isPublicBusinessOperational(data)) return null;
     
     // Guardar en cache
     localStorage.setItem(cacheKey, JSON.stringify({
@@ -118,38 +154,7 @@ export async function getBarberConfig(barberId: string): Promise<PublicBusiness 
  * Obtener la configuración pública de una barbería por su slug de URL.
  */
 export async function getBarberConfigBySlug(slug: string): Promise<PublicBusiness | null> {
-  const cacheKey = `barber_config_slug_${slug}`;
-  const cached = localStorage.getItem(cacheKey);
-
-  if (cached) {
-    const { data, expiresAt } = JSON.parse(cached);
-    if (Date.now() < expiresAt) {
-      return data;
-    }
-  }
-
-  try {
-    const barbersRef = collection(db, PUBLIC_BUSINESSES_COLLECTION);
-    const barberQuery = query(barbersRef, where('slug', '==', slug), where('active', '==', true), limit(1));
-    const barberDocs = await getDocs(barberQuery);
-
-    if (barberDocs.empty) {
-      return null;
-    }
-
-    const barberDoc = barberDocs.docs[0];
-    const data = readPublicBusiness(barberDoc.data(), barberDoc.id);
-
-    localStorage.setItem(cacheKey, JSON.stringify({
-      data,
-      expiresAt: Date.now() + BARBER_CACHE_TTL,
-    }));
-
-    return data;
-  } catch (error) {
-    console.error('Error fetching barber config by slug:', error);
-    throw error;
-  }
+  return (await loadPublicBusinessBySlug(slug)).business;
 }
 
 /**
@@ -217,8 +222,9 @@ export async function createBarber(
     const trialEnds = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
     const barberData = {
       name, slug, businessType, ownerId, ownerEmail, plan, billingCycle,
-      trialStartedAt: serverTimestamp(), trialEndsAt: trialEnds, trialUsed: false,
-      planExpiresAt: trialEnds, active: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      subscriptionStatus: 'trial' as SubscriptionStatus, subscriptionStartsAt: now,
+      trialStartedAt: now, trialEndsAt: trialEnds, trialUsed: false,
+      planExpiresAt: trialEnds, active: isSubscriptionOperational('trial', trialEnds, now), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
       limits: {
         maxBarbers: getLimitsByPlan(plan).maxBarbers,
         maxProducts: getLimitsByPlan(plan).maxProducts,
@@ -239,14 +245,13 @@ export async function createBarber(
       if (!ownerSnapshot.exists()) throw new BusinessCreationError('owner-not-found');
       const owner = ownerSnapshot.data();
       if (owner.role !== DATA.USER_ROLE.CUSTOMER) throw new BusinessCreationError('owner-not-customer');
-      if (typeof owner.barberId === 'string' || typeof owner.staffId === 'string' ||
+      if (typeof owner.staffId === 'string' ||
         (Array.isArray(owner.businessIds) && owner.businessIds.length > 0)) {
         throw new BusinessCreationError('owner-already-assigned');
       }
 
       const ownerUpdates = {
         role: DATA.USER_ROLE.STOREADMIN,
-        barberId: docRef.id,
         businessIds: [docRef.id],
         updatedAt: serverTimestamp(),
       };
@@ -287,23 +292,28 @@ export async function updateBarber(
 }
 
 /** Updates only booking configuration, preserving every other business config field. */
-export async function updateBarberBookingSettings(barberId: string, settings: BookingSettings): Promise<boolean> {
-  try {
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'barbers', barberId), {
-      ...bookingSettingsUpdate(settings),
-      updatedAt: serverTimestamp(),
-    });
-    // `set` does not interpret dotted object keys as field paths. Use an update
-    // so the existing allowlisted projection keeps its sibling config fields.
-    batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), bookingSettingsUpdate(settings));
-    await batch.commit();
-    invalidatePublicBusinessCaches(barberId);
-    return true;
-  } catch (error) {
-    console.error('Error updating barber booking settings:', error);
-    return false;
-  }
+export async function updateBarberBookingSettings(barberId: string, settings: BookingSettings): Promise<void> {
+  if (!isValidBookingSettings(settings)) throw new Error('Invalid booking settings.');
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'barbers', barberId), {
+    ...bookingSettingsUpdate(settings),
+    updatedAt: serverTimestamp(),
+  });
+  // Public booking data is served by the server-authorized callable from the
+  // canonical root document. Do not duplicate this sensitive policy into the
+  // legacy projection, whose stricter public schema rejects closure lists.
+  await batch.commit();
+  invalidatePublicBusinessCaches(barberId);
+}
+
+/** Updates only the existing business-hours field on the root and public projection. */
+export async function updateBarberWorkingHours(barberId: string, workingHours: Barber['workingHours']): Promise<void> {
+  const normalized = normalizeWorkingHours(workingHours);
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'barbers', barberId), { workingHours: normalized, updatedAt: serverTimestamp() });
+  batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), { workingHours: normalized });
+  await batch.commit();
+  invalidatePublicBusinessCaches(barberId);
 }
 
 /**
@@ -357,51 +367,43 @@ export async function updateBarberBusinessDetails(
 }
 
 /**
- * Actualizar plan de una barbería
- */
-export async function updateBarberPlan(
-  barberId: string,
-  newPlan: Plan,
-  billingCycle: BillingCycle
-): Promise<boolean> {
-  return updateBarberPlanSettings(barberId, newPlan, billingCycle);
-}
-
-/**
- * Actualizar plan y fecha de expiración de una barbería
+ * Updates the canonical subscription and its legacy compatibility fields.
+ * The public projection receives only the operational `active` mirror and the
+ * effective booking cutoff, never subscription metadata.
  */
 export async function updateBarberPlanSettings(
   barberId: string,
   newPlan: Plan,
   billingCycle: BillingCycle,
-  planExpiresAtInput?: Date
+  subscription: { status: SubscriptionStatus; startsAt: Date },
 ): Promise<boolean> {
   try {
-    const barberRef = doc(db, 'barbers', barberId);
-
-    // Calcular nueva fecha de expiración según el ciclo (o respetar la definida manualmente)
-    const planExpiresAt = planExpiresAtInput ? new Date(planExpiresAtInput) : new Date();
-
-    if (!planExpiresAtInput) {
-      if (billingCycle === DATA.BILLING_CYCLE.MONTH_1) {
-        planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
-      } else if (billingCycle === DATA.BILLING_CYCLE.MONTH_3) {
-        planExpiresAt.setMonth(planExpiresAt.getMonth() + 3);
-      } else if (billingCycle === DATA.BILLING_CYCLE.MONTH_12) {
-        planExpiresAt.setFullYear(planExpiresAt.getFullYear() + 1);
-      }
+    if (!Number.isFinite(subscription.startsAt.getTime())) {
+      return false;
     }
+
+    const barberRef = doc(db, 'barbers', barberId);
+    const legacyTrial = subscription.status === 'trial';
+    const planExpiresAt = getSubscriptionEndDate(subscription.startsAt, billingCycle);
+    const active = isSubscriptionOperational(subscription.status, planExpiresAt, subscription.startsAt);
 
     const batch = writeBatch(db);
     batch.update(barberRef, {
       plan: newPlan,
       billingCycle,
+      limits: getLimitsByPlan(newPlan),
+      subscriptionStatus: subscription.status,
+      subscriptionStartsAt: subscription.startsAt,
       planExpiresAt,
-      active: true,
-      trialUsed: true,
+      active,
+      trialUsed: !legacyTrial,
+      ...(legacyTrial ? { trialStartedAt: subscription.startsAt, trialEndsAt: planExpiresAt } : {}),
       updatedAt: serverTimestamp(),
     });
-    batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), { active: true });
+    batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), {
+      active,
+      ...(active ? { bookingEnabledUntil: planExpiresAt } : { bookingEnabledUntil: deleteField() }),
+    });
     await batch.commit();
 
     localStorage.removeItem(`barber_config_${barberId}`);
@@ -418,13 +420,29 @@ export async function updateBarberPlanSettings(
 export async function toggleBarberActive(barberId: string, active: boolean): Promise<boolean> {
   try {
     const barberRef = doc(db, 'barbers', barberId);
-    const batch = writeBatch(db);
-    batch.update(barberRef, {
-      active,
-      updatedAt: serverTimestamp(),
+    const publicRef = doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId);
+    await runTransaction(db, async (transaction) => {
+      const barberSnapshot = await transaction.get(barberRef);
+      if (!barberSnapshot.exists()) throw new Error('Business not found.');
+
+      const barber = barberSnapshot.data() as Pick<Barber, 'subscriptionStatus' | 'subscriptionStartsAt' | 'planExpiresAt'>;
+      const publicActive = active && isSubscriptionOperational(
+        barber.subscriptionStatus,
+        barber.planExpiresAt,
+        barber.subscriptionStartsAt,
+      );
+      const hasCanonicalCutoff = (barber.subscriptionStatus === 'active' || barber.subscriptionStatus === 'trial') && barber.planExpiresAt !== undefined;
+      transaction.update(barberRef, {
+        active,
+        updatedAt: serverTimestamp(),
+      });
+      transaction.update(publicRef, {
+        active: publicActive,
+        ...(publicActive && hasCanonicalCutoff
+          ? { bookingEnabledUntil: barber.planExpiresAt }
+          : { bookingEnabledUntil: deleteField() }),
+      });
     });
-    batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), { active });
-    await batch.commit();
 
     localStorage.removeItem(`barber_config_${barberId}`);
     return true;
@@ -452,15 +470,23 @@ export async function deleteBarber(barberId: string): Promise<boolean> {
 }
 
 /**
- * Obtener estado de una barbería (activa / trial / expirada)
+ * Obtiene el estado efectivo para UI (activada / en prueba / desactivada).
  */
 export function getBarberStatus(barber: Barber): BarberStatus {
-  const now = new Date();
-  const planExpires = toDate(barber.planExpiresAt);
-
+  if (barber.subscriptionStatus === 'disabled') return DATA.BARBER_STATUS.DISABLED;
   if (!barber.active) {
-    return DATA.BARBER_STATUS.EXPIRED;
+    return DATA.BARBER_STATUS.DISABLED;
   }
+
+  const now = new Date();
+  if (!isSubscriptionOperational(barber.subscriptionStatus, barber.planExpiresAt, barber.subscriptionStartsAt, now)) {
+    return DATA.BARBER_STATUS.DISABLED;
+  }
+
+  if (barber.subscriptionStatus === 'trial') return DATA.BARBER_STATUS.TRIAL;
+  if (barber.subscriptionStatus === 'active') return DATA.BARBER_STATUS.ACTIVE;
+
+  const planExpires = toDate(barber.planExpiresAt);
 
   // Si está en prueba y no ha terminado
   if (!barber.trialUsed && now < planExpires) {
@@ -468,8 +494,8 @@ export function getBarberStatus(barber: Barber): BarberStatus {
   }
 
   // Si el plan ha expirado
-  if (now > planExpires) {
-    return DATA.BARBER_STATUS.EXPIRED;
+  if (Number.isFinite(planExpires.getTime()) && now > planExpires) {
+    return DATA.BARBER_STATUS.DISABLED;
   }
 
   return DATA.BARBER_STATUS.ACTIVE;
@@ -689,18 +715,12 @@ export async function updateBarberManagedRecord(
   collectionName: ManagedCollection,
   recordId: string,
   data: Record<string, unknown>,
-): Promise<boolean> {
-  try {
-    await updateDoc(doc(db, 'barbers', barberId, collectionName, recordId), {
-      ...data,
-      updatedAt: serverTimestamp(),
-    });
-    clearCollectionCache(barberId, collectionName);
-    return true;
-  } catch (error) {
-    console.error(`Error updating ${collectionName} record:`, error);
-    return false;
-  }
+): Promise<void> {
+  await updateDoc(doc(db, 'barbers', barberId, collectionName, recordId), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+  clearCollectionCache(barberId, collectionName);
 }
 
 export async function deleteBarberManagedRecord(

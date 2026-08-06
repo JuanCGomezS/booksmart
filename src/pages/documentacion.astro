@@ -1,0 +1,116 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const baseUrl = import.meta.env.BASE_URL;
+const homePath = `${baseUrl}#inicio`;
+const loginPath = `${baseUrl}login`;
+---
+
+<Layout
+  title="Documentación"
+  description="Guía rápida para configurar y usar BookSmart."
+>
+  <main id="contenido" class="documentation min-h-screen px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+    <div class="mx-auto max-w-5xl">
+      <header class="documentation-nav flex items-center justify-between gap-4 border-b pb-5">
+        <a href={homePath} class="inline-flex items-center gap-3 font-extrabold text-main no-underline">
+          <img
+            src={`${baseUrl}images/logo.png`}
+            alt=""
+            class="h-10 w-10 object-contain"
+            width="40"
+            height="40"
+          />
+          <span>BookSmart</span>
+        </a>
+        <a href={homePath} class="documentation-back text-sm font-bold text-main">Volver al inicio</a>
+      </header>
+
+      <section class="documentation-intro py-12 sm:py-16" aria-labelledby="documentation-title">
+        <p class="documentation-kicker">Documentación</p>
+        <h1 id="documentation-title" class="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight text-main sm:text-6xl">Configura lo esencial y empieza a agendar.</h1>
+        <p class="mt-5 max-w-2xl text-base leading-7 text-subtle sm:text-lg">
+          Esta guía resume el recorrido disponible en BookSmart: ingresar al negocio, preparar su página pública, administrar el contenido y recibir solicitudes de agendamiento.
+        </p>
+      </section>
+
+      <nav class="documentation-index border-y py-5" aria-label="Contenido de la documentación">
+        <p class="text-sm font-bold text-main">En esta guía</p>
+        <ol class="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+          <li><a href="#empezar" class="accent-link">1. Empezar</a></li>
+          <li><a href="#pagina-publica" class="accent-link">2. Configurar la página pública</a></li>
+          <li><a href="#servicios-equipo" class="accent-link">3. Administrar servicios y equipo</a></li>
+          <li><a href="#agendamiento" class="accent-link">4. Usar el agendamiento</a></li>
+        </ol>
+      </nav>
+
+      <div class="documentation-guide divide-y">
+        <section id="empezar" class="documentation-section py-10 sm:py-12" aria-labelledby="empezar-title">
+          <p class="documentation-step">01 · Primer acceso</p>
+          <h2 id="empezar-title" class="mt-2 text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Empieza desde tu cuenta.</h2>
+          <ol class="mt-5 max-w-3xl space-y-3 text-sm leading-7 text-subtle sm:text-base">
+            <li><strong class="text-main">Crea una cuenta o inicia sesión.</strong> Usa el acceso de BookSmart para entrar a la plataforma.</li>
+            <li><strong class="text-main">Selecciona el negocio.</strong> Desde la administración podrás abrir sus secciones operativas.</li>
+            <li><strong class="text-main">Revisa la página pública.</strong> El botón <em>Ver página</em> abre la ruta pública del negocio para comprobar la información visible.</li>
+          </ol>
+        </section>
+
+        <section id="pagina-publica" class="documentation-section py-10 sm:py-12" aria-labelledby="pagina-publica-title">
+          <p class="documentation-step">02 · Identidad pública</p>
+          <h2 id="pagina-publica-title" class="mt-2 text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Configura la página que visitarán tus clientes.</h2>
+          <div class="mt-5 max-w-3xl text-sm leading-7 text-subtle sm:text-base">
+            <p>En Administración, abre <strong class="text-main">Negocio</strong>. Allí puedes actualizar los datos visibles del negocio.</p>
+            <p class="mt-3">En la misma sección elige un tema para la página pública y, si lo necesitas, carga un logo y una portada. Guarda los cambios y usa <em>Ver página</em> para revisar el resultado en <code>{`${baseUrl}b/<slug>`}</code>.</p>
+          </div>
+        </section>
+
+        <section id="servicios-equipo" class="documentation-section py-10 sm:py-12" aria-labelledby="servicios-equipo-title">
+          <p class="documentation-step">03 · Oferta y equipo</p>
+          <h2 id="servicios-equipo-title" class="mt-2 text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Mantén listos los servicios y los profesionales.</h2>
+          <div class="mt-5 grid gap-6 text-sm leading-7 text-subtle sm:grid-cols-2 sm:text-base">
+            <div>
+              <h3 class="text-lg font-bold text-main">Servicios</h3>
+              <p class="mt-2">En <strong class="text-main">Contenido → Servicios</strong>, agrega el nombre, descripción, precio y duración. Mantén activo el servicio que debe estar disponible para el agendamiento.</p>
+              <p class="mt-2">La compatibilidad de cada servicio y sus márgenes de tiempo se configura desde <strong class="text-main">Agendamiento</strong>.</p>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-main">Personal</h3>
+              <p class="mt-2">En <strong class="text-main">Contenido → Personal</strong>, administra los perfiles profesionales, su estado activo y el código del negocio.</p>
+              <p class="mt-2">Los horarios, descansos y compatibilidad del personal se administran desde <strong class="text-main">Agendamiento</strong>.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="agendamiento" class="documentation-section py-10 sm:py-12" aria-labelledby="agendamiento-title">
+          <p class="documentation-step">04 · Agendamiento público</p>
+          <h2 id="agendamiento-title" class="mt-2 text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Comprueba el recorrido de una solicitud.</h2>
+          <ol class="mt-5 max-w-3xl space-y-3 text-sm leading-7 text-subtle sm:text-base">
+            <li>En la página pública, la persona elige un servicio activo.</li>
+            <li>Puede elegir un profesional o dejar que BookSmart encuentre el primero disponible; después selecciona fecha y hora disponibles.</li>
+            <li>Para enviar la solicitud, completa los campos requeridos y confirma la autorización solicitada para gestionarla.</li>
+            <li>La solicitud queda pendiente de confirmación y aparece en la agenda del negocio.</li>
+          </ol>
+        </section>
+      </div>
+
+      <section class="documentation-next mt-2 border p-6 sm:flex sm:items-center sm:justify-between sm:gap-8 sm:p-8" aria-labelledby="next-title">
+        <div class="max-w-xl">
+          <h2 id="next-title" class="text-xl font-extrabold tracking-tight text-main">¿Listo para configurar tu negocio?</h2>
+          <p class="mt-2 text-sm leading-6 text-subtle">Ingresa a BookSmart para comenzar desde la administración de tu negocio.</p>
+        </div>
+        <a href={loginPath} class="btn-primary mt-5 w-full px-5 py-3 text-center text-sm no-underline sm:mt-0 sm:w-auto">Ir a iniciar sesión</a>
+      </section>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .documentation { background: var(--bg); }
+  .documentation-nav, .documentation-index, .documentation-guide { border-color: var(--border); }
+  .documentation-nav a:hover, .documentation-back:hover { color: var(--accent-text); }
+  .documentation-kicker, .documentation-step { color: var(--accent-text); font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+  .documentation-index ol { list-style-position: inside; }
+  .documentation-section code { border: 1px solid var(--border); background: var(--surface); color: var(--text-primary); padding: .1em .35em; }
+  .documentation-next { border-color: var(--border); background: var(--surface); box-shadow: var(--shadow); }
+  @media (max-width: 639px) { .documentation-next { box-shadow: 3px 3px 0 color-mix(in srgb, var(--primary) 26%, transparent); } }
+</style>

@@ -30,14 +30,12 @@ service cloud.firestore {
     }
 
     function hasBusinessMembership(barberId) {
-      return currentUserDoc().data.barberId == barberId ||
-        (currentUserDoc().data.keys().hasAll(['businessIds']) &&
-          currentUserDoc().data.businessIds.hasAny([barberId]));
+      return currentUserDoc().data.keys().hasAll(['businessIds']) &&
+        currentUserDoc().data.businessIds.hasAny([barberId]);
     }
 
     function isBusinessStaff(barberId) {
       return isStaffRole() &&
-        currentUserDoc().data.barberId == barberId &&
         currentUserDoc().data.keys().hasAll(['businessIds', 'staffId']) &&
         currentUserDoc().data.businessIds == [barberId] &&
         hasActiveStaffBinding(barberId, currentUserDoc().data.staffId);
@@ -56,7 +54,7 @@ service cloud.firestore {
       let publicStaff = get(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId));
       return isSignedIn() &&
         exists(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId)) &&
-        currentUserDoc().data.role == 'staff' && currentUserDoc().data.barberId == barberId &&
+        currentUserDoc().data.role == 'staff' && currentUserDoc().data.businessIds == [barberId] &&
         currentUserDoc().data.staffId == staffId && staffId == request.auth.uid &&
         publicStaff.data.role == 'Staff' &&
         (!publicStaff.data.keys().hasAll(['accountUid']) || publicStaff.data.accountUid == request.auth.uid) &&
@@ -68,7 +66,7 @@ service cloud.firestore {
       let publicStaff = get(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId));
       return isBusinessAdmin(barberId) && exists(/databases/$(database)/documents/barbers/$(barberId)/barbers/$(staffId)) &&
         currentUserDoc().data.staffId == staffId && currentUserDoc().data.professionalBusinessId == barberId &&
-        publicStaff.data.accountUid == request.auth.uid;
+        staffId == request.auth.uid && publicStaff.data.role == 'Staff';
     }
 
     function validBusinessOwnerAssignment(barberId) {
@@ -76,10 +74,9 @@ service cloud.firestore {
       let ownerAfter = getAfter(/databases/$(database)/documents/users/$(request.resource.data.ownerId));
       return request.resource.data.ownerId is string &&
         ownerBefore.data.role == 'customer' &&
-        !ownerBefore.data.keys().hasAny(['barberId', 'staffId']) &&
+        !ownerBefore.data.keys().hasAny(['staffId']) &&
         (!ownerBefore.data.keys().hasAny(['businessIds']) || ownerBefore.data.businessIds.size() == 0) &&
         ownerAfter.data.role == 'storeadmin' &&
-        ownerAfter.data.barberId == barberId &&
         ownerAfter.data.keys().hasAll(['businessIds']) &&
         ownerAfter.data.businessIds == [barberId] &&
         !ownerAfter.data.keys().hasAny(['staffId']);
@@ -98,7 +95,28 @@ service cloud.firestore {
 
     function staffCanUpdateOwnSchedule(barberId, staffId) {
       return (isAssignedStaff(barberId, staffId) || hasOwnStoreadminProfileBinding(barberId, staffId)) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['schedule', 'updatedAt']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['schedule', 'updatedAt']) &&
+        validStaffSchedule(request.resource.data.schedule);
+    }
+
+    // Break contents are validated by the application because Rules cannot
+    // iterate a dynamic list, but the persisted schedule must retain its
+    // complete seven-day shape and scalar types.
+    function validStaffScheduleDay(day) {
+      return day is map && day.keys().hasAll(['enabled', 'start', 'end', 'breaks']) &&
+        day.keys().hasOnly(['enabled', 'start', 'end', 'breaks']) &&
+        day.enabled is bool && day.start is string && day.end is string && day.breaks is list &&
+        day.start.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$') &&
+        day.end.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$') && day.start < day.end;
+    }
+
+    function validStaffSchedule(schedule) {
+      return schedule is map && schedule.keys().hasAll(['0', '1', '2', '3', '4', '5', '6']) &&
+        schedule.keys().hasOnly(['0', '1', '2', '3', '4', '5', '6']) &&
+        validStaffScheduleDay(schedule['0']) && validStaffScheduleDay(schedule['1']) &&
+        validStaffScheduleDay(schedule['2']) && validStaffScheduleDay(schedule['3']) &&
+        validStaffScheduleDay(schedule['4']) && validStaffScheduleDay(schedule['5']) &&
+        validStaffScheduleDay(schedule['6']);
     }
 
     function staffCanUpdateAssignedAppointment(barberId) {
@@ -111,11 +129,11 @@ service cloud.firestore {
     function validDirectEnrollmentUser(currentUser, enrolledUser, uid, barberId, staff) {
       let codeRecord = get(/databases/$(database)/documents/staffEnrollmentCodes/$(enrolledUser.enrollmentCode));
       return isSignedIn() && request.auth.uid == uid && currentUser.role == 'customer' &&
-        !currentUser.keys().hasAny(['barberId', 'staffId', 'enrollmentCode']) &&
+        !currentUser.keys().hasAny(['staffId', 'enrollmentCode']) &&
         (!currentUser.keys().hasAny(['businessIds']) || currentUser.businessIds.size() == 0) &&
-        enrolledUser.role == 'staff' && enrolledUser.barberId == barberId && enrolledUser.staffId == uid && enrolledUser.businessIds == [barberId] &&
+        enrolledUser.role == 'staff' && enrolledUser.staffId == uid && enrolledUser.businessIds == [barberId] &&
         enrolledUser.enrollmentCode is string && codeRecord.data.businessId == barberId &&
-        enrolledUser.diff(currentUser).affectedKeys().hasOnly(['role', 'barberId', 'businessIds', 'staffId', 'enrollmentCode', 'updatedAt']) &&
+        enrolledUser.diff(currentUser).affectedKeys().hasOnly(['role', 'businessIds', 'staffId', 'enrollmentCode', 'updatedAt']) &&
         staff.name is string && staff.name.size() > 0 && staff.name.size() <= 120 && staff.role == 'Staff' && staff.accountUid == uid && staff.active == false && staff.accountStatus == 'inactive' &&
         staff.createdAt == request.time && staff.updatedAt == request.time && staff.keys().hasOnly(['name', 'role', 'accountUid', 'active', 'accountStatus', 'createdAt', 'updatedAt']);
     }
@@ -126,13 +144,16 @@ service cloud.firestore {
         (!request.resource.data.keys().hasAll(['accountUid']) || request.resource.data.accountUid == staffId) && request.resource.data.accountStatus in ['active', 'inactive'] &&
         request.resource.data.active == (request.resource.data.accountStatus == 'active') &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active', 'accountStatus', 'updatedAt']) &&
-        enrolledUser.data.role == 'staff' && enrolledUser.data.barberId == barberId && enrolledUser.data.staffId == staffId && enrolledUser.data.businessIds == [barberId] &&
+        enrolledUser.data.role == 'staff' && enrolledUser.data.staffId == staffId && enrolledUser.data.businessIds == [barberId] &&
         (request.resource.data.accountStatus != 'active' || !enrolledUser.data.keys().hasAny(['enrollmentCode']));
     }
 
     function validDirectEnrollmentUserUpdate(uid) {
-      let staff = getAfter(/databases/$(database)/documents/barbers/$(request.resource.data.barberId)/barbers/$(uid));
-      return validDirectEnrollmentUser(resource.data, request.resource.data, uid, request.resource.data.barberId, staff.data);
+      let businessId = request.resource.data.businessIds[0];
+      let staff = getAfter(/databases/$(database)/documents/barbers/$(businessId)/barbers/$(uid));
+      return request.resource.data.keys().hasAll(['businessIds']) && request.resource.data.businessIds is list &&
+        request.resource.data.businessIds.size() == 1 &&
+        validDirectEnrollmentUser(resource.data, request.resource.data, uid, businessId, staff.data);
     }
 
     function validDirectEnrollmentStaffCreate(barberId, staffId) {
@@ -143,38 +164,62 @@ service cloud.firestore {
     }
 
     function validEnrollmentProofRemoval(uid) {
-      let publicStaff = getAfter(/databases/$(database)/documents/barbers/$(resource.data.barberId)/barbers/$(resource.data.staffId));
+      let businessId = resource.data.businessIds[0];
+      let publicStaff = getAfter(/databases/$(database)/documents/barbers/$(businessId)/barbers/$(resource.data.staffId));
       return isSignedIn() && request.auth.uid != uid && resource.data.role == 'staff' && resource.data.staffId == uid &&
-        isBusinessAdmin(resource.data.barberId) && resource.data.keys().hasAll(['enrollmentCode']) && !request.resource.data.keys().hasAny(['enrollmentCode']) &&
+        resource.data.businessIds is list && resource.data.businessIds.size() == 1 && isBusinessAdmin(businessId) && resource.data.keys().hasAll(['enrollmentCode']) && !request.resource.data.keys().hasAny(['enrollmentCode']) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['enrollmentCode', 'updatedAt']) &&
         publicStaff.data.active == true && publicStaff.data.accountStatus == 'active';
     }
 
-    function validStoreadminSelfProfileLink(uid) {
+    function validStoreadminOwnProfileLink(uid) {
       let profile = getAfter(/databases/$(database)/documents/barbers/$(request.resource.data.professionalBusinessId)/barbers/$(request.resource.data.staffId));
       return isSignedIn() && request.auth.uid == uid && resource.data.role == 'storeadmin' &&
-        request.resource.data.role == 'storeadmin' && request.resource.data.barberId == resource.data.barberId &&
-        request.resource.data.businessIds == resource.data.businessIds && !resource.data.keys().hasAny(['staffId', 'professionalBusinessId']) &&
+        request.resource.data.role == 'storeadmin' && request.resource.data.businessIds == resource.data.businessIds && !resource.data.keys().hasAny(['staffId', 'professionalBusinessId']) &&
         request.resource.data.staffId is string && request.resource.data.professionalBusinessId is string &&
-        request.resource.data.businessIds.hasAny([request.resource.data.professionalBusinessId]) &&
+        hasBusinessMembership(request.resource.data.professionalBusinessId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['staffId', 'professionalBusinessId', 'updatedAt']) &&
-        profile.data.active == true && profile.data.accountUid == uid &&
+        profile.data.name is string && profile.data.name.size() > 0 && profile.data.name.size() <= 120 &&
+        profile.data.role == 'Staff' && profile.data.active is bool &&
         !profile.data.keys().hasAny(['accountStatus']);
     }
 
-    function validStoreadminSelfProfileLinkProfile(barberId, staffId) {
+    function validStoreadminOwnProfileCreate(barberId, staffId) {
       let account = getAfter(/databases/$(database)/documents/users/$(request.auth.uid));
-      return isBusinessAdmin(barberId) && resource.data.active == true &&
-        !resource.data.keys().hasAny(['accountUid', 'accountStatus', 'userId']) &&
-        request.resource.data.accountUid == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountUid', 'updatedAt']) &&
+      return isBusinessAdmin(barberId) && staffId == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['name', 'role', 'active', 'createdAt', 'updatedAt']) &&
+        request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120 &&
+        request.resource.data.role == 'Staff' &&
+        request.resource.data.active is bool && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time &&
         account.data.role == 'storeadmin' && account.data.staffId == staffId &&
-        account.data.professionalBusinessId == barberId && account.data.businessIds.hasAny([barberId]);
+        account.data.professionalBusinessId == barberId &&
+        account.data.keys().hasAll(['businessIds']) && account.data.businessIds.hasAny([barberId]);
+    }
+
+    function validOwnProfileImagePath(barberId, staffId, path) {
+      return path is string && path.matches('^barbers/' + barberId + '/barbers/' + staffId + '/assets/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)$');
+    }
+
+    function ownProfessionalProfileCanUpdate(barberId, staffId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return (hasOwnStaffProfileBinding(barberId, staffId) || hasOwnStoreadminProfileBinding(barberId, staffId)) &&
+        changed.hasOnly(['name', 'photoUrl', 'imageStoragePath', 'pendingImageCleanupPaths', 'updatedAt']) &&
+        request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120 &&
+        (!request.resource.data.keys().hasAny(['photoUrl']) || (request.resource.data.photoUrl is string && request.resource.data.photoUrl.size() <= 2048)) &&
+        (!request.resource.data.keys().hasAny(['imageStoragePath']) || validOwnProfileImagePath(barberId, staffId, request.resource.data.imageStoragePath)) &&
+        (!request.resource.data.keys().hasAny(['pendingImageCleanupPaths']) || request.resource.data.pendingImageCleanupPaths is list);
     }
 
     function validRetirementProfilePatch() {
       return request.resource.data.active == false && !request.resource.data.keys().hasAny(['accountUid', 'accountStatus']) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active', 'accountUid', 'accountStatus', 'updatedAt']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'active', 'accountUid', 'accountStatus', 'pendingImageCleanupPaths', 'updatedAt'
+        ]) &&
+        request.resource.data.pendingImageCleanupPaths is list &&
+        (!resource.data.keys().hasAll(['imageStoragePath']) ||
+          request.resource.data.pendingImageCleanupPaths.hasAny([resource.data.imageStoragePath])) &&
+        (!resource.data.keys().hasAll(['pendingImageCleanupPaths']) ||
+          request.resource.data.pendingImageCleanupPaths.hasAll(resource.data.pendingImageCleanupPaths));
     }
 
     function validProfessionalRetirement(barberId, staffId) {
@@ -183,34 +228,56 @@ service cloud.firestore {
           validLinkedStaffRetirement(staffId) || validLinkedStoreadminRetirement(barberId));
     }
 
+    // Retirement never deletes the professional document because its booking and
+    // schedule references remain historical. Once retired, a business admin may
+    // only remove the exact photo metadata after Storage cleanup succeeds.
+    function validRetiredProfessionalPhotoCleanup(barberId) {
+      return isBusinessAdmin(barberId) && resource.data.active == false &&
+        request.resource.data.active == false &&
+        !resource.data.keys().hasAny(['accountUid', 'accountStatus']) &&
+        !request.resource.data.keys().hasAny(['accountUid', 'accountStatus']) &&
+        (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pendingImageCleanupPaths', 'updatedAt']) &&
+            request.resource.data.pendingImageCleanupPaths is list &&
+            resource.data.pendingImageCleanupPaths is list &&
+            request.resource.data.pendingImageCleanupPaths.hasOnly(resource.data.pendingImageCleanupPaths)) ||
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'photoUrl', 'imageStoragePath', 'pendingImageCleanupPaths', 'updatedAt'
+          ]) &&
+            resource.data.pendingImageCleanupPaths is list && resource.data.pendingImageCleanupPaths.size() == 0 &&
+            !request.resource.data.keys().hasAny(['photoUrl', 'imageStoragePath', 'pendingImageCleanupPaths']))
+        );
+    }
+
     function validLinkedStaffRetirement(staffId) {
       let account = getAfter(/databases/$(database)/documents/users/$(staffId));
       return resource.data.keys().hasAll(['accountStatus']) && account.data.role == 'customer' &&
-        !account.data.keys().hasAny(['barberId', 'businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode']);
+        !account.data.keys().hasAny(['businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode']);
     }
 
     function validLinkedStoreadminRetirement(barberId) {
       let account = getAfter(/databases/$(database)/documents/users/$(resource.data.accountUid));
       return resource.data.keys().hasAll(['accountUid']) && !resource.data.keys().hasAny(['accountStatus']) &&
-        account.data.role == 'storeadmin' && account.data.barberId == barberId && account.data.businessIds.hasAny([barberId]) &&
+        account.data.role == 'storeadmin' && account.data.businessIds.hasAny([barberId]) &&
         !account.data.keys().hasAny(['staffId', 'professionalBusinessId']);
     }
 
     function validProfessionalRetirementUser(uid) {
-      let profile = getAfter(/databases/$(database)/documents/barbers/$(resource.data.barberId)/barbers/$(resource.data.staffId));
+      let businessId = resource.data.businessIds[0];
+      let profile = getAfter(/databases/$(database)/documents/barbers/$(businessId)/barbers/$(resource.data.staffId));
       return isSignedIn() && request.auth.uid != uid && resource.data.role == 'staff' && resource.data.staffId == uid &&
+        resource.data.businessIds is list && resource.data.businessIds.size() == 1 &&
         profile.data.active == false && !profile.data.keys().hasAny(['accountUid', 'accountStatus']) &&
-        request.resource.data.role == 'customer' && !request.resource.data.keys().hasAny(['barberId', 'businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode']) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'barberId', 'businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode', 'updatedAt']) &&
-        isBusinessAdmin(resource.data.barberId);
+        request.resource.data.role == 'customer' && !request.resource.data.keys().hasAny(['businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode', 'updatedAt']) &&
+        isBusinessAdmin(businessId);
     }
 
-    function validStoreadminProfessionalUnlink(uid) {
+    function validStoreadminProfessionalUnlink() {
       let profile = getAfter(/databases/$(database)/documents/barbers/$(resource.data.professionalBusinessId)/barbers/$(resource.data.staffId));
       return isSignedIn() && resource.data.role == 'storeadmin' && resource.data.staffId is string &&
         profile.data.active == false && !profile.data.keys().hasAny(['accountUid', 'accountStatus']) &&
-        request.resource.data.role == 'storeadmin' && request.resource.data.barberId == resource.data.barberId &&
-        request.resource.data.businessIds == resource.data.businessIds && !request.resource.data.keys().hasAny(['staffId', 'professionalBusinessId']) &&
+        request.resource.data.role == 'storeadmin' && request.resource.data.businessIds == resource.data.businessIds && !request.resource.data.keys().hasAny(['staffId', 'professionalBusinessId']) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['staffId', 'professionalBusinessId', 'updatedAt']) &&
         isBusinessAdmin(resource.data.professionalBusinessId);
     }
@@ -218,14 +285,74 @@ service cloud.firestore {
     function staffAdminCanUpdateStaffRecord(barberId, staffId) {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       return validProfessionalRetirement(barberId, staffId) ||
-        (isBusinessAdmin(barberId) && !changed.hasAny(['accountUid']) &&
-          (!resource.data.keys().hasAny(['accountStatus']) ||
-            (!changed.hasAny(['active', 'accountStatus']) && !request.resource.data.keys().hasAny(['accountUid'])) ||
-            validEnrollmentStatusUpdate(barberId, staffId)));
+        validEnrollmentStatusUpdate(barberId, staffId) ||
+        (isBusinessAdmin(barberId) && !resource.data.keys().hasAny(['accountStatus']) &&
+          request.resource.data.active is bool && changed.hasOnly(['active', 'updatedAt']));
+    }
+
+    // Schedule administration is available to the scoped Storeadmin even when
+    // booking is paused. It is intentionally independent of the operational
+    // subscription gate, but remains limited to the canonical schedule shape.
+    function businessAdminCanUpdateStaffSchedule(barberId) {
+      return isBusinessAdmin(barberId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['schedule', 'updatedAt']) &&
+        validStaffSchedule(request.resource.data.schedule);
+    }
+
+    function operationalBusinessData(business) {
+      // Legacy records remain operable until their first subscription save.
+      // Canonical records must be enabled and inside their effective range.
+      return business.data.active == true &&
+        (!business.data.keys().hasAll(['subscriptionStatus']) || business.data.subscriptionStatus in ['active', 'trial']) &&
+        (!business.data.keys().hasAll(['subscriptionStatus']) ||
+          !business.data.keys().hasAll(['subscriptionStartsAt']) ||
+          (business.data.subscriptionStartsAt is timestamp && business.data.subscriptionStartsAt <= request.time)) &&
+        (!business.data.keys().hasAll(['subscriptionStatus']) ||
+           !business.data.keys().hasAll(['planExpiresAt']) ||
+           (business.data.planExpiresAt is timestamp && business.data.planExpiresAt >= request.time));
     }
 
     function businessIsActive(barberId) {
-      return get(/databases/$(database)/documents/barbers/$(barberId)).data.active == true;
+      return operationalBusinessData(get(/databases/$(database)/documents/barbers/$(barberId)));
+    }
+
+    function hasCanonicalPublicCutoff(business) {
+      return business.data.keys().hasAll(['subscriptionStatus', 'planExpiresAt']) &&
+        business.data.subscriptionStatus in ['active', 'trial'] &&
+        business.data.planExpiresAt is timestamp;
+    }
+
+    // Canonical operational writes and their public mirror must commit in one
+    // atomic client transaction/batch. `getAfter` observes the resulting state,
+    // so a root deactivation or subscription change cannot leave a readable
+    // active public projection behind.
+    function publicOperationalStateMatchesRootAfter(barberId) {
+      let root = getAfter(/databases/$(database)/documents/barbers/$(barberId));
+      let publicBusiness = getAfter(/databases/$(database)/documents/publicBusinesses/$(barberId));
+      return publicBusiness.data != null &&
+        publicBusiness.data.active == operationalBusinessData(root) &&
+        (operationalBusinessData(root) && hasCanonicalPublicCutoff(root)
+          ? publicBusiness.data.keys().hasAll(['bookingEnabledUntil']) &&
+            publicBusiness.data.bookingEnabledUntil == root.data.planExpiresAt
+          : !publicBusiness.data.keys().hasAny(['bookingEnabledUntil']));
+    }
+
+    function operationalFieldsUnchangedOrPublicProjectionSynced(barberId) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'active', 'subscriptionStatus', 'subscriptionStartsAt', 'planExpiresAt'
+      ]) || publicOperationalStateMatchesRootAfter(barberId);
+    }
+
+    function publicProjectionRemovedAfterRootDelete(barberId) {
+      return getAfter(/databases/$(database)/documents/publicBusinesses/$(barberId)).data == null;
+    }
+
+    function isOperationalBusinessAdmin(barberId) {
+      return isBusinessAdmin(barberId) && businessIsActive(barberId);
+    }
+
+    function isOperationalBusinessStaff(barberId) {
+      return isBusinessStaff(barberId) && businessIsActive(barberId);
     }
 
     // Business admins can operate their business, but cannot change ownership,
@@ -233,7 +360,7 @@ service cloud.firestore {
     function businessAdminCanUpdateBusiness() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'name', 'businessType', 'config', 'workingHours', 'updatedAt'
-      ]) && businessWorkingHoursUnchangedOrValid();
+      ]) && businessWorkingHoursUnchangedOrValid() && businessBookingSettingsUnchangedOrValid();
     }
 
     function validWorkingHoursDay(day) {
@@ -259,6 +386,262 @@ service cloud.firestore {
         validWorkingHours(request.resource.data.workingHours);
     }
 
+    // Closure rules remain one embedded list. Firestore Rules cannot iterate a
+    // dynamic list to validate every object, so the application validates each
+    // rule before saving; Rules enforce only the enclosing booking shape and cap.
+    function validBookingSettings(settings) {
+      return settings is map && settings.keys().hasAll([
+          'minimumNoticeMinutes', 'bookingHorizonDays', 'slotIntervalMinutes', 'exceptionalClosures', 'closureRules', 'customerFields', 'productSelectionEnabled'
+        ]) && settings.keys().hasOnly([
+          'minimumNoticeMinutes', 'bookingHorizonDays', 'slotIntervalMinutes', 'exceptionalClosures', 'closureRules', 'customerFields', 'productSelectionEnabled'
+        ]) &&
+        settings.minimumNoticeMinutes is int && settings.minimumNoticeMinutes >= 0 &&
+        settings.bookingHorizonDays is int && settings.bookingHorizonDays >= 1 &&
+        settings.slotIntervalMinutes is int && settings.slotIntervalMinutes >= 5 && settings.slotIntervalMinutes <= 120 &&
+        settings.exceptionalClosures is list && settings.closureRules is list && settings.closureRules.size() <= 100 &&
+        validBookingCustomerFields(settings.customerFields) && settings.productSelectionEnabled is bool;
+    }
+
+    function validBookingCustomerFields(fields) {
+      return fields is map && fields.keys().hasAll(['email', 'address']) && fields.keys().hasOnly(['email', 'address']) &&
+        fields.email in ['disabled', 'optional', 'required'] &&
+        fields.address in ['disabled', 'optional', 'required'];
+    }
+
+    // Rules cannot iterate dynamic lists. Keep the per-rule schema small and
+    // validate the bounded list in ten-item blocks so compilation stays safe.
+    function validPublicClosureTimeRange(rule) {
+      return !rule.keys().hasAny(['startTime', 'endTime']) ||
+        (rule.keys().hasAll(['startTime', 'endTime']) && rule.startTime is string && rule.endTime is string &&
+          rule.startTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$') && rule.endTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$') &&
+          rule.startTime < rule.endTime);
+    }
+
+    function validPublicWeeklyClosureRule(rule) {
+      return rule.kind == 'weekly' && rule.keys().hasAll(['weekday']) &&
+        rule.keys().hasOnly(['id', 'kind', 'weekday', 'startTime', 'endTime']) &&
+        rule.weekday is int && rule.weekday >= 0 && rule.weekday <= 6;
+    }
+
+    function validPublicDateClosureRule(rule) {
+      return rule.kind == 'date' && rule.keys().hasAll(['date']) &&
+        rule.keys().hasOnly(['id', 'kind', 'date', 'startTime', 'endTime']) &&
+        rule.date is string && rule.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function validPublicClosureRule(rule) {
+      return rule is map && rule.keys().hasAll(['id', 'kind']) && rule.id is string &&
+        rule.id.size() > 0 && rule.id.size() <= 120 && validPublicClosureTimeRange(rule) &&
+        (validPublicWeeklyClosureRule(rule) || validPublicDateClosureRule(rule));
+    }
+
+    function validPublicClosureRules0(rules) {
+      return (rules.size() <= 0 || validPublicClosureRule(rules[0])) && (rules.size() <= 1 || validPublicClosureRule(rules[1])) &&
+        (rules.size() <= 2 || validPublicClosureRule(rules[2])) && (rules.size() <= 3 || validPublicClosureRule(rules[3])) &&
+        (rules.size() <= 4 || validPublicClosureRule(rules[4])) && (rules.size() <= 5 || validPublicClosureRule(rules[5])) &&
+        (rules.size() <= 6 || validPublicClosureRule(rules[6])) && (rules.size() <= 7 || validPublicClosureRule(rules[7])) &&
+        (rules.size() <= 8 || validPublicClosureRule(rules[8])) && (rules.size() <= 9 || validPublicClosureRule(rules[9]));
+    }
+
+    function validPublicClosureRules10(rules) {
+      return (rules.size() <= 10 || validPublicClosureRule(rules[10])) && (rules.size() <= 11 || validPublicClosureRule(rules[11])) &&
+        (rules.size() <= 12 || validPublicClosureRule(rules[12])) && (rules.size() <= 13 || validPublicClosureRule(rules[13])) &&
+        (rules.size() <= 14 || validPublicClosureRule(rules[14])) && (rules.size() <= 15 || validPublicClosureRule(rules[15])) &&
+        (rules.size() <= 16 || validPublicClosureRule(rules[16])) && (rules.size() <= 17 || validPublicClosureRule(rules[17])) &&
+        (rules.size() <= 18 || validPublicClosureRule(rules[18])) && (rules.size() <= 19 || validPublicClosureRule(rules[19]));
+    }
+
+    function validPublicClosureRules20(rules) {
+      return (rules.size() <= 20 || validPublicClosureRule(rules[20])) && (rules.size() <= 21 || validPublicClosureRule(rules[21])) &&
+        (rules.size() <= 22 || validPublicClosureRule(rules[22])) && (rules.size() <= 23 || validPublicClosureRule(rules[23])) &&
+        (rules.size() <= 24 || validPublicClosureRule(rules[24])) && (rules.size() <= 25 || validPublicClosureRule(rules[25])) &&
+        (rules.size() <= 26 || validPublicClosureRule(rules[26])) && (rules.size() <= 27 || validPublicClosureRule(rules[27])) &&
+        (rules.size() <= 28 || validPublicClosureRule(rules[28])) && (rules.size() <= 29 || validPublicClosureRule(rules[29]));
+    }
+
+    function validPublicClosureRules30(rules) {
+      return (rules.size() <= 30 || validPublicClosureRule(rules[30])) && (rules.size() <= 31 || validPublicClosureRule(rules[31])) &&
+        (rules.size() <= 32 || validPublicClosureRule(rules[32])) && (rules.size() <= 33 || validPublicClosureRule(rules[33])) &&
+        (rules.size() <= 34 || validPublicClosureRule(rules[34])) && (rules.size() <= 35 || validPublicClosureRule(rules[35])) &&
+        (rules.size() <= 36 || validPublicClosureRule(rules[36])) && (rules.size() <= 37 || validPublicClosureRule(rules[37])) &&
+        (rules.size() <= 38 || validPublicClosureRule(rules[38])) && (rules.size() <= 39 || validPublicClosureRule(rules[39]));
+    }
+
+    function validPublicClosureRules40(rules) {
+      return (rules.size() <= 40 || validPublicClosureRule(rules[40])) && (rules.size() <= 41 || validPublicClosureRule(rules[41])) &&
+        (rules.size() <= 42 || validPublicClosureRule(rules[42])) && (rules.size() <= 43 || validPublicClosureRule(rules[43])) &&
+        (rules.size() <= 44 || validPublicClosureRule(rules[44])) && (rules.size() <= 45 || validPublicClosureRule(rules[45])) &&
+        (rules.size() <= 46 || validPublicClosureRule(rules[46])) && (rules.size() <= 47 || validPublicClosureRule(rules[47])) &&
+        (rules.size() <= 48 || validPublicClosureRule(rules[48])) && (rules.size() <= 49 || validPublicClosureRule(rules[49]));
+    }
+
+    function validPublicClosureRules50(rules) {
+      return (rules.size() <= 50 || validPublicClosureRule(rules[50])) && (rules.size() <= 51 || validPublicClosureRule(rules[51])) &&
+        (rules.size() <= 52 || validPublicClosureRule(rules[52])) && (rules.size() <= 53 || validPublicClosureRule(rules[53])) &&
+        (rules.size() <= 54 || validPublicClosureRule(rules[54])) && (rules.size() <= 55 || validPublicClosureRule(rules[55])) &&
+        (rules.size() <= 56 || validPublicClosureRule(rules[56])) && (rules.size() <= 57 || validPublicClosureRule(rules[57])) &&
+        (rules.size() <= 58 || validPublicClosureRule(rules[58])) && (rules.size() <= 59 || validPublicClosureRule(rules[59]));
+    }
+
+    function validPublicClosureRules60(rules) {
+      return (rules.size() <= 60 || validPublicClosureRule(rules[60])) && (rules.size() <= 61 || validPublicClosureRule(rules[61])) &&
+        (rules.size() <= 62 || validPublicClosureRule(rules[62])) && (rules.size() <= 63 || validPublicClosureRule(rules[63])) &&
+        (rules.size() <= 64 || validPublicClosureRule(rules[64])) && (rules.size() <= 65 || validPublicClosureRule(rules[65])) &&
+        (rules.size() <= 66 || validPublicClosureRule(rules[66])) && (rules.size() <= 67 || validPublicClosureRule(rules[67])) &&
+        (rules.size() <= 68 || validPublicClosureRule(rules[68])) && (rules.size() <= 69 || validPublicClosureRule(rules[69]));
+    }
+
+    function validPublicClosureRules70(rules) {
+      return (rules.size() <= 70 || validPublicClosureRule(rules[70])) && (rules.size() <= 71 || validPublicClosureRule(rules[71])) &&
+        (rules.size() <= 72 || validPublicClosureRule(rules[72])) && (rules.size() <= 73 || validPublicClosureRule(rules[73])) &&
+        (rules.size() <= 74 || validPublicClosureRule(rules[74])) && (rules.size() <= 75 || validPublicClosureRule(rules[75])) &&
+        (rules.size() <= 76 || validPublicClosureRule(rules[76])) && (rules.size() <= 77 || validPublicClosureRule(rules[77])) &&
+        (rules.size() <= 78 || validPublicClosureRule(rules[78])) && (rules.size() <= 79 || validPublicClosureRule(rules[79]));
+    }
+
+    function validPublicClosureRules80(rules) {
+      return (rules.size() <= 80 || validPublicClosureRule(rules[80])) && (rules.size() <= 81 || validPublicClosureRule(rules[81])) &&
+        (rules.size() <= 82 || validPublicClosureRule(rules[82])) && (rules.size() <= 83 || validPublicClosureRule(rules[83])) &&
+        (rules.size() <= 84 || validPublicClosureRule(rules[84])) && (rules.size() <= 85 || validPublicClosureRule(rules[85])) &&
+        (rules.size() <= 86 || validPublicClosureRule(rules[86])) && (rules.size() <= 87 || validPublicClosureRule(rules[87])) &&
+        (rules.size() <= 88 || validPublicClosureRule(rules[88])) && (rules.size() <= 89 || validPublicClosureRule(rules[89]));
+    }
+
+    function validPublicClosureRules90(rules) {
+      return (rules.size() <= 90 || validPublicClosureRule(rules[90])) && (rules.size() <= 91 || validPublicClosureRule(rules[91])) &&
+        (rules.size() <= 92 || validPublicClosureRule(rules[92])) && (rules.size() <= 93 || validPublicClosureRule(rules[93])) &&
+        (rules.size() <= 94 || validPublicClosureRule(rules[94])) && (rules.size() <= 95 || validPublicClosureRule(rules[95])) &&
+        (rules.size() <= 96 || validPublicClosureRule(rules[96])) && (rules.size() <= 97 || validPublicClosureRule(rules[97])) &&
+        (rules.size() <= 98 || validPublicClosureRule(rules[98])) && (rules.size() <= 99 || validPublicClosureRule(rules[99]));
+    }
+
+    function validPublicClosureRules(rules) {
+      return rules is list && rules.size() <= 100 && validPublicClosureRules0(rules) &&
+        validPublicClosureRules10(rules) && validPublicClosureRules20(rules) && validPublicClosureRules30(rules) &&
+        validPublicClosureRules40(rules) && validPublicClosureRules50(rules) && validPublicClosureRules60(rules) &&
+        validPublicClosureRules70(rules) && validPublicClosureRules80(rules) && validPublicClosureRules90(rules);
+    }
+
+    // Existing public projections may retain a booking object created before
+    // closureRules was introduced. New booking saves use the canonical shape.
+    function validPublicBookingSettings(settings) {
+      return (settings is map && settings.keys().hasAll([
+          'minimumNoticeMinutes', 'bookingHorizonDays', 'slotIntervalMinutes', 'exceptionalClosures', 'closureRules', 'customerFields', 'productSelectionEnabled'
+        ]) && settings.keys().hasOnly([
+          'minimumNoticeMinutes', 'bookingHorizonDays', 'slotIntervalMinutes', 'exceptionalClosures', 'closureRules', 'customerFields', 'productSelectionEnabled'
+        ]) && settings.minimumNoticeMinutes is int && settings.minimumNoticeMinutes >= 0 &&
+        settings.bookingHorizonDays is int && settings.bookingHorizonDays >= 1 &&
+        settings.slotIntervalMinutes is int && settings.slotIntervalMinutes >= 5 && settings.slotIntervalMinutes <= 120 &&
+        settings.exceptionalClosures is list && settings.exceptionalClosures.size() == 0 && validPublicClosureRules(settings.closureRules) &&
+        validBookingCustomerFields(settings.customerFields) && settings.productSelectionEnabled is bool) ||
+        (settings is map && settings.keys().hasAll([
+          'minimumNoticeMinutes', 'bookingHorizonDays', 'slotIntervalMinutes', 'exceptionalClosures'
+        ]) && settings.keys().hasOnly([
+          'minimumNoticeMinutes', 'bookingHorizonDays', 'slotIntervalMinutes', 'exceptionalClosures'
+        ]) && settings.minimumNoticeMinutes is int && settings.minimumNoticeMinutes >= 0 &&
+        settings.bookingHorizonDays is int && settings.bookingHorizonDays >= 1 &&
+        settings.slotIntervalMinutes is int && settings.slotIntervalMinutes >= 5 && settings.slotIntervalMinutes <= 120 &&
+        settings.exceptionalClosures is list && settings.exceptionalClosures.size() == 0);
+    }
+
+    // Legacy public projections did not carry customer fields. They request no
+    // extra personal data until an administrator saves the canonical settings.
+    function publicCustomerFieldState(barberId, field) {
+      let business = get(/databases/$(database)/documents/publicBusinesses/$(barberId));
+      return business.data.keys().hasAll(['config']) && business.data.config is map &&
+        business.data.config.keys().hasAll(['booking']) && business.data.config.booking is map &&
+        business.data.config.booking.keys().hasAll(['customerFields']) &&
+        validBookingCustomerFields(business.data.config.booking.customerFields)
+        ? business.data.config.booking.customerFields[field]
+        : 'disabled';
+    }
+
+    function publicBookingRequestsAdditionalData(barberId) {
+      return publicCustomerFieldState(barberId, 'email') != 'disabled' ||
+        publicCustomerFieldState(barberId, 'address') != 'disabled';
+    }
+
+    function validRequestedAppointmentField(field, state, maxLength) {
+      return (state == 'disabled' && !request.resource.data.keys().hasAny([field])) ||
+        (state == 'optional' && (!request.resource.data.keys().hasAny([field]) ||
+          (request.resource.data[field] is string && request.resource.data[field].size() > 0 && request.resource.data[field].size() <= maxLength))) ||
+        (state == 'required' && request.resource.data.keys().hasAll([field]) &&
+          request.resource.data[field] is string && request.resource.data[field].size() > 0 && request.resource.data[field].size() <= maxLength);
+    }
+
+    function validPublicBookingPrivacyConsent(barberId) {
+      return !publicBookingRequestsAdditionalData(barberId)
+        ? !request.resource.data.keys().hasAny(['bookingPrivacyConsent'])
+        : request.resource.data.keys().hasAll(['bookingPrivacyConsent']) &&
+          request.resource.data.bookingPrivacyConsent is map &&
+          request.resource.data.bookingPrivacyConsent.keys().hasAll(['version', 'acceptedAt']) &&
+          request.resource.data.bookingPrivacyConsent.keys().hasOnly(['version', 'acceptedAt']) &&
+          request.resource.data.bookingPrivacyConsent.version == '2026-08-01' &&
+          request.resource.data.bookingPrivacyConsent.acceptedAt == request.time;
+    }
+
+    // Product requests are informational only. Public callers are handled by
+    // the trusted booking function because Rules cannot prove dynamic product
+    // membership. This remains a defense-in-depth shape check for privileged
+    // writers that create appointments.
+    function publicProductSelectionEnabled(barberId) {
+      let business = get(/databases/$(database)/documents/publicBusinesses/$(barberId));
+      return business.data.keys().hasAll(['config']) && business.data.config is map &&
+        business.data.config.keys().hasAll(['booking']) && business.data.config.booking is map &&
+        business.data.config.booking.keys().hasAll(['productSelectionEnabled']) &&
+        business.data.config.booking.productSelectionEnabled == true;
+    }
+
+    function validRequestedProduct(product) {
+      return product is map && product.keys().hasOnly(['productId', 'name', 'quantity']) &&
+        product.keys().hasAll(['productId', 'name', 'quantity']) &&
+        product.productId is string && product.productId.size() > 0 && product.productId.size() <= 150 &&
+        product.name is string && product.name.size() > 0 && product.name.size() <= 120 &&
+        product.quantity is int && product.quantity >= 1 && product.quantity <= 10;
+    }
+
+    // Rules have no list quantifier. Public writes are denied and the callable
+    // verifies source membership, while this bounded check keeps the shape
+    // strict for privileged writers too.
+    function validRequestedProductList(products) {
+      return products is list && products.size() <= 10 &&
+        (products.size() <= 0 || validRequestedProduct(products[0])) &&
+        (products.size() <= 1 || validRequestedProduct(products[1])) &&
+        (products.size() <= 2 || validRequestedProduct(products[2])) &&
+        (products.size() <= 3 || validRequestedProduct(products[3])) &&
+        (products.size() <= 4 || validRequestedProduct(products[4])) &&
+        (products.size() <= 5 || validRequestedProduct(products[5])) &&
+        (products.size() <= 6 || validRequestedProduct(products[6])) &&
+        (products.size() <= 7 || validRequestedProduct(products[7])) &&
+        (products.size() <= 8 || validRequestedProduct(products[8])) &&
+        (products.size() <= 9 || validRequestedProduct(products[9]));
+    }
+
+    function validRequestedProducts(barberId) {
+      return (!publicProductSelectionEnabled(barberId) && !request.resource.data.keys().hasAny(['requestedProducts'])) ||
+        (publicProductSelectionEnabled(barberId) && (!request.resource.data.keys().hasAny(['requestedProducts']) ||
+          validRequestedProductList(request.resource.data.requestedProducts)));
+    }
+
+    function bookingPrivacyConsentUnchanged() {
+      return (!resource.data.keys().hasAny(['bookingPrivacyConsent']) &&
+          !request.resource.data.keys().hasAny(['bookingPrivacyConsent'])) ||
+        (resource.data.keys().hasAll(['bookingPrivacyConsent']) &&
+          request.resource.data.keys().hasAll(['bookingPrivacyConsent']) &&
+          request.resource.data.bookingPrivacyConsent == resource.data.bookingPrivacyConsent);
+    }
+
+    function businessBookingSettingsUnchangedOrValid() {
+      // Keep this additive for legacy root records: a business without config,
+      // or a config update that does not add/change booking, remains writable.
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['config']) ||
+        !request.resource.data.keys().hasAny(['config']) ||
+        !request.resource.data.config.keys().hasAny(['booking']) ||
+        (resource.data.keys().hasAny(['config']) && resource.data.config.keys().hasAny(['booking']) &&
+          request.resource.data.config.booking == resource.data.config.booking) ||
+        validBookingSettings(request.resource.data.config.booking);
+    }
+
     // This projection is the sole anonymous source for business presentation
     // and booking policy. Its allowlist deliberately excludes owner, billing,
     // trial, plan, limits, and every other internal field in `barbers/{id}`.
@@ -281,48 +664,61 @@ service cloud.firestore {
       return request.resource.data.slug == getAfter(/databases/$(database)/documents/barbers/$(barberId)).data.slug;
     }
 
-    function validBrandingAssetPath(barberId, slot, path) {
-      return path is string && path.matches('^barbers/' + barberId + '/branding/' + slot + '/assets/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)$');
+    // Presentation-only saves do not change the immutable public slug or the
+    // operational mirror. Avoid a cross-document `getAfter` evaluation for
+    // those writes, while retaining the after-state parity check whenever
+    // either protected public field changes.
+    function publicBusinessSlugUnchangedOrMatchesRootAfter(barberId) {
+      return request.resource.data.slug == resource.data.slug ||
+        publicBusinessSlugMatchesRoot(barberId);
     }
 
-    function validBrandingMetadata(barberId) {
-      return request.resource.data.keys().hasOnly(['logoStoragePath', 'coverStoragePath', 'pendingImageCleanupPaths', 'updatedAt']) &&
-        (!request.resource.data.keys().hasAny(['logoStoragePath']) || validBrandingAssetPath(barberId, 'logo', request.resource.data.logoStoragePath)) &&
-        (!request.resource.data.keys().hasAny(['coverStoragePath']) || validBrandingAssetPath(barberId, 'cover', request.resource.data.coverStoragePath)) &&
-        (!request.resource.data.keys().hasAny(['pendingImageCleanupPaths']) || request.resource.data.pendingImageCleanupPaths is list);
+    function publicOperationalStateUnchangedOrMatchesRootAfter(barberId) {
+      return (request.resource.data.active == resource.data.active &&
+          ((!request.resource.data.keys().hasAny(['bookingEnabledUntil']) &&
+              !resource.data.keys().hasAny(['bookingEnabledUntil'])) ||
+            (request.resource.data.keys().hasAll(['bookingEnabledUntil']) &&
+              resource.data.keys().hasAll(['bookingEnabledUntil']) &&
+              request.resource.data.bookingEnabledUntil == resource.data.bookingEnabledUntil))) ||
+        publicOperationalStateMatchesRootAfter(barberId);
     }
 
     function validPublicBusiness() {
       return request.resource.data.keys().hasAll(['name', 'slug', 'businessType', 'active', 'config', 'workingHours']) &&
-        request.resource.data.keys().hasOnly(['name', 'slug', 'businessType', 'active', 'config', 'workingHours']) &&
+        request.resource.data.keys().hasOnly(['name', 'slug', 'businessType', 'active', 'bookingEnabledUntil', 'config', 'workingHours']) &&
         request.resource.data.name is string && request.resource.data.slug is string &&
         request.resource.data.businessType is string && request.resource.data.active is bool &&
+        (!request.resource.data.keys().hasAny(['bookingEnabledUntil']) || request.resource.data.bookingEnabledUntil is timestamp) &&
         request.resource.data.config is map && request.resource.data.config.keys().hasAll(['address', 'phone']) &&
         request.resource.data.config.keys().hasOnly(['address', 'phone', 'logoUrl', 'coverUrl', 'placeUrl', 'location', 'socialLinks', 'theme', 'booking']) &&
+        (!request.resource.data.config.keys().hasAny(['booking']) || validPublicBookingSettings(request.resource.data.config.booking)) &&
         (!request.resource.data.config.keys().hasAny(['placeUrl']) || validGoogleMapsUrl(request.resource.data.config.placeUrl)) &&
         (!request.resource.data.config.keys().hasAny(['location']) || validBusinessLocation(request.resource.data.config.location)) &&
         validWorkingHours(request.resource.data.workingHours);
     }
 
-    // Browser bookings are deliberately an optimistic, client-only flow. Rules
-    // validate record shape and the primary lock linkage, but cannot prove a
-    // client supplied every interval lock or the complete scheduling policy.
-    // This is not server-authoritative protection against malicious clients.
+    // Browser booking writes are denied below. The callable function is the
+    // authoritative boundary for schedule policy, source-product membership,
+    // and every deterministic lock. These checks protect privileged writers.
     function validPublicAppointment(barberId, appointmentId) {
       return request.resource.data.keys().hasAll([
-          'clientName', 'clientPhone', 'barberId', 'serviceId', 'extraServices',
+          'clientName', 'clientPhone', 'serviceId', 'extraServices',
           'bookingDate', 'startTime', 'endTime', 'occupiedIntervalIds',
           'primaryLockId', 'status', 'createdAt'
         ]) &&
         request.resource.data.keys().hasOnly([
           'clientName', 'clientPhone', 'barberId', 'serviceId', 'extraServices',
           'bookingDate', 'startTime', 'endTime', 'occupiedIntervalIds',
-          'primaryLockId', 'status', 'notes', 'customerUid', 'createdAt'
+          'primaryLockId', 'status', 'notes', 'customerUid', 'createdAt', 'assignmentState', 'capacityStaffId',
+           'clientEmail', 'clientAddress', 'bookingPrivacyConsent', 'requestedProducts'
         ]) &&
         request.resource.data.clientName is string && request.resource.data.clientName.size() > 0 && request.resource.data.clientName.size() <= 120 &&
         request.resource.data.clientPhone is string && request.resource.data.clientPhone.size() > 0 && request.resource.data.clientPhone.size() <= 40 &&
+        validRequestedAppointmentField('clientEmail', publicCustomerFieldState(barberId, 'email'), 254) &&
+        validRequestedAppointmentField('clientAddress', publicCustomerFieldState(barberId, 'address'), 240) &&
+        validPublicBookingPrivacyConsent(barberId) &&
+        validRequestedProducts(barberId) &&
         (!request.resource.data.keys().hasAll(['notes']) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 500)) &&
-        request.resource.data.barberId is string && request.resource.data.barberId.size() > 0 &&
         request.resource.data.serviceId is string && request.resource.data.serviceId.size() > 0 &&
         request.resource.data.extraServices is list && request.resource.data.extraServices.size() == 0 &&
         request.resource.data.bookingDate is string && request.resource.data.bookingDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
@@ -333,7 +729,16 @@ service cloud.firestore {
         request.resource.data.status == 'pending' && request.resource.data.createdAt == request.time &&
         (!request.resource.data.keys().hasAll(['customerUid']) ||
           (isSignedIn() && request.resource.data.customerUid is string && request.resource.data.customerUid == request.auth.uid)) &&
-        getAfter(/databases/$(database)/documents/barbers/$(barberId)/bookingLocks/$(request.resource.data.bookingDate)/staff/$(request.resource.data.barberId)/intervals/$(request.resource.data.primaryLockId)).data.appointmentId == appointmentId;
+        (
+          (!request.resource.data.keys().hasAny(['assignmentState', 'capacityStaffId']) &&
+            request.resource.data.barberId is string && request.resource.data.barberId.size() > 0 &&
+            getAfter(/databases/$(database)/documents/barbers/$(barberId)/bookingLocks/$(request.resource.data.bookingDate)/staff/$(request.resource.data.barberId)/intervals/$(request.resource.data.primaryLockId)).data.appointmentId == appointmentId) ||
+          (request.resource.data.keys().hasAll(['assignmentState', 'capacityStaffId']) &&
+            request.resource.data.assignmentState == 'unassigned' &&
+            request.resource.data.capacityStaffId is string && request.resource.data.capacityStaffId.size() > 0 &&
+            !request.resource.data.keys().hasAny(['barberId']) &&
+            getAfter(/databases/$(database)/documents/barbers/$(barberId)/bookingLocks/$(request.resource.data.bookingDate)/staff/$(request.resource.data.capacityStaffId)/intervals/$(request.resource.data.primaryLockId)).data.appointmentId == appointmentId)
+        );
     }
 
     function validPublicBookingLock(barberId, bookingDate, staffId, intervalId) {
@@ -345,8 +750,73 @@ service cloud.firestore {
         request.resource.data.startTime is string && request.resource.data.startTime.matches('^[0-2][0-9]:[0-5][0-9]$') &&
         request.resource.data.endTime is string && request.resource.data.endTime.matches('^[0-2][0-9]:[0-5][0-9]$') &&
         request.resource.data.createdAt == request.time &&
-        appointment.data.barberId == staffId && appointment.data.bookingDate == bookingDate &&
+        ((appointment.data.keys().hasAll(['assignmentState', 'capacityStaffId']) &&
+            appointment.data.assignmentState == 'unassigned' && appointment.data.capacityStaffId == staffId) ||
+          (!appointment.data.keys().hasAll(['assignmentState']) && appointment.data.barberId == staffId)) &&
+        appointment.data.bookingDate == bookingDate &&
         appointment.data.occupiedIntervalIds.hasAny([intervalId]);
+    }
+
+    function serviceAllowsStaff(barberId, serviceId, staffId) {
+      let serviceDoc = get(/databases/$(database)/documents/barbers/$(barberId)/services/$(serviceId));
+      return serviceDoc.data.active == true &&
+        (!serviceDoc.data.keys().hasAll(['staffIds']) || serviceDoc.data.staffIds.hasAny([staffId]));
+    }
+
+    // A claim has one allowed direction: an authenticated active Staff member
+    // assigns an unassigned pending appointment to their own staff profile.
+    function staffCanClaimUnassignedAppointment(barberId) {
+      let staffId = currentUserDoc().data.staffId;
+      return isOperationalBusinessStaff(barberId) && resource.data.keys().hasAll(['assignmentState', 'capacityStaffId']) && resource.data.assignmentState == 'unassigned' &&
+        resource.data.capacityStaffId is string && resource.data.status in ['pending', 'confirmed'] &&
+        request.resource.data.assignmentState == 'assigned' && request.resource.data.barberId == staffId &&
+        !request.resource.data.keys().hasAny(['capacityStaffId']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assignmentState', 'barberId', 'capacityStaffId', 'updatedAt']) &&
+        request.resource.data.updatedAt == request.time && serviceAllowsStaff(barberId, resource.data.serviceId, staffId);
+    }
+
+    // Capacity locks are moved only in the same claim transaction. They never
+    // contain client data, and the capacity identity is never projected public.
+    function validClaimLockCreate(barberId, bookingDate, staffId, intervalId) {
+      let appointmentBefore = get(/databases/$(database)/documents/barbers/$(barberId)/appointments/$(request.resource.data.appointmentId));
+      let appointmentAfter = getAfter(/databases/$(database)/documents/barbers/$(barberId)/appointments/$(request.resource.data.appointmentId));
+      return isOperationalBusinessStaff(barberId) && currentUserDoc().data.staffId == staffId &&
+        request.resource.data.keys().hasOnly(['appointmentId', 'bookingDate', 'staffId', 'intervalId', 'startTime', 'endTime', 'createdAt']) &&
+        request.resource.data.appointmentId is string && request.resource.data.bookingDate == bookingDate &&
+        request.resource.data.staffId == staffId && request.resource.data.intervalId == intervalId && request.resource.data.createdAt == request.time &&
+        appointmentBefore.data.assignmentState == 'unassigned' && appointmentAfter.data.assignmentState == 'assigned' &&
+        appointmentAfter.data.barberId == staffId && appointmentAfter.data.occupiedIntervalIds.hasAny([intervalId]);
+    }
+
+    function validClaimLockDelete(barberId, bookingDate, staffId, intervalId) {
+      let appointmentBefore = get(/databases/$(database)/documents/barbers/$(barberId)/appointments/$(resource.data.appointmentId));
+      let appointmentAfter = getAfter(/databases/$(database)/documents/barbers/$(barberId)/appointments/$(resource.data.appointmentId));
+      return isOperationalBusinessStaff(barberId) && currentUserDoc().data.staffId == appointmentAfter.data.barberId &&
+        resource.data.bookingDate == bookingDate && resource.data.staffId == staffId && resource.data.intervalId == intervalId &&
+        appointmentBefore.data.assignmentState == 'unassigned' && appointmentBefore.data.capacityStaffId == staffId &&
+        appointmentAfter.data.assignmentState == 'assigned' && appointmentAfter.data.occupiedIntervalIds.hasAny([intervalId]);
+    }
+
+    function validOptionalContentDescription() {
+      return !request.resource.data.keys().hasAny(['description']) ||
+        (request.resource.data.description is string && request.resource.data.description.size() <= 500);
+    }
+
+    function validInitialLegalConsent() {
+      return request.resource.data.keys().hasAll(['legalConsent']) &&
+        request.resource.data.legalConsent is map &&
+        request.resource.data.legalConsent.keys().hasAll(['version', 'acceptedAt']) &&
+        request.resource.data.legalConsent.keys().hasOnly(['version', 'acceptedAt']) &&
+        request.resource.data.legalConsent.version == '2026-07-31' &&
+        request.resource.data.legalConsent.acceptedAt == request.time;
+    }
+
+    function legalConsentUnchangedOrAbsentOnLegacyProfile() {
+      return (!resource.data.keys().hasAll(['legalConsent']) &&
+          (!request.resource.data.keys().hasAll(['legalConsent']) || validInitialLegalConsent())) ||
+        (resource.data.keys().hasAll(['legalConsent']) &&
+          request.resource.data.keys().hasAll(['legalConsent']) &&
+          request.resource.data.legalConsent == resource.data.legalConsent);
     }
 
     // Users collection
@@ -356,103 +826,107 @@ service cloud.firestore {
 
       // Registro inicial: cada usuario solo puede crearse como customer.
       allow create: if isSignedIn() && request.auth.uid == uid &&
-                       request.resource.data.role == 'customer';
+        request.resource.data.role == 'customer' && validInitialLegalConsent();
 
       // Superadmin puede cambiar roles y vínculos de negocio/personal.
       // Usuario normal puede actualizar perfil, pero no role ni vínculos.
       // A Superadmin may manage other accounts, but cannot alter their own
       // global role through a business-creation transaction or direct update.
-      allow update: if (isSuperAdmin() &&
+      allow update: if legalConsentUnchangedOrAbsentOnLegacyProfile() && ((isSuperAdmin() &&
                           (request.auth.uid != uid ||
                             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))) ||
                             validDirectEnrollmentUserUpdate(uid) || validEnrollmentProofRemoval(uid) ||
-                            validStoreadminSelfProfileLink(uid) || validProfessionalRetirementUser(uid) || validStoreadminProfessionalUnlink(uid) ||
+                            validStoreadminOwnProfileLink(uid) || validProfessionalRetirementUser(uid) || validStoreadminProfessionalUnlink() ||
                             (isSignedIn() && request.auth.uid == uid &&
-                              !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'barberId', 'businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode']));
+                              !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'businessIds', 'staffId', 'professionalBusinessId', 'enrollmentCode'])));
 
       allow delete: if isSuperAdmin();
     }
 
     // Root businesses contain owner and billing data. They are never public.
     match /barbers/{barberId} {
-      allow read, delete: if isSuperAdmin();
+      allow read: if isSuperAdmin();
+      allow delete: if isSuperAdmin() && publicProjectionRemovedAfterRootDelete(barberId);
       // `ownerId` is descriptive metadata, never an authorization grant. A
       // created or reassigned owner must also be a Storeadmin member.
-      allow create: if isSuperAdmin() && validBusinessOwnerAssignment(barberId) && validWorkingHours(request.resource.data.workingHours);
+      allow create: if isSuperAdmin() && validBusinessOwnerAssignment(barberId) &&
+        validWorkingHours(request.resource.data.workingHours) && publicOperationalStateMatchesRootAfter(barberId);
       
       // Root records include subscription and platform fields, so only platform
       // administrators can read them. Scoped clients may still update the
       // strictly allowlisted operational fields below.
-      allow update: if (isSuperAdmin() && ownerAssignmentUnchangedOrValid(barberId) && businessWorkingHoursUnchangedOrValid()) ||
-        (isBusinessAdmin(barberId) && businessAdminCanUpdateBusiness());
+      allow update: if ((isSuperAdmin() && ownerAssignmentUnchangedOrValid(barberId) && businessWorkingHoursUnchangedOrValid() && businessBookingSettingsUnchangedOrValid()) ||
+        (isOperationalBusinessAdmin(barberId) && businessAdminCanUpdateBusiness())) &&
+        operationalFieldsUnchangedOrPublicProjectionSynced(barberId);
       
       // Subcolecciones
       match /services/{serviceId} {
-        // Public queries must constrain active == true; legacy services are
-        // migrated explicitly before these rules are deployed.
-        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isBusinessStaff(barberId) ||
-          (businessIsActive(barberId) && resource.data.active == true);
+        // Public booking services are allowlisted by getPublicBusinessBySlug.
+        // Browser reads stay scoped to authenticated operators.
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isBusinessStaff(barberId);
         // Escritura solo para admin de la barbería o super admin
-        allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
+        allow write: if isSuperAdmin() || isOperationalBusinessAdmin(barberId);
       }
 
       match /barbers/{staffId} {
-        // Lectura pública de barberos disponibles
+        // Public booking professionals are allowlisted by
+        // getPublicBusinessBySlug. Preserve existing private role access.
         allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isAssignedStaff(barberId, staffId) ||
-          hasOwnStaffProfileBinding(barberId, staffId) ||
-          (businessIsActive(barberId) && resource.data.active == true);
-        allow create: if validDirectEnrollmentStaffCreate(barberId, staffId) ||
-          ((isSuperAdmin() || isBusinessAdmin(barberId)) && !request.resource.data.keys().hasAny(['accountUid', 'accountStatus']));
+          hasOwnStaffProfileBinding(barberId, staffId);
+        allow create: if (businessIsActive(barberId) && validDirectEnrollmentStaffCreate(barberId, staffId)) ||
+          (businessIsActive(barberId) && validStoreadminOwnProfileCreate(barberId, staffId));
         allow delete: if false;
-        allow update: if isSuperAdmin() || validStoreadminSelfProfileLinkProfile(barberId, staffId) ||
-          staffAdminCanUpdateStaffRecord(barberId, staffId) || staffCanUpdateOwnSchedule(barberId, staffId);
+        allow update: if isSuperAdmin() || businessAdminCanUpdateStaffSchedule(barberId) ||
+          (businessIsActive(barberId) && (ownProfessionalProfileCanUpdate(barberId, staffId) ||
+            staffAdminCanUpdateStaffRecord(barberId, staffId) ||
+            validRetiredProfessionalPhotoCleanup(barberId) || staffCanUpdateOwnSchedule(barberId, staffId)));
       }
 
       match /staffControl/enrollment {
         // The current code is visible only to the business administrator who can rotate it.
-        allow read, write: if isSuperAdmin() || isBusinessAdmin(barberId);
-      }
-
-      // Private replacement metadata lets Storeadmins clean up immutable branding
-      // assets without ever exposing Storage paths through the public projection.
-      match /brandingMetadata/assets {
         allow read: if isSuperAdmin() || isBusinessAdmin(barberId);
-        allow create, update: if (isSuperAdmin() || isBusinessAdmin(barberId)) && validBrandingMetadata(barberId);
-        allow delete: if false;
+        allow write: if isSuperAdmin() || isOperationalBusinessAdmin(barberId);
       }
 
-      match /appointments/{appointmentId} {
+       match /appointments/{appointmentId} {
         // Appointments contain PII and are never publicly readable. A public
         // client may only create the strict pending shape linked to a lock.
-        allow create: if isSuperAdmin() || isBusinessAdmin(barberId) ||
-          (businessIsActive(barberId) && validPublicAppointment(barberId, appointmentId));
-        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isAssignedStaff(barberId, resource.data.barberId);
-        allow update: if isSuperAdmin() || isBusinessAdmin(barberId) || staffCanUpdateAssignedAppointment(barberId);
-        allow delete: if isSuperAdmin() || isBusinessAdmin(barberId);
+         allow create: if isSuperAdmin() || isOperationalBusinessAdmin(barberId);
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) ||
+          (isOperationalBusinessStaff(barberId) &&
+            ((resource.data.keys().hasAll(['assignmentState']) && resource.data.assignmentState == 'unassigned') ||
+              (resource.data.keys().hasAll(['barberId']) && isAssignedStaff(barberId, resource.data.barberId))));
+        allow update: if isSuperAdmin() || (isOperationalBusinessAdmin(barberId) && bookingPrivacyConsentUnchanged()) ||
+          (isOperationalBusinessStaff(barberId) && (staffCanUpdateAssignedAppointment(barberId) || staffCanClaimUnassignedAppointment(barberId)));
+        allow delete: if isSuperAdmin() || isOperationalBusinessAdmin(barberId);
       }
 
-      match /bookingLocks/{bookingDate}/staff/{staffId}/intervals/{intervalId} {
+       match /bookingLocks/{bookingDate}/staff/{staffId}/intervals/{intervalId} {
         // Locks contain no PII. Public availability reads only these small,
         // predictable documents; appointments remain private.
         allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isBusinessStaff(barberId) || businessIsActive(barberId);
-        allow create: if isSuperAdmin() || isBusinessAdmin(barberId) ||
-          (businessIsActive(barberId) && validPublicBookingLock(barberId, bookingDate, staffId, intervalId));
-        allow update, delete: if isSuperAdmin() || isBusinessAdmin(barberId);
+         allow create: if isSuperAdmin() || isOperationalBusinessAdmin(barberId) ||
+           validClaimLockCreate(barberId, bookingDate, staffId, intervalId);
+        allow update: if isSuperAdmin() || isOperationalBusinessAdmin(barberId);
+        allow delete: if isSuperAdmin() || isOperationalBusinessAdmin(barberId) || validClaimLockDelete(barberId, bookingDate, staffId, intervalId);
       }
 
       match /catalog/{itemId} {
         // Lectura pública
         allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || businessIsActive(barberId);
         // Escritura solo para admin de la barbería o super admin
-        allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
+        allow create, update: if (isSuperAdmin() || isOperationalBusinessAdmin(barberId)) && validOptionalContentDescription();
+        allow delete: if isSuperAdmin() || isOperationalBusinessAdmin(barberId);
       }
 
       match /products/{productId} {
-        // Lectura pública de productos activos
-        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isBusinessStaff(barberId) ||
-          (businessIsActive(barberId) && resource.data.active == true);
+        // Public product data is returned only by getPublicBusinessBySlug,
+        // which validates the canonical business with server time and emits a
+        // strict DTO. Browser Firestore reads remain internal.
+        allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isBusinessStaff(barberId);
         // Escritura solo para admin de la barbería o super admin
-        allow write: if isSuperAdmin() || isBusinessAdmin(barberId);
+        allow create, update: if (isSuperAdmin() || isOperationalBusinessAdmin(barberId)) && validOptionalContentDescription();
+        allow delete: if isSuperAdmin() || isOperationalBusinessAdmin(barberId);
       }
     }
 
@@ -462,26 +936,27 @@ service cloud.firestore {
       allow list: if false;
       allow create: if isSuperAdmin() ||
         (request.resource.data.keys().hasOnly(['businessId', 'createdAt']) &&
-          isBusinessAdmin(request.resource.data.businessId) &&
+          isOperationalBusinessAdmin(request.resource.data.businessId) &&
           getAfter(/databases/$(database)/documents/barbers/$(request.resource.data.businessId)/staffControl/enrollment).data.code == code);
       allow delete: if isSuperAdmin() ||
-        (isBusinessAdmin(resource.data.businessId) &&
+        (isOperationalBusinessAdmin(resource.data.businessId) &&
           getAfter(/databases/$(database)/documents/barbers/$(resource.data.businessId)/staffControl/enrollment).data.code != code);
       allow update: if false;
     }
 
     match /publicBusinesses/{barberId} {
-      // Public pages can only read active, allowlisted projections.
-      // Public traffic still reads active projections only. Assigned internal
-      // users may fetch an exact inactive summary for their own selector.
-      allow read: if resource.data.active == true || isBusinessAdmin(barberId) || isBusinessStaff(barberId);
-      allow create: if isSuperAdmin() && validPublicBusiness() && publicBusinessSlugMatchesRoot(barberId);
-      allow delete: if isSuperAdmin();
+      // Public presentation now goes through getPublicBusinessBySlug. Keep
+      // this projection private to the business's authenticated operators.
+      allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isBusinessStaff(barberId);
+      allow create: if isSuperAdmin() && validPublicBusiness() && publicBusinessSlugMatchesRoot(barberId) &&
+        publicOperationalStateMatchesRootAfter(barberId);
+      allow delete: if isSuperAdmin() && getAfter(/databases/$(database)/documents/barbers/$(barberId)).data == null;
       // Business admins may synchronize public presentation and booking fields,
       // but cannot reactivate a business through the projection.
-      allow update: if validPublicBusiness() && publicBusinessSlugMatchesRoot(barberId) &&
-        (isSuperAdmin() || (isBusinessAdmin(barberId) &&
+      allow update: if validPublicBusiness() && publicBusinessSlugUnchangedOrMatchesRootAfter(barberId) && publicOperationalStateUnchangedOrMatchesRootAfter(barberId) &&
+        (isSuperAdmin() || (isOperationalBusinessAdmin(barberId) &&
           request.resource.data.active == resource.data.active && request.resource.data.slug == resource.data.slug));
+
     }
 
     // Denegar acceso por defecto

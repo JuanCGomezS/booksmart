@@ -10,6 +10,7 @@ export type ContentRecord = CatalogItem | Product | Service | BarberStaff;
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+export const CONTENT_DESCRIPTION_MAX_LENGTH = 500;
 type MutationOptions = {
   recordId?: string;
   onUploadTask?: (task: UploadTask | null) => void;
@@ -20,6 +21,13 @@ export function validateContentImage(file: File) {
   if (!IMAGE_TYPES.has(file.type)) return 'Elegí una imagen JPEG, PNG o WebP.';
   if (file.size > MAX_IMAGE_BYTES) return 'La imagen no puede superar 5 MiB.';
   return '';
+}
+
+function validateOptionalDescription(collectionName: ContentCollection, data: Record<string, unknown>) {
+  if ((collectionName !== 'catalog' && collectionName !== 'products') || !Object.hasOwn(data, 'description')) return;
+  if (typeof data.description !== 'string' || data.description.length > CONTENT_DESCRIPTION_MAX_LENGTH) {
+    throw new Error(`La descripción no puede superar ${CONTENT_DESCRIPTION_MAX_LENGTH} caracteres.`);
+  }
 }
 
 function extensionFor(file: File): ContentImageExtension {
@@ -48,7 +56,9 @@ export function allocateContentRecordId(barberId: string, collectionName: Conten
 export async function getContentCollection<T extends ContentRecord>(barberId: string, collectionName: ContentCollection): Promise<T[]> {
   const snapshot = await getDocs(collection(db, 'barbers', barberId, collectionName));
   const records = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T));
-  await retryPendingContentCleanup(barberId, collectionName, records);
+  // Professional photos are only cleaned through the explicit retired-profile
+  // action. Loading staff must remain read-only and resilient to pending work.
+  if (collectionName !== 'barbers') await retryPendingContentCleanup(barberId, collectionName, records);
   return records;
 }
 
@@ -104,6 +114,7 @@ export async function createContentRecord(
   onProgress: (progress: number) => void,
   options: MutationOptions = {},
 ) {
+  validateOptionalDescription(collectionName, data);
   await retryPendingContentCleanupForMutation(barberId, collectionName);
   const recordRef = doc(db, 'barbers', barberId, collectionName, options.recordId || allocateContentRecordId(barberId, collectionName));
   let uploadedPath: string | undefined;
@@ -116,7 +127,8 @@ export async function createContentRecord(
       ? { photoUrl: uploadedImage.imageUrl, imageStoragePath: uploadedImage.imageStoragePath }
       : uploadedImage || {};
     uploadedPath = uploadedImage?.imageStoragePath;
-    await setDoc(recordRef, { ...data, ...imageData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    const recordData = { ...data, ...imageData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+    await setDoc(recordRef, recordData);
     clearPublicCache(barberId, collectionName);
     return recordRef.id;
   } catch (error) {
@@ -126,8 +138,10 @@ export async function createContentRecord(
 }
 
 export async function updateContentRecord(barberId: string, collectionName: ContentCollection, recordId: string, data: Record<string, unknown>) {
+  validateOptionalDescription(collectionName, data);
   await retryPendingContentCleanupForMutation(barberId, collectionName);
-  await updateDoc(doc(db, 'barbers', barberId, collectionName, recordId), { ...data, updatedAt: serverTimestamp() });
+  const recordRef = doc(db, 'barbers', barberId, collectionName, recordId);
+  await updateDoc(recordRef, { ...data, updatedAt: serverTimestamp() });
   clearPublicCache(barberId, collectionName);
 }
 
@@ -152,11 +166,12 @@ export async function replaceContentImage(
       const recordImage = imageField === 'photoUrl'
         ? { photoUrl: imageData.imageUrl, imageStoragePath: imageData.imageStoragePath }
         : imageData;
-      await updateDoc(recordRef, {
+      const recordUpdate = {
         ...recordImage,
         ...(pendingOldPath ? { pendingImageCleanupPaths: arrayUnion(pendingOldPath) } : {}),
         updatedAt: serverTimestamp(),
-      });
+      };
+      await updateDoc(recordRef, recordUpdate);
       clearPublicCache(barberId, collectionName);
     },
     deleteOld: (path) => deleteStorageObject(path),

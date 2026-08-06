@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getUserRecord, signIn, signOut, signUpClient } from '../../lib/auth';
+import { getUserRecord, LEGAL_CONSENT_VERSION, signIn, signOut, signUpClient } from '../../lib/auth';
 import { normalizeUserRole } from '../../lib/roles';
 import { getSafeReturnTo } from '../../lib/return-to';
 import { notifyError } from './FloatingNotifications';
@@ -34,6 +34,10 @@ function authenticationErrorMessage(error: unknown, mode: 'login' | 'register'):
       return 'Se bloquearon temporalmente los intentos de acceso. Espera unos minutos antes de intentarlo nuevamente.';
     case 'auth/operation-not-allowed':
       return 'Esta operación no está disponible en este momento. Inténtalo más tarde.';
+    case 'registration/profile-creation-reverted':
+      return 'No pudimos configurar tu perfil y cancelamos la creación de la cuenta. Verifica tu conexión e inténtalo nuevamente.';
+    case 'registration/profile-creation-recovery-failed':
+      return 'No pudimos configurar tu perfil ni revertir por completo la cuenta. No intentes registrarte otra vez: inicia sesión o contacta al soporte para revisar el acceso.';
     default:
       return mode === 'login'
         ? 'No fue posible iniciar sesión. Verifica tus datos e inténtalo nuevamente.'
@@ -66,7 +70,9 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
 
     try {
       if (mode === 'register') {
-        await signUpClient(name.trim(), email, password);
+        await signUpClient(name.trim(), email, password, {
+          version: LEGAL_CONSENT_VERSION,
+        });
         redirectCustomer();
         return;
       }
@@ -120,22 +126,40 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'register' && (
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-subtle mb-1">
-                  Nombre
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Tu nombre"
-                  required
-                  disabled={loading}
-                  className="w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--secondary)] disabled:opacity-50"
-                  style={{ border: '1px solid var(--border)', background: 'var(--surface-soft)', color: 'var(--text-primary)' }}
-                />
-              </div>
+              <>
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-subtle mb-1">
+                    Nombre
+                  </label>
+                  <input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Tu nombre"
+                    required
+                    disabled={loading}
+                    className="w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--secondary)] disabled:opacity-50"
+                    style={{ border: '1px solid var(--border)', background: 'var(--surface-soft)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+
+                <div className="terms-consent flex items-start gap-3 rounded-lg border p-3 text-sm text-subtle" style={{ borderColor: 'var(--border)', background: 'var(--surface-soft)' }}>
+                  <input
+                    id="legal-consent"
+                    type="checkbox"
+                    required
+                    disabled={loading}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--secondary)]"
+                  />
+                  <p className="leading-5">
+                    <label htmlFor="legal-consent">Acepto los términos, el tratamiento de datos personales y el aviso de privacidad.</label>{' '}
+                    <a href={`${baseUrl}terminos-de-uso`} className="font-semibold underline underline-offset-2">Términos de uso</a>,{' '}
+                    <a href={`${baseUrl}tratamiento-de-datos`} className="font-semibold underline underline-offset-2">tratamiento de datos personales</a>{' '}y{' '}
+                    <a href={`${baseUrl}privacidad`} className="font-semibold underline underline-offset-2">aviso de privacidad</a>.
+                  </p>
+                </div>
+              </>
             )}
 
             <div>
@@ -192,7 +216,7 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
           </button>
 
           <p className="mt-3 text-center text-xs text-subtle">
-            Las personas pueden reservar desde la página pública sin iniciar sesión.
+            Las personas pueden agendar desde la página pública sin iniciar sesión.
           </p>
         </div>
       </div>

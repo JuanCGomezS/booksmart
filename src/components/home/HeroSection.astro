@@ -2,30 +2,47 @@
 const heroDashboardImage = `${import.meta.env.BASE_URL}images/hero-dashboard.png`;
 ---
 
-<section id="inicio" class="landing-refinement section-shell overflow-hidden px-4 pb-16 pt-10 sm:px-6 lg:px-8 lg:pb-24">
-  <div class="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[.92fr_1.08fr] lg:items-end">
+<section
+  id="inicio"
+  class="landing-refinement section-shell overflow-hidden px-4 pb-16 pt-10 sm:px-6 lg:px-8 lg:pb-24"
+>
+  <div
+    class="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[.92fr_1.08fr] lg:items-center"
+  >
     <div class="pt-4 lg:pb-8">
-      <p class="press-kicker shell-fg">BookSmart / hoja de operación</p>
-      <h1 class="press-display shell-fg mt-5 max-w-2xl text-[clamp(3.2rem,8vw,6.4rem)]">
+      <h1
+        class="press-display shell-fg mt-5 max-w-2xl text-[clamp(3.2rem,8vw,6.4rem)]"
+      >
         Agenda. <span class="text-[var(--secondary)]">Controla.</span> Crece.
       </h1>
-      <p class="shell-fg-muted mt-6 max-w-xl text-base leading-relaxed sm:text-lg">
-        Gestiona citas, servicios, equipo y clientes desde un solo lugar. Ideal para barberías, salones, estudios de uñas, clínicas dentales y otros negocios por cita.
+      <p
+        class="shell-fg-muted mt-6 max-w-xl text-base leading-relaxed sm:text-lg"
+      >
+        Gestiona solicitudes, servicios, productos, equipo y clientes desde un solo
+        lugar. Ideal para barberías, salones, estudios de uñas, clínicas
+        dentales y otros negocios.
       </p>
       <div class="mt-8 flex flex-col gap-4 sm:flex-row">
-        <a href="#pricing" class="btn-primary px-6 py-3 text-base">Probar 1 mes gratis <span aria-hidden="true" class="ml-2">↗</span></a>
-        <a href="#features" class="btn-outline shell-fg px-6 py-3 text-base">Ver lo que ofrecemos</a>
+        <a href="https://wa.me/3013971483" target="_blank" class="btn-primary px-6 py-3 text-base"
+          >Probar mes gratis <span aria-hidden="true" class="ml-2">↗</span></a
+        >
+        <a href="#features" class="btn-outline shell-fg px-6 py-3 text-base"
+          >Lo que ofrecemos</a
+        >
       </div>
-      <div class="mt-10 grid max-w-xl grid-cols-2 gap-3" aria-label="Indicadores pendientes de validar">
+      <div
+        class="mt-10 grid max-w-xl grid-cols-2 gap-3"
+        aria-label="Indicadores pendientes de validar"
+      >
         <div class="press-surface p-4">
-          <p class="press-label text-[var(--press-accent)]">Pendiente de validar</p>
           <p class="mt-3 text-3xl font-black">+35%</p>
-          <p class="press-surface-muted mt-1 text-sm">más reservas online</p>
+          <p class="press-surface-muted mt-1 text-sm">más solicitudes en línea</p>
         </div>
         <div class="press-surface p-4">
-          <p class="press-label text-[var(--press-accent)]">Pendiente de validar</p>
           <p class="mt-3 text-3xl font-black">-40%</p>
-          <p class="press-surface-muted mt-1 text-sm">menos tiempo administrativo</p>
+          <p class="press-surface-muted mt-1 text-sm">
+            menos tiempo administrativo
+          </p>
         </div>
       </div>
     </div>
@@ -33,25 +50,59 @@ const heroDashboardImage = `${import.meta.env.BASE_URL}images/hero-dashboard.png
     <div class="grid gap-4">
       <article class="capability-frame registration-mark p-5 sm:col-span-2">
         <div class="flex items-start justify-between gap-4">
-          <div><p class="press-label text-[var(--press-accent)]">01 / reservas</p><h2 class="mt-3 text-2xl font-black">La cita encuentra su lugar.</h2></div>
-          <span class="border border-[var(--secondary)] px-2 py-1 text-xs font-bold">PÚBLICO</span>
+          <div>
+            <p class="press-label text-[var(--press-accent)]">
+              01 / agendamiento
+            </p><h2 class="mt-3 text-2xl font-black">
+              Cada solicitud encuentra su lugar.
+            </h2>
+          </div>
+          <span
+            class="border border-[var(--secondary)] px-2 py-1 text-xs font-bold"
+            >PÚBLICO</span
+          >
         </div>
-        <div class="mt-6 grid grid-cols-3 gap-2 text-xs font-bold text-[var(--text-primary)]">
-          <span class="bg-[var(--press-paper)] p-3">SERVICIO</span><span class="bg-[var(--press-paper-muted)] p-3">HORA</span><span class="bg-[var(--press-paper)] p-3">DATOS</span>
+        <div
+          class="mt-6 grid grid-cols-3 gap-2 text-xs font-bold text-[var(--text-primary)]"
+        >
+          <span class="bg-[var(--press-paper)] p-3">SERVICIO</span><span
+            class="bg-[var(--press-paper-muted)] p-3">HORA</span
+          ><span class="bg-[var(--press-paper)] p-3">DATOS</span>
         </div>
       </article>
       <article class="capability-frame p-5">
         <p class="press-label text-[var(--press-accent)]">02 / agenda</p>
-        <div class="mt-5 space-y-2 text-sm"><p class="flex justify-between border-b border-[var(--press-border)] pb-2"><span>10:00 · Corte</span><strong>Confirmada</strong></p><p class="flex justify-between border-b border-[var(--press-border)] pb-2"><span>11:30 · Color</span><strong>Pendiente</strong></p><p class="flex justify-between"><span>14:00 · Consulta</span><strong>Realizada</strong></p></div>
+        <div class="mt-5 space-y-2 text-sm">
+          <p
+            class="flex justify-between border-b border-[var(--press-border)] pb-2"
+          >
+            <span>10:00 · Corte</span><strong>Confirmada</strong>
+          </p><p
+            class="flex justify-between border-b border-[var(--press-border)] pb-2"
+          >
+            <span>11:30 · Color</span><strong>Pendiente</strong>
+          </p><p class="flex justify-between">
+            <span>14:00 · Consulta</span><strong>Realizada</strong>
+          </p>
+        </div>
       </article>
       <article class="capability-frame p-5">
-        <p class="press-label text-[var(--press-accent)]">03 / equipo y acceso</p>
-        <div class="mt-5 space-y-3 text-sm"><p class="border-l border-[var(--secondary)] pl-3"><strong>Superadmin</strong><br /><span class="press-surface-muted">negocios y permisos</span></p><p class="border-l border-[var(--accent)] pl-3"><strong>Storeadmin</strong><br /><span class="press-surface-muted">operación del negocio</span></p><p class="border-l border-[var(--press-border)] pl-3"><strong>Staff</strong><br /><span class="press-surface-muted">agenda propia</span></p></div>
+        <p class="press-label text-[var(--press-accent)]">
+          03 / equipo y acceso
+        </p>
+        <div class="mt-5 space-y-3 text-sm">
+          <p class="border-l border-[var(--accent)] pl-3">
+            <strong>Administrador</strong><br /><span class="press-surface-muted"
+              >operación del negocio</span>
+          </p><p class="border-l border-[var(--press-border)] pl-3">
+            <strong>Personal</strong><br /><span class="press-surface-muted"
+              >agenda propia</span>
+          </p><p class="border-l border-[var(--secondary)] pl-3">
+            <strong>Clientes</strong><br /><span class="press-surface-muted"
+              >agendamiento</span>
+          </p>
+        </div>
       </article>
-      <!-- <figure class="press-panel sm:col-span-2 p-2">
-        <img src={heroDashboardImage} alt="Vista previa del panel de BookSmart con reservas y directorio de negocios" class="w-full border border-[var(--primary)]" loading="lazy" decoding="async" />
-        <figcaption class="flex items-center justify-between px-2 py-3 text-xs font-bold uppercase tracking-[.12em]"><span>Interfaz de operación</span><span>Edición / 01</span></figcaption>
-      </figure> -->
     </div>
   </div>
 </section>
