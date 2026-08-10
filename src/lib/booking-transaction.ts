@@ -305,7 +305,7 @@ export async function createClientBooking<Reference = DocumentReference>(
         ...(request.anyProfessional
           ? { assignmentState: 'unassigned', capacityStaffId: selected.staffId }
           : { barberId: selected.staffId }),
-        serviceId: request.serviceId, extraServices: [], bookingDate: request.bookingDate,
+        serviceId: request.serviceId, serviceName: service.name, extraServices: [], bookingDate: request.bookingDate,
         ...(productSelectionEnabled && request.requestedProducts?.length ? {
           requestedProducts: request.requestedProducts.map((product) => ({
             productId: product.productId,
@@ -410,6 +410,26 @@ export async function claimUnassignedAppointment(
       });
       return { ok: true };
     });
+  } catch (error) {
+    const result = errorResult(error);
+    return result.code === 'duplicate_phone_day'
+      ? { ok: false, code: 'conflict', message: BOOKING_CONFLICT_MESSAGE }
+      : { ok: false, code: result.code as Exclude<typeof result.code, 'duplicate_phone_day'>, message: result.message };
+  }
+}
+
+/** Confirms an offer reserved for the signed-in Storeadmin's own professional profile. */
+export async function claimStoreadminCapacityAppointment(
+  businessId: string,
+  appointmentId: string,
+): Promise<ClaimAppointmentResult> {
+  try {
+    const claim = httpsCallable<{ businessId: string; appointmentId: string }, void>(
+      getFunctions(app),
+      'claimStoreadminCapacityAppointment',
+    );
+    await claim({ businessId, appointmentId });
+    return { ok: true };
   } catch (error) {
     const result = errorResult(error);
     return result.code === 'duplicate_phone_day'

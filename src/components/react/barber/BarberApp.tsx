@@ -4,7 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { getBarberCatalog } from '../../../lib/barbers';
 import { getUserRecord, signOut } from '../../../lib/auth';
 import { auth, db } from '../../../lib/firebase';
-import { resolvePublicThemeId } from '../../../lib/public-theme';
+import { customThemeCssVariables, resolvePublicTheme } from '../../../lib/public-theme';
 import { normalizeUserRole } from '../../../lib/roles';
 import { isPublicBookingAvailable } from '../../../lib/booking';
 import { loadPublicBusinessBySlug } from '../../../lib/public-business';
@@ -133,7 +133,8 @@ export default function BarberApp() {
   if (error) return <PublicState title={error.title} description={error.description} action={error.retry ? 'Reintentar' : undefined} onAction={error.retry ? () => setReloadVersion((value) => value + 1) : undefined} />;
   if (!barberSlug || !barber) return <PublicState title="Negocio no encontrado" description="No encontramos un negocio activo para esta URL." />;
 
-  const themeId = resolvePublicThemeId(barber.config.theme?.id);
+  const theme = resolvePublicTheme(barber.config.theme);
+  const themeVariables = theme.customPalette ? customThemeCssVariables(theme.customPalette) : undefined;
   const address = barber.config.address?.trim();
   const phone = barber.config.phone?.trim();
   const telephoneUrl = getTelephoneUrl(phone);
@@ -143,7 +144,7 @@ export default function BarberApp() {
   const showTab = (next: BarberTab) => { setTab(next); window.requestAnimationFrame(() => document.getElementById('public-business-content')?.focus({ preventScroll: true })); };
   const publicHome = `${import.meta.env.BASE_URL}b/${encodeURIComponent(barberSlug)}`;
 
-  return <div className={`public-business public-booking-refinement public-theme-${themeId}`} data-public-theme={themeId}>
+  return <div className={`public-business public-booking-refinement public-theme-${theme.id}`} data-public-theme={theme.id} style={themeVariables}>
     <PublicBusinessHeader business={barber} homeUrl={publicHome} />
     <main className="public-business-shell">
       <section className={`public-business-hero ${barber.config.coverUrl && !coverFailed ? 'has-cover' : ''}`}>

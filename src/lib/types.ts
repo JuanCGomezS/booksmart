@@ -168,6 +168,7 @@ export interface Barber {
     };
     theme?: {
       id?: import('./public-theme').PublicThemeId;
+      palette?: import('./public-theme').CustomThemePalette;
       primaryColor?: string;
     };
     /** Optional until a business configures public booking. */
@@ -319,6 +320,8 @@ export interface Appointment {
   /** Private capacity holder for an unassigned appointment; never exposed publicly. */
   capacityStaffId?: string;
   serviceId: string;
+  /** Immutable display-name snapshot captured from the validated service at booking time. */
+  serviceName?: string;
   extraServices: string[];
   date: Timestamp;
   /** Colombia-local date used for bounded operational Agenda queries. */

@@ -4,8 +4,8 @@ import { db, storage } from './firebase';
 import { invalidatePublicBusinessCaches } from './barbers';
 import { isAlreadyMissingStorageObject } from './content-cleanup';
 import { normalizeBusinessCoordinates, PUBLIC_BUSINESSES_COLLECTION } from './public-business';
+import { themeForPersistence, type CustomThemePalette, type PublicThemeId } from './public-theme';
 import type { BusinessCoordinates, BusinessType } from './types';
-import type { PublicThemeId } from './public-theme';
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -24,9 +24,11 @@ type BusinessDetails = {
   facebook: string;
   whatsapp: string;
   publicThemeId: PublicThemeId;
+  customThemePalette: CustomThemePalette;
 };
 
 type BrandingFiles = Partial<Record<BrandingSlot, File | null>>;
+
 export function validateBusinessBrandingImage(file: File) {
   if (!IMAGE_TYPES.has(file.type)) return 'Elija una imagen JPEG, PNG o WebP.';
   if (file.size > MAX_IMAGE_BYTES) return 'La imagen no puede superar 5 MiB.';
@@ -89,7 +91,8 @@ export async function saveBusinessDetails(
   const barberRef = doc(db, 'barbers', barberId);
   const publicRef = doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId);
   const location = normalizeBusinessCoordinates(details.location);
-
+  const theme = themeForPersistence(details.publicThemeId, details.customThemePalette);
+  if (!theme.theme) throw new Error(theme.error || 'No se pudo validar el tema personalizado.');
   const uploaded: Partial<Record<BrandingSlot, { url: string; path: string }>> = {};
   try {
     for (const slot of ['logo', 'cover'] as BrandingSlot[]) {
@@ -108,26 +111,12 @@ export async function saveBusinessDetails(
       'config.socialLinks.instagram': valueOrDelete(details.instagram),
       'config.socialLinks.facebook': valueOrDelete(details.facebook),
       'config.socialLinks.whatsapp': valueOrDelete(details.whatsapp),
-      'config.theme.id': details.publicThemeId,
+      'config.theme': theme.theme,
       ...(uploaded.logo ? { 'config.logoUrl': uploaded.logo.url } : {}),
       ...(uploaded.cover ? { 'config.coverUrl': uploaded.cover.url } : {}),
-    };
-    const rootUpdates = {
-      name: details.name.trim(),
-      businessType: details.businessType,
-      'config.address': details.address.trim(),
-      'config.location': location || deleteField(),
-      'config.phone': details.phone.trim(),
-      'config.socialLinks.instagram': valueOrDelete(details.instagram),
-      'config.socialLinks.facebook': valueOrDelete(details.facebook),
-      'config.socialLinks.whatsapp': valueOrDelete(details.whatsapp),
-      'config.theme.id': details.publicThemeId,
-      ...(uploaded.logo ? { 'config.logoUrl': uploaded.logo.url } : {}),
-      ...(uploaded.cover ? { 'config.coverUrl': uploaded.cover.url } : {}),
-      updatedAt: serverTimestamp(),
     };
     const batch = writeBatch(db);
-    batch.update(barberRef, rootUpdates);
+    batch.update(barberRef, { ...publicUpdates, updatedAt: serverTimestamp() });
     batch.update(publicRef, publicUpdates);
     await batch.commit();
     invalidatePublicBusinessCaches(barberId);

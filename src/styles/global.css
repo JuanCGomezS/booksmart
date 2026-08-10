@@ -3301,6 +3301,10 @@ button.public-business-text-action {
   background: color-mix(in srgb, var(--secondary) 8%, var(--surface));
 }
 
+.public-theme-choice.is-selected {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--secondary) 52%, transparent);
+}
+
 .public-theme-choice strong,
 .public-theme-choice small {
   display: block;
@@ -3323,6 +3327,73 @@ button.public-business-text-action {
 
 .public-theme-swatches span {
   flex: 1;
+}
+
+.theme-color-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .25rem .75rem;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: .75rem;
+  background: color-mix(in srgb, var(--surface-soft) 56%, var(--surface));
+  padding: .875rem;
+  color: var(--text-primary);
+  font-size: .875rem;
+  font-weight: 700;
+}
+
+.theme-color-field input {
+  width: 2.75rem;
+  height: 2.25rem;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  background: var(--surface);
+  padding: .2rem;
+}
+
+.theme-color-inputs {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.theme-color-inputs .field-input {
+  width: 6.5rem;
+  min-width: 0;
+}
+
+.theme-color-field input:disabled {
+  cursor: not-allowed;
+}
+
+.theme-color-field small {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: .75rem;
+  font-weight: 500;
+}
+
+.custom-theme-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(calc(100dvw - 2rem), 42rem);
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  overflow: auto;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.custom-theme-dialog::backdrop {
+  background: color-mix(in srgb, #101114 58%, transparent);
+}
+
+.custom-theme-dialog-content {
+  width: 100%;
+  padding: 1.5rem;
 }
 
 .business-brand-image-picker {

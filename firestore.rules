@@ -642,6 +642,45 @@ service cloud.firestore {
         validBookingSettings(request.resource.data.config.booking);
     }
 
+    function validThemePalette(palette) {
+      return palette is map && palette.keys().hasAll(['background', 'surface', 'text', 'primary']) &&
+        palette.keys().hasOnly(['background', 'surface', 'text', 'primary']) &&
+        palette.background is string && palette.background.matches('^#[0-9A-Fa-f]{6}$') &&
+        palette.surface is string && palette.surface.matches('^#[0-9A-Fa-f]{6}$') &&
+        palette.text is string && palette.text.matches('^#[0-9A-Fa-f]{6}$') &&
+        palette.primary is string && palette.primary.matches('^#[0-9A-Fa-f]{6}$');
+    }
+
+    function validTheme(theme) {
+      return theme is map && ((theme.keys().hasOnly(['id']) && theme.id in [
+          'gold-night', 'royal-night', 'crimson-sun', 'violet-blush', 'teal-night', 'sunset-cream', 'orchid-rose'
+        ]) || (theme.keys().hasOnly(['id', 'palette']) && theme.id == 'custom' && validThemePalette(theme.palette)) ||
+        (theme.keys().hasOnly(['primaryColor']) && theme.primaryColor is string && theme.primaryColor.matches('^#[0-9A-Fa-f]{6}$')));
+    }
+
+    function themesEqual(first, second) {
+      return (!first.keys().hasAny(['theme']) && !second.keys().hasAny(['theme'])) ||
+        (first.keys().hasAll(['theme']) && second.keys().hasAll(['theme']) && first.theme == second.theme);
+    }
+
+    function businessThemeUnchangedOrValid() {
+      return themesEqual(request.resource.data.config, resource.data.config) ||
+        (request.resource.data.config.keys().hasAll(['theme']) && validTheme(request.resource.data.config.theme));
+    }
+
+    function rootThemeUnchangedOrPublicProjectionSynced(barberId) {
+      let publicConfig = getAfter(/databases/$(database)/documents/publicBusinesses/$(barberId)).data.config;
+      return themesEqual(request.resource.data.config, resource.data.config) ||
+        (request.resource.data.config.keys().hasAll(['theme']) && publicConfig.keys().hasAll(['theme']) &&
+          publicConfig.theme == request.resource.data.config.theme);
+    }
+
+    function rootThemeValidAndMatchesPublicAfter(barberId) {
+      let publicConfig = getAfter(/databases/$(database)/documents/publicBusinesses/$(barberId)).data.config;
+      return (!request.resource.data.config.keys().hasAny(['theme']) || validTheme(request.resource.data.config.theme)) &&
+        themesEqual(request.resource.data.config, publicConfig);
+    }
+
     // This projection is the sole anonymous source for business presentation
     // and booking policy. Its allowlist deliberately excludes owner, billing,
     // trial, plan, limits, and every other internal field in `barbers/{id}`.
@@ -681,6 +720,24 @@ service cloud.firestore {
               resource.data.keys().hasAll(['bookingEnabledUntil']) &&
               request.resource.data.bookingEnabledUntil == resource.data.bookingEnabledUntil))) ||
         publicOperationalStateMatchesRootAfter(barberId);
+    }
+
+    function publicThemeUnchangedOrValid() {
+      return themesEqual(request.resource.data.config, resource.data.config) ||
+        (request.resource.data.config.keys().hasAll(['theme']) && validTheme(request.resource.data.config.theme));
+    }
+
+    function publicThemeUnchangedOrMatchesRootAfter(barberId) {
+      let rootConfig = getAfter(/databases/$(database)/documents/barbers/$(barberId)).data.config;
+      return themesEqual(request.resource.data.config, resource.data.config) ||
+        (request.resource.data.config.keys().hasAll(['theme']) && rootConfig.keys().hasAll(['theme']) &&
+          rootConfig.theme == request.resource.data.config.theme);
+    }
+
+    function publicThemeValidAndMatchesRootAfter(barberId) {
+      let rootConfig = getAfter(/databases/$(database)/documents/barbers/$(barberId)).data.config;
+      return (!request.resource.data.config.keys().hasAny(['theme']) || validTheme(request.resource.data.config.theme)) &&
+        themesEqual(request.resource.data.config, rootConfig);
     }
 
     function validPublicBusiness() {
@@ -850,14 +907,16 @@ service cloud.firestore {
       // `ownerId` is descriptive metadata, never an authorization grant. A
       // created or reassigned owner must also be a Storeadmin member.
       allow create: if isSuperAdmin() && validBusinessOwnerAssignment(barberId) &&
-        validWorkingHours(request.resource.data.workingHours) && publicOperationalStateMatchesRootAfter(barberId);
+        validWorkingHours(request.resource.data.workingHours) && publicOperationalStateMatchesRootAfter(barberId) &&
+        rootThemeValidAndMatchesPublicAfter(barberId);
       
       // Root records include subscription and platform fields, so only platform
       // administrators can read them. Scoped clients may still update the
       // strictly allowlisted operational fields below.
       allow update: if ((isSuperAdmin() && ownerAssignmentUnchangedOrValid(barberId) && businessWorkingHoursUnchangedOrValid() && businessBookingSettingsUnchangedOrValid()) ||
         (isOperationalBusinessAdmin(barberId) && businessAdminCanUpdateBusiness())) &&
-        operationalFieldsUnchangedOrPublicProjectionSynced(barberId);
+        operationalFieldsUnchangedOrPublicProjectionSynced(barberId) && businessThemeUnchangedOrValid() &&
+        rootThemeUnchangedOrPublicProjectionSynced(barberId);
       
       // Subcolecciones
       match /services/{serviceId} {
@@ -949,11 +1008,12 @@ service cloud.firestore {
       // this projection private to the business's authenticated operators.
       allow read: if isSuperAdmin() || isBusinessAdmin(barberId) || isBusinessStaff(barberId);
       allow create: if isSuperAdmin() && validPublicBusiness() && publicBusinessSlugMatchesRoot(barberId) &&
-        publicOperationalStateMatchesRootAfter(barberId);
+        publicOperationalStateMatchesRootAfter(barberId) &&
+        publicThemeValidAndMatchesRootAfter(barberId);
       allow delete: if isSuperAdmin() && getAfter(/databases/$(database)/documents/barbers/$(barberId)).data == null;
       // Business admins may synchronize public presentation and booking fields,
       // but cannot reactivate a business through the projection.
-      allow update: if validPublicBusiness() && publicBusinessSlugUnchangedOrMatchesRootAfter(barberId) && publicOperationalStateUnchangedOrMatchesRootAfter(barberId) &&
+      allow update: if validPublicBusiness() && publicBusinessSlugUnchangedOrMatchesRootAfter(barberId) && publicOperationalStateUnchangedOrMatchesRootAfter(barberId) && publicThemeUnchangedOrValid() && publicThemeUnchangedOrMatchesRootAfter(barberId) &&
         (isSuperAdmin() || (isOperationalBusinessAdmin(barberId) &&
           request.resource.data.active == resource.data.active && request.resource.data.slug == resource.data.slug));
 

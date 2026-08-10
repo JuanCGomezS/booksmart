@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createPublicBooking = exports.getPublicBusinessBySlug = void 0;
+exports.claimStoreadminCapacityAppointment = exports.createPublicBooking = exports.getPublicBusinessBySlug = void 0;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
@@ -12,6 +12,8 @@ const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 const idempotencyKeyPattern = /^[A-Za-z0-9_-]{16,128}$/;
 const bookingTimeZone = 'America/Bogota';
 const blockingAppointmentStatuses = new Set(['pending', 'confirmed']);
+const publicPresetThemeIds = new Set(['gold-night', 'royal-night', 'crimson-sun', 'violet-blush', 'teal-night', 'sunset-cream', 'orchid-rose']);
+const hexColorPattern = /^#[0-9a-f]{6}$/i;
 function minutes(value) {
     if (typeof value !== 'string' || !timePattern.test(value))
         return null;
@@ -91,6 +93,17 @@ function publicUnavailable() {
 function publicString(value, maximum = 2_048) {
     return typeof value === 'string' && value.trim() && value.trim().length <= maximum ? value.trim() : undefined;
 }
+function publicThemeDto(value) {
+    const theme = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    if (typeof theme.id === 'string' && publicPresetThemeIds.has(theme.id))
+        return { id: theme.id };
+    const palette = theme.palette && typeof theme.palette === 'object' && !Array.isArray(theme.palette) ? theme.palette : {};
+    const keys = ['background', 'surface', 'text', 'primary'];
+    if (theme.id === 'custom' && Object.keys(theme).length === 2 && Object.keys(palette).length === 4 && keys.every((key) => typeof palette[key] === 'string' && hexColorPattern.test(palette[key]))) {
+        return { id: 'custom', palette: Object.fromEntries(keys.map((key) => [key, palette[key]])) };
+    }
+    return { id: 'gold-night' };
+}
 function publicWorkingHours(value) {
     const source = value && typeof value === 'object' ? value : {};
     return Object.fromEntries(Array.from({ length: 7 }, (_, day) => {
@@ -164,7 +177,6 @@ function publicStaffSchedule(value) {
 function publicBusinessDto(id, business, now) {
     const config = business.config && typeof business.config === 'object' ? business.config : {};
     const socialLinks = config.socialLinks && typeof config.socialLinks === 'object' ? config.socialLinks : {};
-    const theme = config.theme && typeof config.theme === 'object' ? config.theme : {};
     const booking = effectiveBookingSettings(config.booking);
     const location = config.location && typeof config.location === 'object' ? config.location : {};
     const latitude = location.latitude;
@@ -191,10 +203,7 @@ function publicBusinessDto(id, business, now) {
                     ...(publicString(socialLinks.facebook) ? { facebook: publicString(socialLinks.facebook) } : {}),
                     ...(publicString(socialLinks.whatsapp) ? { whatsapp: publicString(socialLinks.whatsapp) } : {}),
                 } } : {}),
-            ...(Object.keys(theme).length ? { theme: {
-                    ...(publicString(theme.id, 80) ? { id: publicString(theme.id, 80) } : {}),
-                    ...(publicString(theme.primaryColor, 32) ? { primaryColor: publicString(theme.primaryColor, 32) } : {}),
-                } } : {}),
+            theme: publicThemeDto(config.theme),
             booking: {
                 minimumNoticeMinutes: booking.minimumNoticeMinutes,
                 bookingHorizonDays: booking.bookingHorizonDays,
@@ -428,7 +437,7 @@ exports.createPublicBooking = (0, https_1.onCall)(async (request) => {
             if (locks.some((lock) => lock.exists))
                 continue;
             transaction.set(appointmentRef, {
-                clientName: input.clientName.trim(), clientPhone: normalizedPhone, serviceId: input.serviceId, extraServices: [], bookingDate: input.bookingDate,
+                clientName: input.clientName.trim(), clientPhone: normalizedPhone, serviceId: input.serviceId, serviceName: service.name, extraServices: [], bookingDate: input.bookingDate,
                 ...(input.anyProfessional ? { assignmentState: 'unassigned', capacityStaffId: staff.id } : { barberId: staff.id }),
                 ...(input.clientEmail?.trim() ? { clientEmail: input.clientEmail.trim() } : {}), ...(input.clientAddress?.trim() ? { clientAddress: input.clientAddress.trim() } : {}),
                 ...(booking.customerFields?.email !== 'disabled' || booking.customerFields?.address !== 'disabled' ? { bookingPrivacyConsent: { version: '2026-08-01', acceptedAt: firestore_1.FieldValue.serverTimestamp() } } : {}),
@@ -443,4 +452,52 @@ exports.createPublicBooking = (0, https_1.onCall)(async (request) => {
         throw new https_1.HttpsError('aborted', 'Selected time is no longer available.');
     });
     return { appointmentId };
+});
+/**
+ * Confirms only the capacity offer reserved for a Storeadmin's linked
+ * professional profile. The Admin SDK transaction keeps the existing
+ * first-valid-claim semantics without broadening browser Firestore writes.
+ */
+exports.claimStoreadminCapacityAppointment = (0, https_1.onCall)(async (request) => {
+    const input = request.data;
+    if (!request.auth || typeof input?.businessId !== 'string' || !input.businessId || typeof input.appointmentId !== 'string' || !input.appointmentId) {
+        throw new https_1.HttpsError('invalid-argument', 'Invalid appointment claim.');
+    }
+    const actorId = request.auth.uid;
+    const appointmentRef = db.doc(`barbers/${input.businessId}/appointments/${input.appointmentId}`);
+    await db.runTransaction(async (transaction) => {
+        const actorRef = db.doc(`users/${actorId}`);
+        const actorSnapshot = await transaction.get(actorRef);
+        const actor = actorSnapshot.data();
+        const actorStaffId = typeof actor?.staffId === 'string' ? actor.staffId : '';
+        const hasBusiness = Array.isArray(actor?.businessIds) && actor.businessIds.includes(input.businessId);
+        if (actor?.role !== 'storeadmin' || actorStaffId !== actorId || actor?.professionalBusinessId !== input.businessId || !hasBusiness) {
+            throw new https_1.HttpsError('permission-denied', 'Not authorized to claim this appointment.');
+        }
+        const [appointmentSnapshot, staffSnapshot] = await Promise.all([
+            transaction.get(appointmentRef),
+            transaction.get(db.doc(`barbers/${input.businessId}/barbers/${actorStaffId}`)),
+        ]);
+        const appointment = appointmentSnapshot.data();
+        if (!appointmentSnapshot.exists || appointment?.assignmentState !== 'unassigned' || appointment?.capacityStaffId !== actorStaffId || !blockingAppointmentStatuses.has(appointment?.status)) {
+            throw new https_1.HttpsError('failed-precondition', 'Appointment is no longer available.');
+        }
+        if (!staffSnapshot.exists || staffSnapshot.data()?.active !== true) {
+            throw new https_1.HttpsError('failed-precondition', 'Professional profile is not available.');
+        }
+        const [serviceSnapshot, ...capacityLocks] = await Promise.all([
+            transaction.get(db.doc(`barbers/${input.businessId}/services/${appointment.serviceId}`)),
+            ...(Array.isArray(appointment.occupiedIntervalIds) ? appointment.occupiedIntervalIds : []).map((intervalId) => transaction.get(db.doc(`barbers/${input.businessId}/bookingLocks/${appointment.bookingDate}/staff/${actorStaffId}/intervals/${intervalId}`))),
+        ]);
+        const service = serviceSnapshot.data();
+        if (!serviceSnapshot.exists || service?.active !== true || (Array.isArray(service.staffIds) && !service.staffIds.includes(actorStaffId)) || capacityLocks.length === 0 || capacityLocks.some((lock) => !lock.exists || lock.data()?.appointmentId !== input.appointmentId)) {
+            throw new https_1.HttpsError('failed-precondition', 'Appointment is no longer available.');
+        }
+        transaction.update(appointmentRef, {
+            assignmentState: 'assigned',
+            barberId: actorStaffId,
+            capacityStaffId: firestore_1.FieldValue.delete(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+    });
 });

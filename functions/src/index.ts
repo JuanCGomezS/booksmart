@@ -78,6 +78,9 @@ type EffectiveBookingSettings = {
 
 type BookingCustomerFieldState = 'disabled' | 'optional' | 'required';
 type BookingCustomerFields = Record<'email' | 'address', BookingCustomerFieldState>;
+type PublicThemeDto = { id: string; palette?: Record<'background' | 'surface' | 'text' | 'primary', string> };
+const publicPresetThemeIds = new Set(['gold-night', 'royal-night', 'crimson-sun', 'violet-blush', 'teal-night', 'sunset-cream', 'orchid-rose']);
+const hexColorPattern = /^#[0-9a-f]{6}$/i;
 
 function minutes(value: unknown): number | null {
   if (typeof value !== 'string' || !timePattern.test(value)) return null;
@@ -164,6 +167,17 @@ function publicString(value: unknown, maximum = 2_048): string | undefined {
   return typeof value === 'string' && value.trim() && value.trim().length <= maximum ? value.trim() : undefined;
 }
 
+function publicThemeDto(value: unknown): PublicThemeDto {
+  const theme = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  if (typeof theme.id === 'string' && publicPresetThemeIds.has(theme.id)) return { id: theme.id };
+  const palette = theme.palette && typeof theme.palette === 'object' && !Array.isArray(theme.palette) ? theme.palette as Record<string, unknown> : {};
+  const keys = ['background', 'surface', 'text', 'primary'] as const;
+  if (theme.id === 'custom' && Object.keys(theme).length === 2 && Object.keys(palette).length === 4 && keys.every((key) => typeof palette[key] === 'string' && hexColorPattern.test(palette[key] as string))) {
+    return { id: 'custom', palette: Object.fromEntries(keys.map((key) => [key, palette[key]])) as PublicThemeDto['palette'] };
+  }
+  return { id: 'gold-night' };
+}
+
 function publicWorkingHours(value: unknown): Record<string, { open: string; close: string; enabled: boolean }> {
   const source = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   return Object.fromEntries(Array.from({ length: 7 }, (_, day) => {
@@ -233,7 +247,6 @@ function publicStaffSchedule(value: unknown): PublicBusinessResponse['staff'][nu
 function publicBusinessDto(id: string, business: DocumentData, now: Date): PublicBusinessResponse['business'] {
   const config = business.config && typeof business.config === 'object' ? business.config as Record<string, unknown> : {};
   const socialLinks = config.socialLinks && typeof config.socialLinks === 'object' ? config.socialLinks as Record<string, unknown> : {};
-  const theme = config.theme && typeof config.theme === 'object' ? config.theme as Record<string, unknown> : {};
   const booking = effectiveBookingSettings(config.booking);
   const location = config.location && typeof config.location === 'object' ? config.location as Record<string, unknown> : {};
   const latitude = location.latitude;
@@ -260,10 +273,7 @@ function publicBusinessDto(id: string, business: DocumentData, now: Date): Publi
         ...(publicString(socialLinks.facebook) ? { facebook: publicString(socialLinks.facebook) } : {}),
         ...(publicString(socialLinks.whatsapp) ? { whatsapp: publicString(socialLinks.whatsapp) } : {}),
       } } : {}),
-      ...(Object.keys(theme).length ? { theme: {
-        ...(publicString(theme.id, 80) ? { id: publicString(theme.id, 80) } : {}),
-        ...(publicString(theme.primaryColor, 32) ? { primaryColor: publicString(theme.primaryColor, 32) } : {}),
-      } } : {}),
+      theme: publicThemeDto(config.theme),
       booking: {
         minimumNoticeMinutes: booking.minimumNoticeMinutes,
         bookingHorizonDays: booking.bookingHorizonDays,
@@ -486,7 +496,7 @@ export const createPublicBooking = onCall(async (request) => {
       const locks = await Promise.all(lockRefs.map((reference) => transaction.get(reference)));
       if (locks.some((lock) => lock.exists)) continue;
       transaction.set(appointmentRef, {
-        clientName: input.clientName.trim(), clientPhone: normalizedPhone, serviceId: input.serviceId, extraServices: [], bookingDate: input.bookingDate,
+        clientName: input.clientName.trim(), clientPhone: normalizedPhone, serviceId: input.serviceId, serviceName: service.name, extraServices: [], bookingDate: input.bookingDate,
         ...(input.anyProfessional ? { assignmentState: 'unassigned', capacityStaffId: staff.id } : { barberId: staff.id }),
         ...(input.clientEmail?.trim() ? { clientEmail: input.clientEmail.trim() } : {}), ...(input.clientAddress?.trim() ? { clientAddress: input.clientAddress.trim() } : {}),
         ...(booking.customerFields?.email !== 'disabled' || booking.customerFields?.address !== 'disabled' ? { bookingPrivacyConsent: { version: '2026-08-01', acceptedAt: FieldValue.serverTimestamp() } } : {}),
@@ -501,4 +511,59 @@ export const createPublicBooking = onCall(async (request) => {
     throw new HttpsError('aborted', 'Selected time is no longer available.');
   });
   return { appointmentId };
+});
+
+/**
+ * Confirms only the capacity offer reserved for a Storeadmin's linked
+ * professional profile. The Admin SDK transaction keeps the existing
+ * first-valid-claim semantics without broadening browser Firestore writes.
+ */
+export const claimStoreadminCapacityAppointment = onCall(async (request) => {
+  const input = request.data as { businessId?: unknown; appointmentId?: unknown };
+  if (!request.auth || typeof input?.businessId !== 'string' || !input.businessId || typeof input.appointmentId !== 'string' || !input.appointmentId) {
+    throw new HttpsError('invalid-argument', 'Invalid appointment claim.');
+  }
+
+  const actorId = request.auth.uid;
+  const appointmentRef = db.doc(`barbers/${input.businessId}/appointments/${input.appointmentId}`);
+  await db.runTransaction(async (transaction) => {
+    const actorRef = db.doc(`users/${actorId}`);
+    const actorSnapshot = await transaction.get(actorRef);
+    const actor = actorSnapshot.data();
+    const actorStaffId = typeof actor?.staffId === 'string' ? actor.staffId : '';
+    const hasBusiness = Array.isArray(actor?.businessIds) && actor.businessIds.includes(input.businessId);
+    if (actor?.role !== 'storeadmin' || actorStaffId !== actorId || actor?.professionalBusinessId !== input.businessId || !hasBusiness) {
+      throw new HttpsError('permission-denied', 'Not authorized to claim this appointment.');
+    }
+
+    const [appointmentSnapshot, staffSnapshot] = await Promise.all([
+      transaction.get(appointmentRef),
+      transaction.get(db.doc(`barbers/${input.businessId}/barbers/${actorStaffId}`)),
+    ]);
+    const appointment = appointmentSnapshot.data();
+    if (!appointmentSnapshot.exists || appointment?.assignmentState !== 'unassigned' || appointment?.capacityStaffId !== actorStaffId || !blockingAppointmentStatuses.has(appointment?.status)) {
+      throw new HttpsError('failed-precondition', 'Appointment is no longer available.');
+    }
+    if (!staffSnapshot.exists || staffSnapshot.data()?.active !== true) {
+      throw new HttpsError('failed-precondition', 'Professional profile is not available.');
+    }
+
+    const [serviceSnapshot, ...capacityLocks] = await Promise.all([
+      transaction.get(db.doc(`barbers/${input.businessId}/services/${appointment.serviceId}`)),
+      ...(Array.isArray(appointment.occupiedIntervalIds) ? appointment.occupiedIntervalIds : []).map((intervalId) =>
+        transaction.get(db.doc(`barbers/${input.businessId}/bookingLocks/${appointment.bookingDate}/staff/${actorStaffId}/intervals/${intervalId}`)),
+      ),
+    ]);
+    const service = serviceSnapshot.data();
+    if (!serviceSnapshot.exists || service?.active !== true || (Array.isArray(service.staffIds) && !service.staffIds.includes(actorStaffId)) || capacityLocks.length === 0 || capacityLocks.some((lock) => !lock.exists || lock.data()?.appointmentId !== input.appointmentId)) {
+      throw new HttpsError('failed-precondition', 'Appointment is no longer available.');
+    }
+
+    transaction.update(appointmentRef, {
+      assignmentState: 'assigned',
+      barberId: actorStaffId,
+      capacityStaffId: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
 });
