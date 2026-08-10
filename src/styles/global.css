@@ -3625,10 +3625,6 @@ button.public-business-text-action {
     min-height: 30rem;
   }
 
-  .public-business-cover {
-    object-position: center center;
-  }
-
   .public-business-hero-overlay {
     background:
       radial-gradient(ellipse 112% 72% at 14% 100%, color-mix(in srgb, var(--public-bg) 78%, transparent), color-mix(in srgb, var(--public-bg) 45%, transparent) 48%, transparent 78%),
