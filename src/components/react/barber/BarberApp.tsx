@@ -18,7 +18,7 @@ type DeferredResource<T> = { status: 'idle' | 'loading' | 'ready' | 'error'; dat
 type PublicBusinessLoadFailure = { title: string; description: string; retry: boolean };
 type AccountMenu = { name: string; email: string; photoUrl?: string; roleLabel: string; roleLink?: { label: string; href: string }; note?: string };
 const emptyDeferredResource = <T,>(): DeferredResource<T> => ({ status: 'idle', data: [], error: '' });
-const TAB_LABELS: Record<BarberTab, string> = { inicio: 'Inicio', agendar: 'Agendar', catalogo: 'Catálogo', productos: 'Productos', ubicacion: 'Ubicación' };
+const TAB_LABELS: Record<BarberTab, string> = { inicio: 'Inicio', agendar: 'Agendar', catalogo: 'Galería', productos: 'Productos', ubicacion: 'Ubicación' };
 const DAYS: Record<number, string> = { 0: 'Domingo', 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado' };
 
 function getBarberIdFromPath(pathname: string) { const parts = pathname.split('/').filter(Boolean); const index = parts.indexOf('b'); return index === -1 || !parts[index + 1] ? null : decodeURIComponent(parts[index + 1]); }
@@ -126,7 +126,7 @@ export default function BarberApp() {
     return () => { active = false; };
   }, [barber]);
 
-  const loadCatalog = async (force = false) => { if (!barber || (!force && catalog.status !== 'idle')) return; setCatalog((current) => ({ ...current, status: 'loading', error: '' })); try { setCatalog({ status: 'ready', data: await getBarberCatalog(barber.id), error: '' }); } catch (cause) { console.error(cause); setCatalog((current) => ({ ...current, status: 'error', error: 'No pudimos cargar el catálogo. Inténtalo nuevamente.' })); } };
+  const loadCatalog = async (force = false) => { if (!barber || (!force && catalog.status !== 'idle')) return; setCatalog((current) => ({ ...current, status: 'loading', error: '' })); try { setCatalog({ status: 'ready', data: await getBarberCatalog(barber.id), error: '' }); } catch (cause) { console.error(cause); setCatalog((current) => ({ ...current, status: 'error', error: 'No pudimos cargar la Galería. Inténtalo nuevamente.' })); } };
   useEffect(() => { if (tab === 'catalogo') void loadCatalog(); }, [tab, barber?.id]);
 
   if (loading) return <PublicState title="Cargando negocio..." />;
@@ -314,12 +314,12 @@ function BusinessOverview({ business, address, telephoneUrl, whatsappUrl, openSt
   </div>;
 }
 function CatalogContent({ state, reload }: { state: DeferredResource<CatalogItem>; reload: () => void }) {
-  if (state.status === 'loading') return <PublicCollectionState kind="loading" label="Cargando catálogo..." />;
+  if (state.status === 'loading') return <PublicCollectionState kind="loading" label="Cargando Galería..." />;
   if (state.status === 'error') return <ErrorMessage message={state.error} retry={reload} />;
   if (!state.data.length) return <PublicCollectionState kind="empty" label="Todavía no hay fotos publicadas." />;
 
   return <div>
-    <header className="public-business-section-heading"><p className="public-business-kicker">Inspiración</p><h2>Catálogo</h2></header>
+    <header className="public-business-section-heading"><p className="public-business-kicker">Inspiración</p><h2>Galería</h2></header>
     <div className="public-business-catalog-grid">{state.data.map((item) => <CatalogCard key={item.id} item={item} />)}</div>
   </div>;
 }
@@ -351,7 +351,7 @@ function CatalogVisual({ item }: { item: CatalogItem }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [item.imageUrl]);
   if (!failed) return <img className="public-business-card-image" src={item.imageUrl} alt={item.title} loading="lazy" onError={() => setFailed(true)} />;
-  return <div className="public-business-card-placeholder" aria-label={`Imagen no disponible para ${item.title}`}><span aria-hidden="true">✦</span><strong>{item.title.slice(0, 1).toLocaleUpperCase('es-CO')}</strong><small>Catálogo del negocio</small></div>;
+  return <div className="public-business-card-placeholder" aria-label={`Imagen no disponible para ${item.title}`}><span aria-hidden="true">✦</span><strong>{item.title.slice(0, 1).toLocaleUpperCase('es-CO')}</strong><small>Galería del negocio</small></div>;
 }
 function ProductVisual({ product }: { product: PublicBookingProduct }) {
   const [failed, setFailed] = useState(false);

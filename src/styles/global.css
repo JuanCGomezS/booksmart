@@ -1772,6 +1772,7 @@ textarea {
   --public-on-action: #ffffff;
   --public-accent: #d74b91;
   --public-shadow: rgba(85, 47, 120, .2);
+  --public-hero-glass-surface: color-mix(in srgb, color-mix(in srgb, var(--public-surface) 68%, var(--public-accent)) 32%, transparent);
 }
 
 /* Light themes use a visible accent tint while preserving dark-ink readability. */
@@ -2123,7 +2124,7 @@ textarea {
   max-width: min(100%, 35rem);
   border: 0;
   border-radius: .55rem;
-  background: var(--public-hero-glass-surface);
+  background: color-mix(in srgb, var(--public-surface) 50%, transparent);
   box-shadow: none;
   color: var(--public-hero-glass-foreground);
   text-shadow: none;

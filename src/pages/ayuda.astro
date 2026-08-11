@@ -5,37 +5,29 @@ const baseUrl = import.meta.env.BASE_URL;
 const homePath = `${baseUrl}#inicio`;
 const loginPath = `${baseUrl}login`;
 
-const faqs = [
-  {
-    question: '¿Qué es BookSmart?',
-    answer: 'BookSmart es una plataforma de agendamiento para negocios de servicios. Reúne la página pública del negocio y las herramientas para organizar su operación.',
-  },
-  {
-    question: '¿Qué tipos de negocio pueden usar BookSmart?',
-    answer: 'Está pensado para barberías, salones de belleza, estudios de uñas, clínicas dentales y otros negocios de servicios. Dentro de la plataforma se usa el término “negocio” para todos ellos.',
-  },
-  {
-    question: '¿Cómo agendan las personas con un negocio?',
-    answer: `Cada negocio puede tener una página pública en la ruta ${baseUrl}b/<slug>. Desde allí, las personas pueden elegir un servicio, una fecha y un horario disponibles para solicitar su agendamiento.`,
-  },
-  {
-    question: '¿Qué puede organizar un negocio desde BookSmart?',
-    answer: 'La operación incluye agenda, servicios, catálogo, productos y equipo. Estas secciones ayudan a mantener ordenada la información que se muestra y se gestiona para el negocio.',
-  },
-  {
-    question: '¿BookSmart permite personalizar la identidad del negocio?',
-    answer: 'Sí. La plataforma incluye temas configurables para que cada negocio pueda usar una identidad visual acorde con su marca.',
-  },
+const quickHelp = [
   {
     question: '¿Dónde ingreso a mi cuenta?',
-    answer: 'Usa la página de inicio de sesión para acceder a tu cuenta o crear una cuenta nueva.',
+    answer: 'Usa la página de inicio de sesión para acceder a tu cuenta o crear una nueva. Si te unirás como parte del personal, primero crea tu cuenta y después ingresa el código del negocio desde Mi cuenta.',
+  },
+  {
+    question: '¿Cómo encuentro la página pública de un negocio?',
+    answer: 'La persona que administra el negocio te comparte su enlace público. Allí puedes consultar su información, Galería y opciones de agendamiento.',
+  },
+  {
+    question: '¿Qué hago si mi acceso como personal sigue pendiente?',
+    answer: 'Completa tu perfil profesional y espera a que la administración del negocio active tu acceso. Hasta entonces no verás las herramientas operativas.',
+  },
+  {
+    question: '¿Necesito una cuenta para enviar una solicitud de agendamiento?',
+    answer: 'No. Puedes hacerlo desde la página pública del negocio sin crear una cuenta.',
   },
 ];
 ---
 
 <Layout
   title="Centro de ayuda"
-  description="Preguntas frecuentes sobre BookSmart y el agendamiento para negocios de servicios."
+  description="Guía rápida para administrar un negocio, trabajar como parte del personal o solicitar un agendamiento en BookSmart."
 >
   <main id="contenido" class="help-center min-h-screen px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
     <div class="mx-auto max-w-5xl">
@@ -53,39 +45,141 @@ const faqs = [
         <a href={homePath} class="help-back text-sm font-bold text-main">Volver al inicio</a>
       </header>
 
-      <section class="help-intro py-12 sm:py-16" aria-labelledby="help-title">
-        <p class="help-kicker">Centro de ayuda</p>
-        <h1 id="help-title" class="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight text-main sm:text-6xl">Respuestas claras para usar BookSmart.</h1>
-        <p class="mt-5 max-w-2xl text-base leading-7 text-subtle sm:text-lg">
-          Encuentra lo esencial sobre la plataforma, la página pública de cada negocio y las herramientas de operación.
-        </p>
-      </section>
+        <section class="help-intro py-12 sm:py-16" aria-labelledby="help-title">
+          <p class="help-kicker">Centro de ayuda</p>
+          <h1 id="help-title" class="mt-3 max-w-3xl text-4xl font-extrabold tracking-tight text-main sm:text-6xl">Empieza según lo que necesitas hacer.</h1>
+          <p class="mt-5 max-w-2xl text-base leading-7 text-subtle sm:text-lg">
+            Elige tu perfil para ver un camino corto, las herramientas que tendrás disponibles y ayuda para tus primeros pasos.
+          </p>
+        </section>
 
-      <section class="help-faq border-t py-8 sm:py-10" aria-labelledby="faq-title">
-        <div class="max-w-2xl">
-          <h2 id="faq-title" class="text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Preguntas frecuentes</h2>
-          <p class="mt-2 text-sm leading-6 text-subtle">Selecciona una pregunta para ver la respuesta.</p>
-        </div>
+        <section class="help-chooser border-y py-8 sm:py-10" aria-labelledby="chooser-title">
+          <div class="max-w-2xl">
+            <p class="help-kicker">Ruta rápida</p>
+            <h2 id="chooser-title" class="mt-2 text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Elige tu perfil</h2>
+            <p class="mt-2 text-sm leading-6 text-subtle">No necesitas conocer la plataforma completa para comenzar.</p>
+          </div>
 
-        <div class="mt-7 divide-y border-y" style="border-color: var(--border);">
-          {faqs.map((faq) => (
-            <details class="help-question group py-1">
-              <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-5 py-4 text-left font-bold text-main">
-                <span>{faq.question}</span>
-                <span class="help-question-icon" aria-hidden="true"></span>
-              </summary>
-              <div class="max-w-3xl pb-5 pr-10 text-sm leading-7 text-subtle sm:text-base">
-                {faq.answer}
+          <nav class="mt-7" aria-label="Perfiles de BookSmart">
+            <ol class="help-role-links grid gap-px border sm:grid-cols-3" style="border-color: var(--border);">
+              <li><a href="#administra-un-negocio"><strong>Administra un negocio</strong><span>Organiza la operación y configura el agendamiento.</span></a></li>
+              <li><a href="#soy-parte-del-personal"><strong>Soy parte del personal</strong><span>Activa tu acceso y gestiona tu trabajo diario.</span></a></li>
+              <li><a href="#quiero-agendar"><strong>Quiero agendar</strong><span>Consulta un negocio y envía una solicitud.</span></a></li>
+            </ol>
+          </nav>
+        </section>
+
+        <div class="help-roles divide-y" style="border-color: var(--border);">
+          <section id="administra-un-negocio" class="py-10 sm:py-14" aria-labelledby="storeadmin-title">
+            <div class="max-w-2xl">
+              <p class="help-kicker">Storeadmin</p>
+              <h2 id="storeadmin-title" class="mt-2 text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Administra un negocio</h2>
+              <p class="mt-3 text-base leading-7 text-subtle">Esta ruta es para quien organiza la operación de un negocio asignado.</p>
+            </div>
+            <div class="mt-7 grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(15rem,.75fr)]">
+              <div>
+                <h3 class="text-lg font-extrabold text-main">Primeros pasos</h3>
+                <ol class="help-steps mt-4 space-y-3">
+                  <li>Crea una cuenta en BookSmart con el correo que usarás para administrar tu negocio.</li>
+                  <li>Comparte ese correo con tu asesor o el equipo de BookSmart para que creen el negocio y te asignen el acceso.</li>
+                  <li>Espera la confirmación de la asignación.</li>
+                  <li>Ingresa a <strong>Administración</strong>: allí verás el negocio que tienes asignado y podrás abrirlo.</li>
+                  <li>Configura sus datos, servicios, equipo y agendamiento. Cuando la página esté lista, comparte el enlace público de tu negocio.</li>
+                </ol>
               </div>
-            </details>
-          ))}
-        </div>
-      </section>
+              <aside class="help-capabilities p-5" aria-labelledby="storeadmin-can-do">
+                <h3 id="storeadmin-can-do" class="text-base font-extrabold text-main">Qué puedes hacer</h3>
+                <ul class="mt-3 space-y-2 text-sm leading-6 text-subtle">
+                  <li>Gestionar la agenda del negocio asignado.</li>
+                  <li>Actualizar sus datos, imagen y contenido público.</li>
+                  <li>Administrar servicios, productos, equipo, horarios y reglas de reserva.</li>
+                  <li>Usar tu perfil y horario profesional solo si están vinculados a tu cuenta.</li>
+                </ul>
+              </aside>
+            </div>
+          </section>
 
-      <section class="help-next mt-4 border p-6 sm:flex sm:items-center sm:justify-between sm:gap-8 sm:p-8" aria-labelledby="next-title">
-        <div class="max-w-xl">
-          <h2 id="next-title" class="text-xl font-extrabold tracking-tight text-main">¿Listo para entrar?</h2>
-          <p class="mt-2 text-sm leading-6 text-subtle">Accede a tu cuenta o crea una nueva para comenzar a organizar tu negocio.</p>
+          <section id="soy-parte-del-personal" class="py-10 sm:py-14" aria-labelledby="staff-title">
+            <div class="max-w-2xl">
+              <p class="help-kicker">Staff</p>
+              <h2 id="staff-title" class="mt-2 text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Soy parte del personal</h2>
+              <p class="mt-3 text-base leading-7 text-subtle">Tu acceso operativo se habilita cuando el negocio confirma tu incorporación.</p>
+            </div>
+            <div class="mt-7 grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(15rem,.75fr)]">
+              <div>
+                <h3 class="text-lg font-extrabold text-main">Cómo empezar</h3>
+                <ol class="help-steps mt-4 space-y-3">
+                  <li>Crea tu cuenta o ingresa si ya tienes una.</li>
+                  <li>Desde <strong>Mi cuenta</strong>, ingresa el código que te compartió el negocio.</li>
+                  <li>Completa tu perfil profesional mientras tu acceso está pendiente.</li>
+                  <li>Espera la activación de la administración para entrar a las herramientas operativas.</li>
+                </ol>
+              </div>
+              <aside class="help-capabilities p-5" aria-labelledby="staff-can-do">
+                <h3 id="staff-can-do" class="text-base font-extrabold text-main">Qué puedes hacer al activarte</h3>
+                <ul class="mt-3 space-y-2 text-sm leading-6 text-subtle">
+                  <li>Consultar y trabajar con tu agenda.</li>
+                  <li>Completar tu perfil profesional y definir tu horario.</li>
+                  <li>Trabajar únicamente dentro del negocio al que estás asignado.</li>
+                </ul>
+              </aside>
+            </div>
+          </section>
+
+          <section id="quiero-agendar" class="py-10 sm:py-14" aria-labelledby="customer-title">
+            <div class="max-w-2xl">
+              <p class="help-kicker">Customer</p>
+              <h2 id="customer-title" class="mt-2 text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Quiero agendar</h2>
+              <p class="mt-3 text-base leading-7 text-subtle">Puedes conocer un negocio y enviar una solicitud desde su página pública, sin crear una cuenta.</p>
+            </div>
+            <div class="mt-7 grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(15rem,.75fr)]">
+              <div>
+                <h3 class="text-lg font-extrabold text-main">Cómo solicitar un agendamiento</h3>
+                <ol class="help-steps mt-4 space-y-3">
+                  <li>Abre la página pública del negocio que quieres visitar.</li>
+                  <li>Consulta su información y la Galería disponible.</li>
+                  <li>Elige un servicio, fecha y horario disponibles.</li>
+                  <li>Completa el formulario con tu nombre y número de teléfono.</li>
+                  <li>Envía tu solicitud de agendamiento.</li>
+                </ol>
+              </div>
+              <aside class="help-capabilities p-5" aria-labelledby="customer-can-do">
+                <h3 id="customer-can-do" class="text-base font-extrabold text-main">Qué puedes hacer</h3>
+                <ul class="mt-3 space-y-2 text-sm leading-6 text-subtle">
+                  <li>Ver la información pública del negocio.</li>
+                  <li>Explorar sus servicios y productos publicados.</li>
+                  <li>Enviar una solicitud de agendamiento sin cuenta.</li>
+                </ul>
+              </aside>
+            </div>
+          </section>
+        </div>
+
+        <section class="help-faq border-t py-8 sm:py-10" aria-labelledby="faq-title">
+          <div class="max-w-2xl">
+            <h2 id="faq-title" class="text-2xl font-extrabold tracking-tight text-main sm:text-3xl">Ayuda rápida</h2>
+            <p class="mt-2 text-sm leading-6 text-subtle">Abre solo la respuesta que necesitas.</p>
+          </div>
+
+          <div class="mt-7 divide-y border-y" style="border-color: var(--border);">
+            {quickHelp.map((item) => (
+              <details class="help-question group py-1">
+                <summary class="flex min-h-14 cursor-pointer list-none items-center justify-between gap-5 py-4 text-left font-bold text-main">
+                  <span>{item.question}</span>
+                  <span class="help-question-icon" aria-hidden="true"></span>
+                </summary>
+                <div class="max-w-3xl pb-5 pr-10 text-sm leading-7 text-subtle sm:text-base">
+                  {item.answer}
+                </div>
+              </details>
+            ))}
+          </div>
+        </section>
+
+        <section class="help-next mt-4 border p-6 sm:flex sm:items-center sm:justify-between sm:gap-8 sm:p-8" aria-labelledby="next-title">
+          <div class="max-w-xl">
+            <h2 id="next-title" class="text-xl font-extrabold tracking-tight text-main">¿Necesitas entrar a tu cuenta?</h2>
+            <p class="mt-2 text-sm leading-6 text-subtle">Inicia sesión o crea una cuenta para administrar un negocio o unirte a su personal.</p>
         </div>
         <a href={loginPath} class="btn-primary mt-5 w-full px-5 py-3 text-center text-sm no-underline sm:mt-0 sm:w-auto">Ir a iniciar sesión</a>
       </section>
@@ -97,8 +191,21 @@ const faqs = [
   .help-center { background: var(--bg); }
   .help-nav { border-color: var(--border); }
   .help-nav a:hover, .help-back:hover { color: var(--accent-text); }
-  .help-kicker { color: var(--accent-text); font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-  .help-question { border-color: var(--border); }
+   .help-kicker { color: var(--accent-text); font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+   .help-role-links { background: var(--border); }
+   .help-role-links li { background: var(--surface); }
+   .help-role-links a { display: block; min-height: 100%; padding: 1.25rem; color: var(--text-primary); text-decoration: none; transition: background-color 160ms var(--motion), color 160ms var(--motion); }
+   .help-role-links a:hover { background: var(--bg); color: var(--accent-text); }
+   .help-role-links a:focus-visible { outline: 3px solid var(--secondary); outline-offset: -3px; }
+   .help-role-links strong, .help-role-links span { display: block; }
+   .help-role-links span { margin-top: .4rem; color: var(--text-secondary); font-size: .875rem; line-height: 1.5; }
+   .help-steps { max-width: 42rem; padding-left: 1.5rem; color: var(--text-secondary); font-size: .9375rem; line-height: 1.7; }
+   .help-steps li { padding-left: .45rem; }
+   .help-steps li::marker { color: var(--accent-text); font-weight: 800; }
+   .help-capabilities { align-self: start; border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); }
+   .help-capabilities li { position: relative; padding-left: 1rem; }
+   .help-capabilities li::before { position: absolute; left: 0; color: var(--secondary); content: '•'; font-weight: 800; }
+   .help-question { border-color: var(--border); }
   .help-question summary::-webkit-details-marker { display: none; }
   .help-question-icon { position: relative; width: 1.25rem; height: 1.25rem; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 50%; }
   .help-question-icon::before, .help-question-icon::after { position: absolute; top: 50%; left: 50%; width: .55rem; height: 1px; background: currentColor; content: ''; transform: translate(-50%, -50%); }
