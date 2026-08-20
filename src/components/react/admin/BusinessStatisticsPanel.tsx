@@ -44,6 +44,7 @@ export default function BusinessStatisticsPanel({ businessId }: { businessId: st
     void load();
   }, []); // Initial data is cached by the callable for one hour.
   const max = Math.max(1, ...(data?.series.map((item) => item.total) || [0]));
+  const money = (value: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(value);
 
   return (
     <section className="surface-card rounded-2xl p-6" aria-labelledby="statistics-title">
@@ -126,10 +127,15 @@ export default function BusinessStatisticsPanel({ businessId }: { businessId: st
       )}
       {data && (
         <>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className="mt-6 grid gap-3 sm:grid-cols-4">
             <article className="surface-soft rounded-xl p-4">
               <p className="text-sm text-subtle">Total de citas</p>
               <p className="mt-1 text-3xl font-bold text-main">{data.total}</p>
+            </article>
+            <article className="surface-soft rounded-xl p-4">
+              <p className="text-sm text-subtle">Ingresos realizados</p>
+              <p className="mt-1 text-2xl font-bold text-main">{money(data.estimatedRevenue)}</p>
+              <p className="mt-1 text-xs text-subtle">Solo citas completadas.</p>
             </article>
             <article className="surface-soft rounded-xl p-4">
               <p className="text-sm text-subtle">Completadas</p>
@@ -144,14 +150,14 @@ export default function BusinessStatisticsPanel({ businessId }: { businessId: st
           </div>
           <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div>
-              <h3 className="font-semibold text-main">Citas por fecha</h3>
+              <h3 className="font-semibold text-main">Citas e ingresos por período</h3>
               <div className="mt-3 flex h-40 items-end gap-1 border-b border-(--border) pb-1">
                 {data.series.map((item) => (
                   <div
                     key={item.label}
                     className="group relative min-w-1 flex-1 bg-(--secondary)"
                     style={{ height: `${Math.max(3, (item.total / max) * 100)}%` }}
-                    title={`${item.label}: ${item.total}`}
+                    title={`${item.label}: ${item.total} citas · ${money(item.revenue)}`}
                   >
                     <span className="sr-only">
                       {item.label}: {item.total}

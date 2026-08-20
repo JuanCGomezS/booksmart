@@ -895,6 +895,7 @@ export const createPublicBooking = onCall(async (request) => {
         clientPhone: normalizedPhone,
         serviceId: input.serviceId,
         serviceName: service.name,
+        servicePrice: service.price,
         extraServices: [],
         bookingDate: input.bookingDate,
         ...(input.anyProfessional

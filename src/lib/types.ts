@@ -333,6 +333,8 @@ export interface Appointment {
   serviceId: string;
   /** Immutable display-name snapshot captured from the validated service at booking time. */
   serviceName?: string;
+  /** Immutable service price snapshot used for historical revenue reports. */
+  servicePrice?: number;
   extraServices: string[];
   date: Timestamp;
   /** Colombia-local date used for bounded operational Agenda queries. */

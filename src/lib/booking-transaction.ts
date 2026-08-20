@@ -450,6 +450,7 @@ export async function createClientBooking<Reference = DocumentReference>(
           : { barberId: selected.staffId }),
         serviceId: request.serviceId,
         serviceName: service.name,
+        servicePrice: service.price,
         extraServices: [],
         bookingDate: request.bookingDate,
         ...(productSelectionEnabled && request.requestedProducts?.length
