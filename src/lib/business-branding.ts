@@ -1,5 +1,11 @@
 import { deleteField, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, ref, uploadBytesResumable, type UploadTask } from 'firebase/storage';
+import {
+  deleteObject,
+  getDownloadURL,
+  ref,
+  uploadBytesResumable,
+  type UploadTask,
+} from 'firebase/storage';
 import { db, storage } from './firebase';
 import { invalidatePublicBusinessCaches } from './barbers';
 import { isAlreadyMissingStorageObject } from './content-cleanup';
@@ -52,7 +58,13 @@ async function deleteBrandingObject(path: string) {
   }
 }
 
-async function uploadBrandingImage(barberId: string, slot: BrandingSlot, file: File, onProgress: (progress: number) => void, onTask: BrandingUploadTaskHandler) {
+async function uploadBrandingImage(
+  barberId: string,
+  slot: BrandingSlot,
+  file: File,
+  onProgress: (progress: number) => void,
+  onTask: BrandingUploadTaskHandler,
+) {
   const validationError = validateBusinessBrandingImage(file);
   if (validationError) throw new Error(validationError);
 
@@ -61,13 +73,18 @@ async function uploadBrandingImage(barberId: string, slot: BrandingSlot, file: F
   await new Promise<void>((resolve, reject) => {
     const task = uploadBytesResumable(imageRef, file, { contentType: file.type });
     onTask(task);
-    task.on('state_changed', (snapshot) => onProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)), (error) => {
-      onTask(null);
-      reject(error);
-    }, () => {
-      onTask(null);
-      resolve();
-    });
+    task.on(
+      'state_changed',
+      (snapshot) => onProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)),
+      (error) => {
+        onTask(null);
+        reject(error);
+      },
+      () => {
+        onTask(null);
+        resolve();
+      },
+    );
   });
 
   try {
@@ -98,7 +115,13 @@ export async function saveBusinessDetails(
     for (const slot of ['logo', 'cover'] as BrandingSlot[]) {
       const file = files[slot];
       if (!file) continue;
-      uploaded[slot] = await uploadBrandingImage(barberId, slot, file, (progress) => onProgress({ [slot]: progress }), onUploadTask);
+      uploaded[slot] = await uploadBrandingImage(
+        barberId,
+        slot,
+        file,
+        (progress) => onProgress({ [slot]: progress }),
+        onUploadTask,
+      );
     }
 
     const valueOrDelete = (value: string) => value.trim() || deleteField();
@@ -121,14 +144,16 @@ export async function saveBusinessDetails(
     await batch.commit();
     invalidatePublicBusinessCaches(barberId);
   } catch (error) {
-    await Promise.all(Object.values(uploaded).map(async (image) => {
-      if (!image) return;
-      try {
-        await deleteBrandingObject(image.path);
-      } catch (cleanupError) {
-        console.warn('No se pudo limpiar una imagen de marca no guardada.', cleanupError);
-      }
-    }));
+    await Promise.all(
+      Object.values(uploaded).map(async (image) => {
+        if (!image) return;
+        try {
+          await deleteBrandingObject(image.path);
+        } catch (cleanupError) {
+          console.warn('No se pudo limpiar una imagen de marca no guardada.', cleanupError);
+        }
+      }),
+    );
     throw error;
   }
 }

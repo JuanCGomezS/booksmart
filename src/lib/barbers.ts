@@ -16,9 +16,36 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { DATA } from './data';
-import type { Barber, BarberMetrics, Plan, BillingCycle, BarberStatus, BarberStaff, BusinessCreationErrorCode, BusinessType, BookingSettings, CatalogItem, Product, Service, PublicBusiness, SubscriptionStatus } from './types';
-import { bookingSettingsUpdate, getBogotaDateTime, getBookingDate, isValidBookingSettings } from './booking';
-import { isPublicBusinessOperational, loadPublicBusinessBySlug, normalizeWorkingHours, PUBLIC_BUSINESSES_COLLECTION, readPublicBusiness, toPublicBusiness } from './public-business';
+import type {
+  Barber,
+  BarberMetrics,
+  Plan,
+  BillingCycle,
+  BarberStatus,
+  BarberStaff,
+  BusinessCreationErrorCode,
+  BusinessType,
+  BookingSettings,
+  CatalogItem,
+  Product,
+  Service,
+  PublicBusiness,
+  SubscriptionStatus,
+} from './types';
+import {
+  bookingSettingsUpdate,
+  getBogotaDateTime,
+  getBookingDate,
+  isValidBookingSettings,
+} from './booking';
+import {
+  isPublicBusinessOperational,
+  loadPublicBusinessBySlug,
+  normalizeWorkingHours,
+  PUBLIC_BUSINESSES_COLLECTION,
+  readPublicBusiness,
+  toPublicBusiness,
+} from './public-business';
 import { generateStaffEnrollmentCode } from './staff-enrollment';
 
 const LEGACY_BUSINESS_TYPE: BusinessType = 'barbershop';
@@ -32,26 +59,32 @@ export class BusinessCreationError extends Error {
 
 /** Maps Firestore write failures to safe, actionable UI copy without exposing backend details. */
 export function getFirestoreWriteErrorMessage(error: unknown, fallback: string): string {
-  const code = typeof error === 'object' && error !== null && 'code' in error
-    ? (error as { code?: unknown }).code
-    : undefined;
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: unknown }).code
+      : undefined;
 
   if (code === 'permission-denied') return 'No tienes permisos para guardar este cambio.';
-  if (code === 'failed-precondition') return 'Firestore rechazó la operación por una precondición. Actualiza la página e inténtalo de nuevo.';
-  if (code === 'unavailable' || code === 'deadline-exceeded') return 'Firestore no está disponible en este momento. Inténtalo de nuevo.';
+  if (code === 'failed-precondition')
+    return 'Firestore rechazó la operación por una precondición. Actualiza la página e inténtalo de nuevo.';
+  if (code === 'unavailable' || code === 'deadline-exceeded')
+    return 'Firestore no está disponible en este momento. Inténtalo de nuevo.';
   return fallback;
 }
 
 function toBusinessCreationError(error: unknown): BusinessCreationError {
   if (error instanceof BusinessCreationError) return error;
 
-  const code = typeof error === 'object' && error !== null && 'code' in error
-    ? (error as { code?: string }).code
-    : undefined;
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: string }).code
+      : undefined;
 
   if (code === 'permission-denied') return new BusinessCreationError('permission-denied');
-  if (code === 'unavailable' || code === 'deadline-exceeded') return new BusinessCreationError('unavailable');
-  if (code === 'aborted' || code === 'already-exists' || code === 'failed-precondition') return new BusinessCreationError('conflict');
+  if (code === 'unavailable' || code === 'deadline-exceeded')
+    return new BusinessCreationError('unavailable');
+  if (code === 'aborted' || code === 'already-exists' || code === 'failed-precondition')
+    return new BusinessCreationError('conflict');
   return new BusinessCreationError('unknown');
 }
 
@@ -61,7 +94,12 @@ function toBusiness(data: Record<string, unknown>, id: string): Barber {
 
 function toDate(value: unknown): Date {
   if (value instanceof Date) return value;
-  if (typeof value === 'object' && value !== null && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'toDate' in value &&
+    typeof (value as { toDate: () => Date }).toDate === 'function'
+  ) {
     return (value as { toDate: () => Date }).toDate();
   }
 
@@ -69,21 +107,39 @@ function toDate(value: unknown): Date {
 }
 
 function getSubscriptionEndDate(startsAt: Date, billingCycle: BillingCycle): Date {
-  const months = billingCycle === DATA.BILLING_CYCLE.MONTH_3 ? 3 : billingCycle === DATA.BILLING_CYCLE.MONTH_12 ? 12 : 1;
+  const months =
+    billingCycle === DATA.BILLING_CYCLE.MONTH_3
+      ? 3
+      : billingCycle === DATA.BILLING_CYCLE.MONTH_12
+        ? 12
+        : 1;
   const nextCycleStart = new Date(startsAt.getFullYear(), startsAt.getMonth() + months, 1);
-  const lastDay = new Date(nextCycleStart.getFullYear(), nextCycleStart.getMonth() + 1, 0).getDate();
+  const lastDay = new Date(
+    nextCycleStart.getFullYear(),
+    nextCycleStart.getMonth() + 1,
+    0,
+  ).getDate();
   nextCycleStart.setDate(Math.min(startsAt.getDate(), lastDay));
   nextCycleStart.setDate(nextCycleStart.getDate() - 1);
   nextCycleStart.setHours(23, 59, 59, 999);
   return nextCycleStart;
 }
 
-function isSubscriptionOperational(status: SubscriptionStatus | undefined, planExpiresAt: unknown, subscriptionStartsAt?: unknown, now = new Date()): boolean {
+function isSubscriptionOperational(
+  status: SubscriptionStatus | undefined,
+  planExpiresAt: unknown,
+  subscriptionStartsAt?: unknown,
+  now = new Date(),
+): boolean {
   if (status === undefined) return true;
   if (status !== 'active' && status !== 'trial') return false;
 
   const startsAt = toDate(subscriptionStartsAt);
-  if (subscriptionStartsAt !== undefined && (!Number.isFinite(startsAt.getTime()) || startsAt > now)) return false;
+  if (
+    subscriptionStartsAt !== undefined &&
+    (!Number.isFinite(startsAt.getTime()) || startsAt > now)
+  )
+    return false;
 
   const expiresAt = toDate(planExpiresAt);
   // Legacy records may not have a usable end date yet. Keep their existing
@@ -136,12 +192,15 @@ export async function getBarberConfig(barberId: string): Promise<PublicBusiness 
 
     const data = readPublicBusiness(barberSnap.data(), barberSnap.id);
     if (!isPublicBusinessOperational(data)) return null;
-    
+
     // Guardar en cache
-    localStorage.setItem(cacheKey, JSON.stringify({
-      data,
-      expiresAt: Date.now() + BARBER_CACHE_TTL,
-    }));
+    localStorage.setItem(
+      cacheKey,
+      JSON.stringify({
+        data,
+        expiresAt: Date.now() + BARBER_CACHE_TTL,
+      }),
+    );
 
     return data;
   } catch (error) {
@@ -174,10 +233,12 @@ export async function getAllBarbers(): Promise<Barber[]> {
 /** Reads only explicitly allowed public business summaries, never a collection query. */
 export async function getBusinessSummaries(businessIds: string[]): Promise<PublicBusiness[]> {
   const ids = [...new Set(businessIds.filter(Boolean))];
-  const summaries = await Promise.all(ids.map(async (businessId) => {
-    const snapshot = await getDoc(doc(db, PUBLIC_BUSINESSES_COLLECTION, businessId));
-    return snapshot.exists() ? readPublicBusiness(snapshot.data(), snapshot.id) : null;
-  }));
+  const summaries = await Promise.all(
+    ids.map(async (businessId) => {
+      const snapshot = await getDoc(doc(db, PUBLIC_BUSINESSES_COLLECTION, businessId));
+      return snapshot.exists() ? readPublicBusiness(snapshot.data(), snapshot.id) : null;
+    }),
+  );
   return summaries.filter((summary): summary is PublicBusiness => summary !== null);
 }
 
@@ -212,7 +273,9 @@ export async function createBarber(
     if (!signedInUser) throw new BusinessCreationError('not-authenticated');
 
     const normalizedOwnerEmail = ownerEmail.trim().toLowerCase();
-    const owners = await getDocs(query(collection(db, 'users'), where('email', '==', normalizedOwnerEmail), limit(1)));
+    const owners = await getDocs(
+      query(collection(db, 'users'), where('email', '==', normalizedOwnerEmail), limit(1)),
+    );
     if (owners.empty) throw new BusinessCreationError('owner-not-found');
     const ownerRef = owners.docs[0].ref;
     if (ownerRef.id === signedInUser.uid) throw new BusinessCreationError('self-owner');
@@ -221,10 +284,22 @@ export async function createBarber(
     const now = new Date();
     const trialEnds = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
     const barberData = {
-      name, slug, businessType, ownerId, ownerEmail, plan, billingCycle,
-      subscriptionStatus: 'trial' as SubscriptionStatus, subscriptionStartsAt: now,
-      trialStartedAt: now, trialEndsAt: trialEnds, trialUsed: false,
-      planExpiresAt: trialEnds, active: isSubscriptionOperational('trial', trialEnds, now), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      name,
+      slug,
+      businessType,
+      ownerId,
+      ownerEmail,
+      plan,
+      billingCycle,
+      subscriptionStatus: 'trial' as SubscriptionStatus,
+      subscriptionStartsAt: now,
+      trialStartedAt: now,
+      trialEndsAt: trialEnds,
+      trialUsed: false,
+      planExpiresAt: trialEnds,
+      active: isSubscriptionOperational('trial', trialEnds, now),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
       limits: {
         maxBarbers: getLimitsByPlan(plan).maxBarbers,
         maxProducts: getLimitsByPlan(plan).maxProducts,
@@ -232,9 +307,12 @@ export async function createBarber(
       },
       config: { address: '', phone: '', socialLinks: {}, theme: { primaryColor: '#000000' } },
       workingHours: {
-        0: { open: '09:00', close: '18:00', enabled: false }, 1: { open: '09:00', close: '18:00', enabled: true },
-        2: { open: '09:00', close: '18:00', enabled: true }, 3: { open: '09:00', close: '18:00', enabled: true },
-        4: { open: '09:00', close: '18:00', enabled: true }, 5: { open: '09:00', close: '18:00', enabled: true },
+        0: { open: '09:00', close: '18:00', enabled: false },
+        1: { open: '09:00', close: '18:00', enabled: true },
+        2: { open: '09:00', close: '18:00', enabled: true },
+        3: { open: '09:00', close: '18:00', enabled: true },
+        4: { open: '09:00', close: '18:00', enabled: true },
+        5: { open: '09:00', close: '18:00', enabled: true },
         6: { open: '09:00', close: '14:00', enabled: true },
       },
     };
@@ -244,9 +322,12 @@ export async function createBarber(
       const ownerSnapshot = await transaction.get(ownerRef);
       if (!ownerSnapshot.exists()) throw new BusinessCreationError('owner-not-found');
       const owner = ownerSnapshot.data();
-      if (owner.role !== DATA.USER_ROLE.CUSTOMER) throw new BusinessCreationError('owner-not-customer');
-      if (typeof owner.staffId === 'string' ||
-        (Array.isArray(owner.businessIds) && owner.businessIds.length > 0)) {
+      if (owner.role !== DATA.USER_ROLE.CUSTOMER)
+        throw new BusinessCreationError('owner-not-customer');
+      if (
+        typeof owner.staffId === 'string' ||
+        (Array.isArray(owner.businessIds) && owner.businessIds.length > 0)
+      ) {
         throw new BusinessCreationError('owner-already-assigned');
       }
 
@@ -256,12 +337,26 @@ export async function createBarber(
         updatedAt: serverTimestamp(),
       };
       transaction.set(docRef, barberData);
-      transaction.set(doc(db, PUBLIC_BUSINESSES_COLLECTION, docRef.id), toPublicBusiness({ id: docRef.id, ...barberData } as unknown as Barber));
-      transaction.set(doc(db, 'staffEnrollmentCodes', enrollmentCode), { businessId: docRef.id, createdAt: serverTimestamp() });
-      transaction.set(doc(db, 'barbers', docRef.id, 'staffControl', 'enrollment'), { code: enrollmentCode, rotatedAt: serverTimestamp() });
+      transaction.set(
+        doc(db, PUBLIC_BUSINESSES_COLLECTION, docRef.id),
+        toPublicBusiness({ id: docRef.id, ...barberData } as unknown as Barber),
+      );
+      transaction.set(doc(db, 'staffEnrollmentCodes', enrollmentCode), {
+        businessId: docRef.id,
+        createdAt: serverTimestamp(),
+      });
+      transaction.set(doc(db, 'barbers', docRef.id, 'staffControl', 'enrollment'), {
+        code: enrollmentCode,
+        rotatedAt: serverTimestamp(),
+      });
       transaction.update(ownerRef, ownerUpdates);
     });
-    return { id: docRef.id, ...barberData, trialEndsAt: trialEnds as any, planExpiresAt: trialEnds as any } as unknown as Barber;
+    return {
+      id: docRef.id,
+      ...barberData,
+      trialEndsAt: trialEnds as any,
+      planExpiresAt: trialEnds as any,
+    } as unknown as Barber;
   } catch (error) {
     console.error('Error creating barber:', error);
     throw toBusinessCreationError(error);
@@ -271,10 +366,7 @@ export async function createBarber(
 /**
  * Actualizar barbería
  */
-export async function updateBarber(
-  barberId: string,
-  updates: Partial<Barber>
-): Promise<boolean> {
+export async function updateBarber(barberId: string, updates: Partial<Barber>): Promise<boolean> {
   try {
     const barberRef = doc(db, 'barbers', barberId);
     await updateDoc(barberRef, {
@@ -292,7 +384,10 @@ export async function updateBarber(
 }
 
 /** Updates only booking configuration, preserving every other business config field. */
-export async function updateBarberBookingSettings(barberId: string, settings: BookingSettings): Promise<void> {
+export async function updateBarberBookingSettings(
+  barberId: string,
+  settings: BookingSettings,
+): Promise<void> {
   if (!isValidBookingSettings(settings)) throw new Error('Invalid booking settings.');
   const batch = writeBatch(db);
   batch.update(doc(db, 'barbers', barberId), {
@@ -307,10 +402,16 @@ export async function updateBarberBookingSettings(barberId: string, settings: Bo
 }
 
 /** Updates only the existing business-hours field on the root and public projection. */
-export async function updateBarberWorkingHours(barberId: string, workingHours: Barber['workingHours']): Promise<void> {
+export async function updateBarberWorkingHours(
+  barberId: string,
+  workingHours: Barber['workingHours'],
+): Promise<void> {
   const normalized = normalizeWorkingHours(workingHours);
   const batch = writeBatch(db);
-  batch.update(doc(db, 'barbers', barberId), { workingHours: normalized, updatedAt: serverTimestamp() });
+  batch.update(doc(db, 'barbers', barberId), {
+    workingHours: normalized,
+    updatedAt: serverTimestamp(),
+  });
   batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), { workingHours: normalized });
   await batch.commit();
   invalidatePublicBusinessCaches(barberId);
@@ -385,7 +486,11 @@ export async function updateBarberPlanSettings(
     const barberRef = doc(db, 'barbers', barberId);
     const legacyTrial = subscription.status === 'trial';
     const planExpiresAt = getSubscriptionEndDate(subscription.startsAt, billingCycle);
-    const active = isSubscriptionOperational(subscription.status, planExpiresAt, subscription.startsAt);
+    const active = isSubscriptionOperational(
+      subscription.status,
+      planExpiresAt,
+      subscription.startsAt,
+    );
 
     const batch = writeBatch(db);
     batch.update(barberRef, {
@@ -425,13 +530,20 @@ export async function toggleBarberActive(barberId: string, active: boolean): Pro
       const barberSnapshot = await transaction.get(barberRef);
       if (!barberSnapshot.exists()) throw new Error('Business not found.');
 
-      const barber = barberSnapshot.data() as Pick<Barber, 'subscriptionStatus' | 'subscriptionStartsAt' | 'planExpiresAt'>;
-      const publicActive = active && isSubscriptionOperational(
-        barber.subscriptionStatus,
-        barber.planExpiresAt,
-        barber.subscriptionStartsAt,
-      );
-      const hasCanonicalCutoff = (barber.subscriptionStatus === 'active' || barber.subscriptionStatus === 'trial') && barber.planExpiresAt !== undefined;
+      const barber = barberSnapshot.data() as Pick<
+        Barber,
+        'subscriptionStatus' | 'subscriptionStartsAt' | 'planExpiresAt'
+      >;
+      const publicActive =
+        active &&
+        isSubscriptionOperational(
+          barber.subscriptionStatus,
+          barber.planExpiresAt,
+          barber.subscriptionStartsAt,
+        );
+      const hasCanonicalCutoff =
+        (barber.subscriptionStatus === 'active' || barber.subscriptionStatus === 'trial') &&
+        barber.planExpiresAt !== undefined;
       transaction.update(barberRef, {
         active,
         updatedAt: serverTimestamp(),
@@ -479,7 +591,14 @@ export function getBarberStatus(barber: Barber): BarberStatus {
   }
 
   const now = new Date();
-  if (!isSubscriptionOperational(barber.subscriptionStatus, barber.planExpiresAt, barber.subscriptionStartsAt, now)) {
+  if (
+    !isSubscriptionOperational(
+      barber.subscriptionStatus,
+      barber.planExpiresAt,
+      barber.subscriptionStartsAt,
+      now,
+    )
+  ) {
     return DATA.BARBER_STATUS.DISABLED;
   }
 
@@ -542,16 +661,20 @@ export async function getBarberMetrics(barberId: string): Promise<BarberMetrics 
     // date query remains during migration; IDs are unioned to avoid double-counting
     // records that contain both formats without reading the full collection.
     const [bookingDateAppointments, legacyAppointments] = await Promise.all([
-      getDocs(query(
-        appointmentsRef,
-        where('bookingDate', '>=', `${currentMonth}-01`),
-        where('bookingDate', '<', `${nextMonth}-01`),
-      )),
-      getDocs(query(
-        appointmentsRef,
-        where('date', '>=', legacyMonthStart),
-        where('date', '<', legacyNextMonthStart),
-      )),
+      getDocs(
+        query(
+          appointmentsRef,
+          where('bookingDate', '>=', `${currentMonth}-01`),
+          where('bookingDate', '<', `${nextMonth}-01`),
+        ),
+      ),
+      getDocs(
+        query(
+          appointmentsRef,
+          where('date', '>=', legacyMonthStart),
+          where('date', '<', legacyNextMonthStart),
+        ),
+      ),
     ]);
     const appointmentIds = new Set([
       ...bookingDateAppointments.docs.map((appointment) => appointment.id),
@@ -581,11 +704,14 @@ export async function getBarberMetrics(barberId: string): Promise<BarberMetrics 
     };
 
     // Cache 1 hora
-    localStorage.setItem(cacheKey, JSON.stringify({
-      version: 2,
-      data: metrics,
-      expiresAt: Date.now() + 60 * 60 * 1000,
-    }));
+    localStorage.setItem(
+      cacheKey,
+      JSON.stringify({
+        version: 2,
+        data: metrics,
+        expiresAt: Date.now() + 60 * 60 * 1000,
+      }),
+    );
 
     return metrics;
   } catch (error) {
@@ -611,14 +737,16 @@ export async function getBarberCatalog(barberId: string): Promise<CatalogItem[]>
   try {
     const catalogRef = collection(db, 'barbers', barberId, 'catalog');
     const catalogDocs = await getDocs(catalogRef);
-    const items = catalogDocs.docs.map((catalogDoc) => ({ id: catalogDoc.id, ...catalogDoc.data() } as CatalogItem));
+    const items = catalogDocs.docs.map(
+      (catalogDoc) => ({ id: catalogDoc.id, ...catalogDoc.data() }) as CatalogItem,
+    );
 
     localStorage.setItem(
       cacheKey,
       JSON.stringify({
         data: items,
         expiresAt: Date.now() + BARBER_CATALOG_CACHE_TTL,
-      })
+      }),
     );
 
     return items;
@@ -646,14 +774,16 @@ export async function getBarberProducts(barberId: string): Promise<Product[]> {
     const productsRef = collection(db, 'barbers', barberId, 'products');
     const productsQuery = query(productsRef, where('active', '==', true));
     const productsDocs = await getDocs(productsQuery);
-    const products = productsDocs.docs.map((productDoc) => ({ id: productDoc.id, ...productDoc.data() } as Product));
+    const products = productsDocs.docs.map(
+      (productDoc) => ({ id: productDoc.id, ...productDoc.data() }) as Product,
+    );
 
     localStorage.setItem(
       cacheKey,
       JSON.stringify({
         data: products,
         expiresAt: Date.now() + BARBER_PRODUCTS_CACHE_TTL,
-      })
+      }),
     );
 
     return products;
@@ -684,7 +814,7 @@ export async function getBarberManagedCollection<T extends ManagedRecord>(
 ): Promise<T[]> {
   try {
     const snapshot = await getDocs(collection(db, 'barbers', barberId, collectionName));
-    return snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T));
+    return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as T);
   } catch (error) {
     console.error(`Error fetching ${collectionName}:`, error);
     return [];

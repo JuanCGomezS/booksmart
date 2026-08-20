@@ -21,7 +21,9 @@ export type ReplacementOperations<Image> = {
  * The new reference and old cleanup marker are committed together. A failed old
  * deletion leaves the marker durable for a later client retry.
  */
-export async function replaceWithDurableCleanup<Image>(operations: ReplacementOperations<Image>): Promise<Image> {
+export async function replaceWithDurableCleanup<Image>(
+  operations: ReplacementOperations<Image>,
+): Promise<Image> {
   let uploaded: Image | undefined;
   let committed = false;
   const oldPath = operations.getOldPath ? await operations.getOldPath() : operations.oldPath;
@@ -42,13 +44,20 @@ export async function replaceWithDurableCleanup<Image>(operations: ReplacementOp
 }
 
 export function isAlreadyMissingStorageObject(error: unknown) {
-  return typeof error === 'object' && error !== null && 'code' in error
-    && (error as { code?: unknown }).code === 'storage/object-not-found';
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'storage/object-not-found'
+  );
 }
 
 export async function retryPendingCleanup<T extends PendingCleanupRecord>(
   records: T[],
-  operations: { deletePath: (path: string) => Promise<void>; clearPath: (recordId: string, path: string) => Promise<void> },
+  operations: {
+    deletePath: (path: string) => Promise<void>;
+    clearPath: (recordId: string, path: string) => Promise<void>;
+  },
 ): Promise<void> {
   let firstError: unknown;
   for (const record of records) {

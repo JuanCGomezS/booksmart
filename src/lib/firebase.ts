@@ -11,7 +11,7 @@ const firebaseConfig = {
   projectId: environment?.PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: environment?.PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: environment?.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: environment?.PUBLIC_FIREBASE_APP_ID
+  appId: environment?.PUBLIC_FIREBASE_APP_ID,
 };
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);

@@ -1,8 +1,35 @@
-import { arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, ref, uploadBytesResumable, type UploadTask } from 'firebase/storage';
+import {
+  arrayRemove,
+  arrayUnion,
+  collection,
+  deleteDoc,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from 'firebase/firestore';
+import {
+  deleteObject,
+  getDownloadURL,
+  ref,
+  uploadBytesResumable,
+  type UploadTask,
+} from 'firebase/storage';
 import { db, storage } from './firebase';
-import { createContentImageStoragePath, type ContentCollection, type ContentImageExtension } from './content-image-path';
-import { deleteWithDurableCleanup, isAlreadyMissingStorageObject, replaceWithDurableCleanup, retryPendingCleanup } from './content-cleanup';
+import {
+  createContentImageStoragePath,
+  type ContentCollection,
+  type ContentImageExtension,
+} from './content-image-path';
+import {
+  deleteWithDurableCleanup,
+  isAlreadyMissingStorageObject,
+  replaceWithDurableCleanup,
+  retryPendingCleanup,
+} from './content-cleanup';
 import type { BarberStaff, CatalogItem, Product, Service } from './types';
 
 export type { ContentCollection } from './content-image-path';
@@ -23,10 +50,22 @@ export function validateContentImage(file: File) {
   return '';
 }
 
-function validateOptionalDescription(collectionName: ContentCollection, data: Record<string, unknown>) {
-  if ((collectionName !== 'catalog' && collectionName !== 'products') || !Object.hasOwn(data, 'description')) return;
-  if (typeof data.description !== 'string' || data.description.length > CONTENT_DESCRIPTION_MAX_LENGTH) {
-    throw new Error(`La descripción no puede superar ${CONTENT_DESCRIPTION_MAX_LENGTH} caracteres.`);
+function validateOptionalDescription(
+  collectionName: ContentCollection,
+  data: Record<string, unknown>,
+) {
+  if (
+    (collectionName !== 'catalog' && collectionName !== 'products') ||
+    !Object.hasOwn(data, 'description')
+  )
+    return;
+  if (
+    typeof data.description !== 'string' ||
+    data.description.length > CONTENT_DESCRIPTION_MAX_LENGTH
+  ) {
+    throw new Error(
+      `La descripción no puede superar ${CONTENT_DESCRIPTION_MAX_LENGTH} caracteres.`,
+    );
   }
 }
 
@@ -46,19 +85,25 @@ function clearPublicCache(barberId: string, collectionName: ContentCollection) {
 }
 
 function cleanupError(path: string) {
-  return new Error(`No se pudo limpiar la imagen de Storage (${path}). El registro se conservó y la limpieza se reintentará al volver a cargar o modificar este contenido.`);
+  return new Error(
+    `No se pudo limpiar la imagen de Storage (${path}). El registro se conservó y la limpieza se reintentará al volver a cargar o modificar este contenido.`,
+  );
 }
 
 export function allocateContentRecordId(barberId: string, collectionName: ContentCollection) {
   return doc(collection(db, 'barbers', barberId, collectionName)).id;
 }
 
-export async function getContentCollection<T extends ContentRecord>(barberId: string, collectionName: ContentCollection): Promise<T[]> {
+export async function getContentCollection<T extends ContentRecord>(
+  barberId: string,
+  collectionName: ContentCollection,
+): Promise<T[]> {
   const snapshot = await getDocs(collection(db, 'barbers', barberId, collectionName));
-  const records = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T));
+  const records = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as T);
   // Professional photos are only cleaned through the explicit retired-profile
   // action. Loading staff must remain read-only and resilient to pending work.
-  if (collectionName !== 'barbers') await retryPendingContentCleanup(barberId, collectionName, records);
+  if (collectionName !== 'barbers')
+    await retryPendingContentCleanup(barberId, collectionName, records);
   return records;
 }
 
@@ -73,18 +118,28 @@ async function uploadContentImage(
   const validationError = validateContentImage(file);
   if (validationError) throw new Error(validationError);
 
-  const path = createContentImageStoragePath(barberId, collectionName, recordId, extensionFor(file));
+  const path = createContentImageStoragePath(
+    barberId,
+    collectionName,
+    recordId,
+    extensionFor(file),
+  );
   const imageRef = ref(storage, path);
   await new Promise<void>((resolve, reject) => {
     const task = uploadBytesResumable(imageRef, file, { contentType: file.type });
     onUploadTask?.(task);
-    task.on('state_changed', (snapshot) => onProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)), (error) => {
-      onUploadTask?.(null);
-      reject(error);
-    }, () => {
-      onUploadTask?.(null);
-      resolve();
-    });
+    task.on(
+      'state_changed',
+      (snapshot) => onProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)),
+      (error) => {
+        onUploadTask?.(null);
+        reject(error);
+      },
+      () => {
+        onUploadTask?.(null);
+        resolve();
+      },
+    );
   });
 
   try {
@@ -116,18 +171,37 @@ export async function createContentRecord(
 ) {
   validateOptionalDescription(collectionName, data);
   await retryPendingContentCleanupForMutation(barberId, collectionName);
-  const recordRef = doc(db, 'barbers', barberId, collectionName, options.recordId || allocateContentRecordId(barberId, collectionName));
+  const recordRef = doc(
+    db,
+    'barbers',
+    barberId,
+    collectionName,
+    options.recordId || allocateContentRecordId(barberId, collectionName),
+  );
   let uploadedPath: string | undefined;
 
   try {
     const uploadedImage = image
-      ? await uploadContentImage(barberId, collectionName, recordRef.id, image, onProgress, options.onUploadTask)
+      ? await uploadContentImage(
+          barberId,
+          collectionName,
+          recordRef.id,
+          image,
+          onProgress,
+          options.onUploadTask,
+        )
       : undefined;
-    const imageData = uploadedImage && options.imageField === 'photoUrl'
-      ? { photoUrl: uploadedImage.imageUrl, imageStoragePath: uploadedImage.imageStoragePath }
-      : uploadedImage || {};
+    const imageData =
+      uploadedImage && options.imageField === 'photoUrl'
+        ? { photoUrl: uploadedImage.imageUrl, imageStoragePath: uploadedImage.imageStoragePath }
+        : uploadedImage || {};
     uploadedPath = uploadedImage?.imageStoragePath;
-    const recordData = { ...data, ...imageData, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+    const recordData = {
+      ...data,
+      ...imageData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
     await setDoc(recordRef, recordData);
     clearPublicCache(barberId, collectionName);
     return recordRef.id;
@@ -137,7 +211,12 @@ export async function createContentRecord(
   }
 }
 
-export async function updateContentRecord(barberId: string, collectionName: ContentCollection, recordId: string, data: Record<string, unknown>) {
+export async function updateContentRecord(
+  barberId: string,
+  collectionName: ContentCollection,
+  recordId: string,
+  data: Record<string, unknown>,
+) {
   validateOptionalDescription(collectionName, data);
   await retryPendingContentCleanupForMutation(barberId, collectionName);
   const recordRef = doc(db, 'barbers', barberId, collectionName, recordId);
@@ -159,13 +238,15 @@ export async function replaceContentImage(
     upload: () => uploadContentImage(barberId, collectionName, record.id, file, onProgress),
     getOldPath: async () => {
       const currentRecord = await getDoc(recordRef);
-      if (!currentRecord.exists()) throw new Error('El registro ya no existe. Actualizá el contenido antes de reintentar.');
+      if (!currentRecord.exists())
+        throw new Error('El registro ya no existe. Actualizá el contenido antes de reintentar.');
       return (currentRecord.data() as ContentRecord).imageStoragePath;
     },
     commit: async (imageData, pendingOldPath) => {
-      const recordImage = imageField === 'photoUrl'
-        ? { photoUrl: imageData.imageUrl, imageStoragePath: imageData.imageStoragePath }
-        : imageData;
+      const recordImage =
+        imageField === 'photoUrl'
+          ? { photoUrl: imageData.imageUrl, imageStoragePath: imageData.imageStoragePath }
+          : imageData;
       const recordUpdate = {
         ...recordImage,
         ...(pendingOldPath ? { pendingImageCleanupPaths: arrayUnion(pendingOldPath) } : {}),
@@ -175,39 +256,57 @@ export async function replaceContentImage(
       clearPublicCache(barberId, collectionName);
     },
     deleteOld: (path) => deleteStorageObject(path),
-    clearPendingOld: (path) => updateDoc(recordRef, { pendingImageCleanupPaths: arrayRemove(path) }),
+    clearPendingOld: (path) =>
+      updateDoc(recordRef, { pendingImageCleanupPaths: arrayRemove(path) }),
     deleteNew: (imageData) => deleteStorageObject(imageData.imageStoragePath),
   });
 }
 
-export async function deleteContentRecord(barberId: string, collectionName: ContentCollection, record: ContentRecord) {
+export async function deleteContentRecord(
+  barberId: string,
+  collectionName: ContentCollection,
+  record: ContentRecord,
+) {
   await retryPendingContentCleanupForMutation(barberId, collectionName);
   const recordRef = doc(db, 'barbers', barberId, collectionName, record.id);
-  await deleteWithDurableCleanup([record.imageStoragePath, ...(record.pendingImageCleanupPaths || [])], {
-    deletePath: deleteStorageObject,
-    clearPath: (path) => updateDoc(recordRef, {
-      ...(record.imageStoragePath === path ? { imageStoragePath: deleteField() } : {}),
-      pendingImageCleanupPaths: arrayRemove(path),
-      updatedAt: serverTimestamp(),
-    }),
-    deleteRecord: () => deleteDoc(recordRef),
-  });
+  await deleteWithDurableCleanup(
+    [record.imageStoragePath, ...(record.pendingImageCleanupPaths || [])],
+    {
+      deletePath: deleteStorageObject,
+      clearPath: (path) =>
+        updateDoc(recordRef, {
+          ...(record.imageStoragePath === path ? { imageStoragePath: deleteField() } : {}),
+          pendingImageCleanupPaths: arrayRemove(path),
+          updatedAt: serverTimestamp(),
+        }),
+      deleteRecord: () => deleteDoc(recordRef),
+    },
+  );
   clearPublicCache(barberId, collectionName);
 }
 
-async function retryPendingContentCleanupForMutation(barberId: string, collectionName: ContentCollection) {
+async function retryPendingContentCleanupForMutation(
+  barberId: string,
+  collectionName: ContentCollection,
+) {
   const snapshot = await getDocs(collection(db, 'barbers', barberId, collectionName));
-  const records = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as ContentRecord));
+  const records = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as ContentRecord);
   await retryPendingContentCleanup(barberId, collectionName, records);
 }
 
-async function retryPendingContentCleanup(barberId: string, collectionName: ContentCollection, records: ContentRecord[]) {
+async function retryPendingContentCleanup(
+  barberId: string,
+  collectionName: ContentCollection,
+  records: ContentRecord[],
+) {
   try {
     await retryPendingCleanup(records, {
       deletePath: (path) => deleteStorageObject(path),
-      clearPath: (recordId, path) => updateDoc(doc(db, 'barbers', barberId, collectionName, recordId), {
-        pendingImageCleanupPaths: arrayRemove(path), updatedAt: serverTimestamp(),
-      }),
+      clearPath: (recordId, path) =>
+        updateDoc(doc(db, 'barbers', barberId, collectionName, recordId), {
+          pendingImageCleanupPaths: arrayRemove(path),
+          updatedAt: serverTimestamp(),
+        }),
     });
   } catch (error) {
     console.warn('No se pudo completar toda la limpieza pendiente de Storage.', error);

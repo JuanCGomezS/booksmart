@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { getUserRecord, LEGAL_CONSENT_VERSION, signIn, signOut, signUpClient } from '../../lib/auth';
+import {
+  getUserRecord,
+  LEGAL_CONSENT_VERSION,
+  signIn,
+  signOut,
+  signUpClient,
+} from '../../lib/auth';
 import { normalizeUserRole } from '../../lib/roles';
 import { getSafeReturnTo } from '../../lib/return-to';
 import { notifyError } from './FloatingNotifications';
@@ -10,9 +16,10 @@ interface LoginFormProps {
 }
 
 function authenticationErrorMessage(error: unknown, mode: 'login' | 'register'): string {
-  const code = typeof error === 'object' && error !== null && 'code' in error
-    ? (error as { code?: string }).code
-    : undefined;
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: string }).code
+      : undefined;
 
   switch (code) {
     case 'auth/invalid-email':
@@ -100,7 +107,10 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
         window.location.href = `${window.location.pathname}?account=bookings`;
         return;
       }
-      const returnTo = getSafeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), baseUrl);
+      const returnTo = getSafeReturnTo(
+        new URLSearchParams(window.location.search).get('returnTo'),
+        baseUrl,
+      );
       if (returnTo) {
         window.location.href = returnTo;
       } else if (role === 'customer') {
@@ -120,7 +130,10 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
   return (
     <div className="login-refinement min-h-[calc(100vh-90px)] section-shell flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
-        <button className="mb-4 text-sm text-subtle transition-colors cursor-pointer" onClick={() => window.history.back()}>
+        <button
+          className="mb-4 text-sm text-subtle transition-colors cursor-pointer"
+          onClick={() => window.history.back()}
+        >
           &lt; Volver
         </button>
         <div className="surface-card rounded-2xl p-5">
@@ -149,11 +162,18 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
                     required
                     disabled={loading}
                     className="w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--secondary)] disabled:opacity-50"
-                    style={{ border: '1px solid var(--border)', background: 'var(--surface-soft)', color: 'var(--text-primary)' }}
+                    style={{
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface-soft)',
+                      color: 'var(--text-primary)',
+                    }}
                   />
                 </div>
 
-                <div className="terms-consent flex items-start gap-3 rounded-lg border p-3 text-sm text-subtle" style={{ borderColor: 'var(--border)', background: 'var(--surface-soft)' }}>
+                <div
+                  className="terms-consent flex items-start gap-3 rounded-lg border p-3 text-sm text-subtle"
+                  style={{ borderColor: 'var(--border)', background: 'var(--surface-soft)' }}
+                >
                   <input
                     id="legal-consent"
                     type="checkbox"
@@ -162,10 +182,31 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
                     className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--secondary)]"
                   />
                   <p className="leading-5">
-                    <label htmlFor="legal-consent">Acepto los términos, el tratamiento de datos personales y el aviso de privacidad.</label>{' '}
-                    <a href={`${baseUrl}terminos-de-uso`} className="font-semibold underline underline-offset-2">Términos de uso</a>,{' '}
-                    <a href={`${baseUrl}tratamiento-de-datos`} className="font-semibold underline underline-offset-2">tratamiento de datos personales</a>{' '}y{' '}
-                    <a href={`${baseUrl}privacidad`} className="font-semibold underline underline-offset-2">aviso de privacidad</a>.
+                    <label htmlFor="legal-consent">
+                      Acepto los términos, el tratamiento de datos personales y el aviso de
+                      privacidad.
+                    </label>{' '}
+                    <a
+                      href={`${baseUrl}terminos-de-uso`}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      Términos de uso
+                    </a>
+                    ,{' '}
+                    <a
+                      href={`${baseUrl}tratamiento-de-datos`}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      tratamiento de datos personales
+                    </a>{' '}
+                    y{' '}
+                    <a
+                      href={`${baseUrl}privacidad`}
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      aviso de privacidad
+                    </a>
+                    .
                   </p>
                 </div>
               </>
@@ -184,13 +225,17 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
                 required
                 disabled={loading}
                 className="w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--secondary)] disabled:opacity-50"
-                style={{ border: '1px solid var(--border)', background: 'var(--surface-soft)', color: 'var(--text-primary)' }}
+                style={{
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-soft)',
+                  color: 'var(--text-primary)',
+                }}
               />
             </div>
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-subtle mb-1">
-                  Contraseña
+                Contraseña
               </label>
               <input
                 id="password"
@@ -201,7 +246,11 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
                 required
                 disabled={loading}
                 className="w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--secondary)] disabled:opacity-50"
-                style={{ border: '1px solid var(--border)', background: 'var(--surface-soft)', color: 'var(--text-primary)' }}
+                style={{
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-soft)',
+                  color: 'var(--text-primary)',
+                }}
               />
             </div>
 
@@ -221,7 +270,9 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
             }}
             className="mt-6 w-full text-sm font-semibold text-subtle hover:text-[var(--secondary)] transition-colors cursor-pointer"
           >
-            {mode === 'login' ? '¿No tienes una cuenta? Crea una' : '¿Ya tienes una cuenta? Inicia sesión'}
+            {mode === 'login'
+              ? '¿No tienes una cuenta? Crea una'
+              : '¿Ya tienes una cuenta? Inicia sesión'}
           </button>
 
           <p className="mt-3 text-center text-xs text-subtle">

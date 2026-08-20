@@ -8,15 +8,15 @@ BookSmart es una plataforma de agendamiento para negocios que atienden por cita:
 2. Copia las variables de Firebase de `.env.example` a `.env` y completa sus valores.
 3. Ejecuta `npm run dev` para desarrollo local o `npm run build` para generar producción.
 
-| Capa | Tecnología |
-| --- | --- |
-| Sitio y rutas | Astro 7 |
-| UI interactiva | React 19 |
-| Mapas | React Leaflet + OpenStreetMap |
-| Estilos | Tailwind CSS 4 |
+| Capa                  | Tecnología                           |
+| --------------------- | ------------------------------------ |
+| Sitio y rutas         | Astro 7                              |
+| UI interactiva        | React 19                             |
+| Mapas                 | React Leaflet + OpenStreetMap        |
+| Estilos               | Tailwind CSS 4                       |
 | Datos y autenticación | Firebase / Firestore / Firebase Auth |
-| Despliegue web | GitHub Pages |
-| Backend público | Firebase Functions + Rules |
+| Despliegue web        | GitHub Pages                         |
+| Backend público       | Firebase Functions + Rules           |
 
 ## Producto
 
@@ -31,12 +31,12 @@ La UI usa el término **negocio** como concepto de plataforma. Cada alta nueva d
 
 BookSmart conserva deliberadamente la colección Firestore histórica `barbers` y sus subcolecciones, además de los campos internos como `barberId` y roles existentes. Renombrarlos en producción separaría los documentos ya creados de citas, servicios, productos y permisos asociados.
 
-| Elemento | Decisión |
-| --- | --- |
-| Colección principal | Se mantiene `barbers` por compatibilidad. |
-| Categoría visible | Los negocios nuevos guardan `businessType`. |
+| Elemento             | Decisión                                                                                                          |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Colección principal  | Se mantiene `barbers` por compatibilidad.                                                                         |
+| Categoría visible    | Los negocios nuevos guardan `businessType`.                                                                       |
 | Registros anteriores | Al leer un documento sin `businessType`, la app lo interpreta como `barbershop`. No se requiere migración masiva. |
-| Cambio de categoría | La capa de datos admite actualizar `businessType`; la UI de edición completa queda como siguiente trabajo. |
+| Cambio de categoría  | La capa de datos admite actualizar `businessType`; la UI de edición completa queda como siguiente trabajo.        |
 
 No se cambian reglas de Firestore ni rutas públicas en este rebrand: siguen autorizando y resolviendo el almacenamiento heredado.
 
@@ -44,11 +44,11 @@ No se cambian reglas de Firestore ni rutas públicas en este rebrand: siguen aut
 
 El proyecto requiere las variables públicas de Firebase que aparecen en `.env.example`. El script administrativo también requiere `FIREBASE_SERVICE_ACCOUNT_JSON` cuando se usa para crear el superadmin.
 
-| Comando | Resultado |
-| --- | --- |
-| `npm run dev` | Inicia Astro en desarrollo local con base `/`. |
-| `npm run build` | Genera el sitio estático de producción. |
-| `npm run preview` | Sirve el build local. |
+| Comando                                                        | Resultado                                                                                    |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `npm run dev`                                                  | Inicia Astro en desarrollo local con base `/`.                                               |
+| `npm run build`                                                | Genera el sitio estático de producción.                                                      |
+| `npm run preview`                                              | Sirve el build local.                                                                        |
 | `npx tsx scripts/seed-superadmin.ts <email> <password> <name>` | Crea o actualiza el primer superadmin si las credenciales administrativas están disponibles. |
 
 ## Despliegue en GitHub Pages
@@ -99,11 +99,11 @@ El administrador selecciona directamente el punto exacto del negocio en el mapa 
 
 En esta etapa no se mantienen ni ejecutan pruebas automatizadas. Antes de publicar cambios, usa estas verificaciones manuales del repositorio:
 
-| Comando | Resultado |
-| --- | --- |
+| Comando            | Resultado                                               |
+| ------------------ | ------------------------------------------------------- |
 | `npx tsc --noEmit` | Comprueba los tipos de TypeScript sin generar archivos. |
-| `npm run build` | Genera el sitio estático de producción. |
-| `git diff --check` | Detecta errores de espacios en blanco en los cambios. |
+| `npm run build`    | Genera el sitio estático de producción.                 |
+| `git diff --check` | Detecta errores de espacios en blanco en los cambios.   |
 
 ## Contacto de marca
 

@@ -7,6 +7,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "deploy:backend": "npx firebase-tools deploy --only functions,firestore:rules,storage --project barberflow-7ccac"
   },
   "dependencies": {

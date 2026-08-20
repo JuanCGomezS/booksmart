@@ -74,7 +74,9 @@ export default function FancySelect<T extends string = string>({
     requestAnimationFrame(() => triggerRef.current?.focus());
   };
 
-  const openMenu = (preferredIndex = selectedEnabledIndex >= 0 ? selectedEnabledIndex : firstEnabledIndex) => {
+  const openMenu = (
+    preferredIndex = selectedEnabledIndex >= 0 ? selectedEnabledIndex : firstEnabledIndex,
+  ) => {
     const nextPosition = getMenuPosition();
     if (!nextPosition) return;
 
@@ -136,9 +138,20 @@ export default function FancySelect<T extends string = string>({
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       if (!open) {
-        openMenu(event.key === 'ArrowDown' ? (selectedEnabledIndex >= 0 ? selectedEnabledIndex : firstEnabledIndex) : (selectedEnabledIndex >= 0 ? selectedEnabledIndex : lastEnabledIndex));
+        openMenu(
+          event.key === 'ArrowDown'
+            ? selectedEnabledIndex >= 0
+              ? selectedEnabledIndex
+              : firstEnabledIndex
+            : selectedEnabledIndex >= 0
+              ? selectedEnabledIndex
+              : lastEnabledIndex,
+        );
       } else {
-        const nextIndex = getNextEnabledIndex(activeIndex >= 0 ? activeIndex : firstEnabledIndex, event.key === 'ArrowDown' ? 1 : -1);
+        const nextIndex = getNextEnabledIndex(
+          activeIndex >= 0 ? activeIndex : firstEnabledIndex,
+          event.key === 'ArrowDown' ? 1 : -1,
+        );
         if (nextIndex >= 0) focusOption(nextIndex);
       }
       return;
@@ -216,61 +229,74 @@ export default function FancySelect<T extends string = string>({
           openMenu();
         }}
       >
-        <span className={selected ? 'text-main' : 'text-subtle'}>{selected?.label ?? placeholder}</span>
+        <span className={selected ? 'text-main' : 'text-subtle'}>
+          {selected?.label ?? placeholder}
+        </span>
         <svg
           viewBox="0 0 24 24"
           aria-hidden="true"
           className={`h-4 w-4 shrink-0 text-subtle transition-transform ${open ? 'rotate-180' : ''}`}
         >
-          <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path
+            d="M7 10l5 5 5-5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </button>
 
-      {open && position && createPortal(
-        <div
-          ref={menuRef}
-          id={listId}
-          role="listbox"
-          aria-activedescendant={activeIndex >= 0 ? `${listId}-option-${activeIndex}` : undefined}
-          className={['surface-card rounded-xl p-1', menuClassName].join(' ')}
-          style={{
-            position: 'fixed',
-            top: `${position.top}px`,
-            left: `${position.left}px`,
-            width: `${position.width}px`,
-            zIndex: 9999,
-          }}
-        >
-          {options.map((item, index) => {
-            const isSelected = item.value === value;
-            return (
-              <button
-                ref={(element) => { optionRefs.current[index] = element; }}
-                key={item.value}
-                id={`${listId}-option-${index}`}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                disabled={item.disabled}
-                tabIndex={item.disabled ? -1 : activeIndex === index ? 0 : -1}
-                className={[
-                  'block w-full rounded-lg px-3 py-2 text-left text-sm transition-colors',
-                  isSelected
-                    ? 'bg-[color-mix(in_srgb,var(--secondary)_22%,var(--surface))] text-main'
-                    : 'text-subtle hover:bg-[color-mix(in_srgb,var(--secondary)_12%,transparent)] hover:text-main',
-                  item.disabled ? 'cursor-not-allowed opacity-50' : '',
-                ].join(' ')}
-                onFocus={() => setActiveIndex(index)}
-                onKeyDown={(event) => handleOptionKeyDown(event, index)}
-                onClick={() => selectOption(index)}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>,
-        document.body
-      )}
+      {open &&
+        position &&
+        createPortal(
+          <div
+            ref={menuRef}
+            id={listId}
+            role="listbox"
+            aria-activedescendant={activeIndex >= 0 ? `${listId}-option-${activeIndex}` : undefined}
+            className={['surface-card rounded-xl p-1', menuClassName].join(' ')}
+            style={{
+              position: 'fixed',
+              top: `${position.top}px`,
+              left: `${position.left}px`,
+              width: `${position.width}px`,
+              zIndex: 9999,
+            }}
+          >
+            {options.map((item, index) => {
+              const isSelected = item.value === value;
+              return (
+                <button
+                  ref={(element) => {
+                    optionRefs.current[index] = element;
+                  }}
+                  key={item.value}
+                  id={`${listId}-option-${index}`}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  disabled={item.disabled}
+                  tabIndex={item.disabled ? -1 : activeIndex === index ? 0 : -1}
+                  className={[
+                    'block w-full rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                    isSelected
+                      ? 'bg-[color-mix(in_srgb,var(--secondary)_22%,var(--surface))] text-main'
+                      : 'text-subtle hover:bg-[color-mix(in_srgb,var(--secondary)_12%,transparent)] hover:text-main',
+                    item.disabled ? 'cursor-not-allowed opacity-50' : '',
+                  ].join(' ')}
+                  onFocus={() => setActiveIndex(index)}
+                  onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                  onClick={() => selectOption(index)}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

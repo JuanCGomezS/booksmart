@@ -6,7 +6,11 @@ import BarbersList from './admin/BarbersList';
 import CreateBarberForm from './admin/CreateBarberForm';
 import { notifySuccess } from './FloatingNotifications';
 
-export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: (barber: Barber) => void }) {
+export default function SuperAdminApp({
+  onSelectBusiness,
+}: {
+  onSelectBusiness: (barber: Barber) => void;
+}) {
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -22,7 +26,6 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
     try {
       const barbersData = await getAllBarbers();
       setBarbers(barbersData);
-      
     } catch (err) {
       setError('Error cargando negocios');
       console.error(err);
@@ -41,7 +44,10 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
     return (
       <div className="super-admin-workspace section-shell min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin mx-auto mb-4 h-10 w-10 border-2" style={{ borderColor: 'var(--secondary)' }}></div>
+          <div
+            className="animate-spin mx-auto mb-4 h-10 w-10 border-2"
+            style={{ borderColor: 'var(--secondary)' }}
+          ></div>
           <p className="text-subtle">Cargando negocios...</p>
         </div>
       </div>
@@ -59,9 +65,18 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
         </div>
 
         {error && (
-          <div className="status-cancelled mb-6 flex flex-wrap items-center gap-3 rounded border p-4" role="alert">
+          <div
+            className="status-cancelled mb-6 flex flex-wrap items-center gap-3 rounded border p-4"
+            role="alert"
+          >
             <p>{error}</p>
-            <button type="button" className="btn-outline px-3 py-1 text-sm" onClick={() => void loadBarbers()}>Reintentar</button>
+            <button
+              type="button"
+              className="btn-outline px-3 py-1 text-sm"
+              onClick={() => void loadBarbers()}
+            >
+              Reintentar
+            </button>
           </div>
         )}
 
@@ -75,19 +90,19 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
             <div>
               <p className="text-subtle text-sm">Activas</p>
               <p className="text-xl font-semibold" style={{ color: 'var(--success)' }}>
-                {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.ACTIVE).length}
+                {barbers.filter((b) => getBarberStatus(b) === DATA.BARBER_STATUS.ACTIVE).length}
               </p>
             </div>
             <div>
               <p className="text-subtle text-sm">En prueba</p>
               <p className="status-trial-fg text-xl font-semibold">
-                {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.TRIAL).length}
+                {barbers.filter((b) => getBarberStatus(b) === DATA.BARBER_STATUS.TRIAL).length}
               </p>
             </div>
             <div>
               <p className="text-subtle text-sm">Inactivas</p>
               <p className="text-xl font-semibold" style={{ color: 'var(--danger)' }}>
-                {barbers.filter(b => getBarberStatus(b) === DATA.BARBER_STATUS.DISABLED).length}
+                {barbers.filter((b) => getBarberStatus(b) === DATA.BARBER_STATUS.DISABLED).length}
               </p>
             </div>
           </div>
@@ -104,17 +119,10 @@ export default function SuperAdminApp({ onSelectBusiness }: { onSelectBusiness: 
         </div>
 
         {/* Create form */}
-        {showCreateForm && (
-          <CreateBarberForm onSuccess={handleBarberCreated} />
-        )}
+        {showCreateForm && <CreateBarberForm onSuccess={handleBarberCreated} />}
 
         {/* Barbers list */}
-        <BarbersList 
-          barbers={barbers} 
-          onRefresh={loadBarbers}
-          onSelect={onSelectBusiness}
-        />
-
+        <BarbersList barbers={barbers} onRefresh={loadBarbers} onSelect={onSelectBusiness} />
       </main>
     </div>
   );

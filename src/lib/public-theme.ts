@@ -9,7 +9,7 @@ export const PUBLIC_THEME_IDS = [
   'custom',
 ] as const;
 
-export type PublicThemeId = typeof PUBLIC_THEME_IDS[number];
+export type PublicThemeId = (typeof PUBLIC_THEME_IDS)[number];
 export type PresetPublicThemeId = Exclude<PublicThemeId, 'custom'>;
 
 export type CustomThemePalette = {
@@ -32,14 +32,54 @@ export type ResolvedPublicTheme = {
 };
 
 export const PUBLIC_THEMES: PublicTheme[] = [
-  { id: 'gold-night', name: 'Noche dorada', mode: 'dark', swatches: ['#0a0d17', '#d6ad59', '#f0c676'] },
-  { id: 'royal-night', name: 'Noche real', mode: 'dark', swatches: ['#0a1124', '#9bb7ff', '#f7b267'] },
-  { id: 'crimson-sun', name: 'Sol carmesí', mode: 'dark', swatches: ['#1a0d10', '#f4c542', '#ff7b3d'] },
-  { id: 'violet-blush', name: 'Violeta suave', mode: 'dark', swatches: ['#140f1f', '#f06bb4', '#b584ff'] },
-  { id: 'teal-night', name: 'Verde azulado', mode: 'light', swatches: ['#f5fbfb', '#0e7c7b', '#d15b29'] },
-  { id: 'sunset-cream', name: 'Crema al atardecer', mode: 'light', swatches: ['#fff8f3', '#c9472a', '#d9941a'] },
-  { id: 'orchid-rose', name: 'Orquídea rosa', mode: 'light', swatches: ['#fdf8ff', '#8d48c5', '#d74b91'] },
-  { id: 'custom', name: 'Tema personalizado', mode: 'light', swatches: ['#0a0d17', '#f2f2f1', '#d6ad59'] },
+  {
+    id: 'gold-night',
+    name: 'Noche dorada',
+    mode: 'dark',
+    swatches: ['#0a0d17', '#d6ad59', '#f0c676'],
+  },
+  {
+    id: 'royal-night',
+    name: 'Noche real',
+    mode: 'dark',
+    swatches: ['#0a1124', '#9bb7ff', '#f7b267'],
+  },
+  {
+    id: 'crimson-sun',
+    name: 'Sol carmesí',
+    mode: 'dark',
+    swatches: ['#1a0d10', '#f4c542', '#ff7b3d'],
+  },
+  {
+    id: 'violet-blush',
+    name: 'Violeta suave',
+    mode: 'dark',
+    swatches: ['#140f1f', '#f06bb4', '#b584ff'],
+  },
+  {
+    id: 'teal-night',
+    name: 'Verde azulado',
+    mode: 'light',
+    swatches: ['#f5fbfb', '#0e7c7b', '#d15b29'],
+  },
+  {
+    id: 'sunset-cream',
+    name: 'Crema al atardecer',
+    mode: 'light',
+    swatches: ['#fff8f3', '#c9472a', '#d9941a'],
+  },
+  {
+    id: 'orchid-rose',
+    name: 'Orquídea rosa',
+    mode: 'light',
+    swatches: ['#fdf8ff', '#8d48c5', '#d74b91'],
+  },
+  {
+    id: 'custom',
+    name: 'Tema personalizado',
+    mode: 'light',
+    swatches: ['#0a0d17', '#f2f2f1', '#d6ad59'],
+  },
 ];
 
 export const DEFAULT_PUBLIC_THEME_ID: PresetPublicThemeId = 'gold-night';
@@ -58,25 +98,45 @@ function normalizeHexColor(value: unknown): string | null {
 }
 
 function relativeLuminance(color: string): number {
-  const channels = [1, 3, 5].map((index) => Number.parseInt(color.slice(index, index + 2), 16) / 255);
-  const [red, green, blue] = channels.map((channel) => channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  const channels = [1, 3, 5].map(
+    (index) => Number.parseInt(color.slice(index, index + 2), 16) / 255,
+  );
+  const [red, green, blue] = channels.map((channel) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
 export function contrastRatio(first: string, second: string): number {
   const firstLuminance = relativeLuminance(first);
   const secondLuminance = relativeLuminance(second);
-  return (Math.max(firstLuminance, secondLuminance) + 0.05) / (Math.min(firstLuminance, secondLuminance) + 0.05);
+  return (
+    (Math.max(firstLuminance, secondLuminance) + 0.05) /
+    (Math.min(firstLuminance, secondLuminance) + 0.05)
+  );
 }
 
 export function primaryActionTextColor(primary: string): '#111111' | '#ffffff' {
-  return contrastRatio(primary, '#111111') >= contrastRatio(primary, '#ffffff') ? '#111111' : '#ffffff';
+  return contrastRatio(primary, '#111111') >= contrastRatio(primary, '#ffffff')
+    ? '#111111'
+    : '#ffffff';
 }
 
-export function validateCustomThemePalette(value: unknown): { palette?: CustomThemePalette; error?: string } {
-  const source = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+export function validateCustomThemePalette(value: unknown): {
+  palette?: CustomThemePalette;
+  error?: string;
+} {
+  const source =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
   const paletteKeys = Object.keys(source);
-  if (paletteKeys.length !== 4 || !(['background', 'surface', 'text', 'primary'] as const).every((key) => Object.hasOwn(source, key))) {
+  if (
+    paletteKeys.length !== 4 ||
+    !(['background', 'surface', 'text', 'primary'] as const).every((key) =>
+      Object.hasOwn(source, key),
+    )
+  ) {
     return { error: 'Use exactamente los cuatro colores del tema personalizado.' };
   }
   const background = normalizeHexColor(source.background);
@@ -93,13 +153,22 @@ export function validateCustomThemePalette(value: unknown): { palette?: CustomTh
   if (contrastRatio(primary, primaryActionTextColor(primary)) < AA_CONTRAST) {
     return { error: 'La acción principal no tiene contraste AA suficiente.' };
   }
-  if (contrastRatio(primary, background) < AA_CONTRAST || contrastRatio(primary, surface) < AA_CONTRAST) {
+  if (
+    contrastRatio(primary, background) < AA_CONTRAST ||
+    contrastRatio(primary, surface) < AA_CONTRAST
+  ) {
     return { error: 'La acción principal debe tener contraste AA con el fondo y la superficie.' };
   }
   return { palette: { background, surface, text, primary } };
 }
 
-export function themeForPersistence(id: PublicThemeId, palette: unknown): { theme?: { id: PresetPublicThemeId } | { id: 'custom'; palette: CustomThemePalette }; error?: string } {
+export function themeForPersistence(
+  id: PublicThemeId,
+  palette: unknown,
+): {
+  theme?: { id: PresetPublicThemeId } | { id: 'custom'; palette: CustomThemePalette };
+  error?: string;
+} {
   if (id !== 'custom') return { theme: { id } };
   const result = validateCustomThemePalette(palette);
   return result.palette ? { theme: { id, palette: result.palette } } : { error: result.error };
@@ -107,12 +176,13 @@ export function themeForPersistence(id: PublicThemeId, palette: unknown): { them
 
 export function resolvePublicThemeId(value: unknown): PublicThemeId {
   return typeof value === 'string' && (PUBLIC_THEME_IDS as readonly string[]).includes(value)
-    ? value as PublicThemeId
+    ? (value as PublicThemeId)
     : DEFAULT_PUBLIC_THEME_ID;
 }
 
 export function resolvePublicTheme(value: unknown): ResolvedPublicTheme {
-  const theme = value && typeof value === 'object' ? value as { id?: unknown; palette?: unknown } : {};
+  const theme =
+    value && typeof value === 'object' ? (value as { id?: unknown; palette?: unknown }) : {};
   const id = resolvePublicThemeId(theme.id);
   if (id !== 'custom') return { id };
   const { palette } = validateCustomThemePalette(theme.palette);

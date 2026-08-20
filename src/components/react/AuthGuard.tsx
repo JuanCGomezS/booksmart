@@ -8,10 +8,10 @@ interface AuthGuardProps {
   fallback?: React.ReactNode;
 }
 
-export default function AuthGuard({ 
-  children, 
+export default function AuthGuard({
+  children,
   requiredRole = 'superadmin',
-  fallback 
+  fallback,
 }: AuthGuardProps) {
   const baseUrl = import.meta.env.BASE_URL;
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
@@ -23,9 +23,9 @@ export default function AuthGuard({
         setIsAuthorized(true);
         return;
       }
-      
+
       const user = await getCurrentUser();
-      
+
       if (!user) {
         window.location.href = `${baseUrl}login`;
         return;
@@ -58,21 +58,21 @@ export default function AuthGuard({
 
   // Sin autorización
   if (!isAuthorized) {
-    return fallback || (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="bg-white rounded-lg shadow p-8 max-w-md text-center">
-          <h1 className="text-2xl font-bold mb-2 text-gray-900">Acceso denegado</h1>
-          <p className="text-gray-600 mb-4">
-            No tienes permiso para acceder a esta sección.
-          </p>
-          <a
-            href={baseUrl}
-            className="inline-block bg-black text-white px-6 py-2 rounded-lg hover:bg-gray-900 transition-colors"
-          >
-            Volver a inicio
-          </a>
+    return (
+      fallback || (
+        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+          <div className="bg-white rounded-lg shadow p-8 max-w-md text-center">
+            <h1 className="text-2xl font-bold mb-2 text-gray-900">Acceso denegado</h1>
+            <p className="text-gray-600 mb-4">No tienes permiso para acceder a esta sección.</p>
+            <a
+              href={baseUrl}
+              className="inline-block bg-black text-white px-6 py-2 rounded-lg hover:bg-gray-900 transition-colors"
+            >
+              Volver a inicio
+            </a>
+          </div>
         </div>
-      </div>
+      )
     );
   }
 

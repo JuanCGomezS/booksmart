@@ -126,7 +126,7 @@ export interface Barber {
   ownerEmail?: string;
   plan: Plan;
   billingCycle: BillingCycle;
-  
+
   // Control de membresía
   trialStartedAt: Timestamp;
   trialEndsAt: Timestamp;
@@ -137,19 +137,19 @@ export interface Barber {
   subscriptionStatus: SubscriptionStatus;
   /** Effective end date for the selected plan and billing cycle. */
   planExpiresAt: Timestamp;
-  
+
   // Estado
   active: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  
+
   // Límites según plan
   limits: {
     maxBarbers: number;
     maxProducts: number;
     maxGalleryItems: number;
   };
-  
+
   // Configuración
   config: {
     address: string;
@@ -174,7 +174,7 @@ export interface Barber {
     /** Optional until a business configures public booking. */
     booking?: BookingSettings;
   };
-  
+
   // Horario de atención del local
   workingHours: {
     [day: number]: {
@@ -200,7 +200,18 @@ export interface PublicBusiness {
   businessType: BusinessType;
   active: boolean;
   bookingEnabledUntil?: Timestamp;
-  config: Pick<Barber['config'], 'address' | 'phone' | 'logoUrl' | 'coverUrl' | 'placeUrl' | 'location' | 'socialLinks' | 'theme' | 'booking'>;
+  config: Pick<
+    Barber['config'],
+    | 'address'
+    | 'phone'
+    | 'logoUrl'
+    | 'coverUrl'
+    | 'placeUrl'
+    | 'location'
+    | 'socialLinks'
+    | 'theme'
+    | 'booking'
+  >;
   workingHours: Barber['workingHours'];
 }
 
@@ -361,7 +372,10 @@ export interface PublicBookingProduct {
 }
 
 /** Strict booking-only service fields returned by the public callable. */
-export type PublicBookingService = Pick<Service, 'id' | 'name' | 'duration' | 'bufferMinutes' | 'staffIds'> & {
+export type PublicBookingService = Pick<
+  Service,
+  'id' | 'name' | 'duration' | 'bufferMinutes' | 'staffIds'
+> & {
   active: true;
 };
 

@@ -10,7 +10,10 @@ export function emptyLazyResource<T>(): LazyResourceState<T> {
 }
 
 /** Starts one fetch per modal session unless the caller explicitly retries. */
-export function beginLazyResourceLoad<T>(state: LazyResourceState<T>, force = false): LazyResourceState<T> | null {
+export function beginLazyResourceLoad<T>(
+  state: LazyResourceState<T>,
+  force = false,
+): LazyResourceState<T> | null {
   if (state.loading || (state.loaded && !force)) return null;
   return { ...state, loading: true, error: '' };
 }
@@ -19,7 +22,10 @@ export function resolveLazyResource<T>(data: T[]): LazyResourceState<T> {
   return { data, loaded: true, loading: false, error: '' };
 }
 
-export function rejectLazyResource<T>(state: LazyResourceState<T>, error: unknown): LazyResourceState<T> {
+export function rejectLazyResource<T>(
+  state: LazyResourceState<T>,
+  error: unknown,
+): LazyResourceState<T> {
   return {
     ...state,
     loading: false,

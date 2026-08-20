@@ -20,15 +20,21 @@ export type LegalConsent = {
 };
 
 export class RegistrationRecoveryError extends Error {
-  constructor(code: 'registration/profile-creation-reverted' | 'registration/profile-creation-recovery-failed') {
-    super(code === 'registration/profile-creation-reverted'
-      ? 'No se pudo crear el perfil y se revirtió la cuenta.'
-      : 'No se pudo crear el perfil ni revertir completamente la cuenta.');
+  constructor(
+    code:
+      'registration/profile-creation-reverted' | 'registration/profile-creation-recovery-failed',
+  ) {
+    super(
+      code === 'registration/profile-creation-reverted'
+        ? 'No se pudo crear el perfil y se revirtió la cuenta.'
+        : 'No se pudo crear el perfil ni revertir completamente la cuenta.',
+    );
     this.name = 'RegistrationRecoveryError';
     this.code = code;
   }
 
-  readonly code: 'registration/profile-creation-reverted' | 'registration/profile-creation-recovery-failed';
+  readonly code:
+    'registration/profile-creation-reverted' | 'registration/profile-creation-recovery-failed';
 }
 
 /**
@@ -101,7 +107,7 @@ export async function getCurrentUser(): Promise<(FirebaseUser & { userRecord?: U
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       unsubscribe();
-      
+
       if (!firebaseUser) {
         resolve(null);
         return;
@@ -111,7 +117,7 @@ export async function getCurrentUser(): Promise<(FirebaseUser & { userRecord?: U
         // Obtener datos adicionales del usuario desde Firestore
         const userRef = doc(db, 'users', firebaseUser.uid);
         const userSnap = await getDoc(userRef);
-        
+
         if (userSnap.exists()) {
           const userData = userSnap.data() as User;
           resolve(Object.assign(firebaseUser, { userRecord: userData }));

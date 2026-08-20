@@ -4,26 +4,159 @@
   "title": "Design System: BookSmart",
   "extensions": {
     "colorMeta": {
-      "ink": { "role": "neutral", "displayName": "Press Ink", "canonical": "#101114", "tonalRamp": ["#101114", "#292A2D", "#45464A", "#626367", "#828388", "#A2A3A7", "#C4C5C8", "#F1EEE6"] },
-      "paper": { "role": "neutral", "displayName": "Uncoated Paper", "canonical": "#F1EEE6", "tonalRamp": ["#34322F", "#595650", "#7D7971", "#A09B91", "#BDB7AB", "#D8D3C8", "#E7E3DA", "#F1EEE6"] },
-      "silver": { "role": "secondary", "displayName": "Foil Silver", "canonical": "#B9BDC4", "tonalRamp": ["#25272B", "#41444A", "#5D6168", "#787D86", "#969BA5", "#B9BDC4", "#D2D5DB", "#EAECF0"] },
-      "pink": { "role": "primary", "displayName": "Fluorescent Action Pink", "canonical": "#F13B87", "tonalRamp": ["#35061B", "#5B0A2F", "#820D43", "#A91458", "#CD216F", "#F13B87", "#FF70AB", "#FFA9CC"] },
-      "marigold": { "role": "secondary", "displayName": "Registration Marigold", "canonical": "#FFB400", "tonalRamp": ["#352300", "#5B3B00", "#824F00", "#A96800", "#CD8500", "#FFB400", "#FFCF54", "#FFE8AE"] },
-      "warning-bg": { "role": "secondary", "displayName": "Pending Paper", "canonical": "#FFE3A3", "tonalRamp": ["#403000", "#665000", "#8F7100", "#B89000", "#D9B32C", "#FFE3A3", "#FFEDC9", "#FFF8E7"] },
-      "success-bg": { "role": "tertiary", "displayName": "Confirmed Paper", "canonical": "#C9F1DC", "tonalRamp": ["#073D27", "#0D6140", "#17815A", "#39A777", "#71C798", "#C9F1DC", "#DCF8E8", "#EFFDF4"] },
-      "danger-bg": { "role": "tertiary", "displayName": "Cancelled Paper", "canonical": "#FFD9DC", "tonalRamp": ["#49101A", "#741B28", "#9C2B39", "#C04450", "#DE7180", "#FFD9DC", "#FFE7E9", "#FFF4F5"] }
+      "ink": {
+        "role": "neutral",
+        "displayName": "Press Ink",
+        "canonical": "#101114",
+        "tonalRamp": [
+          "#101114",
+          "#292A2D",
+          "#45464A",
+          "#626367",
+          "#828388",
+          "#A2A3A7",
+          "#C4C5C8",
+          "#F1EEE6"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Uncoated Paper",
+        "canonical": "#F1EEE6",
+        "tonalRamp": [
+          "#34322F",
+          "#595650",
+          "#7D7971",
+          "#A09B91",
+          "#BDB7AB",
+          "#D8D3C8",
+          "#E7E3DA",
+          "#F1EEE6"
+        ]
+      },
+      "silver": {
+        "role": "secondary",
+        "displayName": "Foil Silver",
+        "canonical": "#B9BDC4",
+        "tonalRamp": [
+          "#25272B",
+          "#41444A",
+          "#5D6168",
+          "#787D86",
+          "#969BA5",
+          "#B9BDC4",
+          "#D2D5DB",
+          "#EAECF0"
+        ]
+      },
+      "pink": {
+        "role": "primary",
+        "displayName": "Fluorescent Action Pink",
+        "canonical": "#F13B87",
+        "tonalRamp": [
+          "#35061B",
+          "#5B0A2F",
+          "#820D43",
+          "#A91458",
+          "#CD216F",
+          "#F13B87",
+          "#FF70AB",
+          "#FFA9CC"
+        ]
+      },
+      "marigold": {
+        "role": "secondary",
+        "displayName": "Registration Marigold",
+        "canonical": "#FFB400",
+        "tonalRamp": [
+          "#352300",
+          "#5B3B00",
+          "#824F00",
+          "#A96800",
+          "#CD8500",
+          "#FFB400",
+          "#FFCF54",
+          "#FFE8AE"
+        ]
+      },
+      "warning-bg": {
+        "role": "secondary",
+        "displayName": "Pending Paper",
+        "canonical": "#FFE3A3",
+        "tonalRamp": [
+          "#403000",
+          "#665000",
+          "#8F7100",
+          "#B89000",
+          "#D9B32C",
+          "#FFE3A3",
+          "#FFEDC9",
+          "#FFF8E7"
+        ]
+      },
+      "success-bg": {
+        "role": "tertiary",
+        "displayName": "Confirmed Paper",
+        "canonical": "#C9F1DC",
+        "tonalRamp": [
+          "#073D27",
+          "#0D6140",
+          "#17815A",
+          "#39A777",
+          "#71C798",
+          "#C9F1DC",
+          "#DCF8E8",
+          "#EFFDF4"
+        ]
+      },
+      "danger-bg": {
+        "role": "tertiary",
+        "displayName": "Cancelled Paper",
+        "canonical": "#FFD9DC",
+        "tonalRamp": [
+          "#49101A",
+          "#741B28",
+          "#9C2B39",
+          "#C04450",
+          "#DE7180",
+          "#FFD9DC",
+          "#FFE7E9",
+          "#FFF4F5"
+        ]
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "Oswald Press Headline", "purpose": "Landing statements and select route titles." },
-      "body": { "displayName": "Archivo Operational Sans", "purpose": "All task content, fields, tables, and recovery messages." },
-      "label": { "displayName": "Production Label", "purpose": "Compact metadata and state labels." }
+      "display": {
+        "displayName": "Oswald Press Headline",
+        "purpose": "Landing statements and select route titles."
+      },
+      "body": {
+        "displayName": "Archivo Operational Sans",
+        "purpose": "All task content, fields, tables, and recovery messages."
+      },
+      "label": {
+        "displayName": "Production Label",
+        "purpose": "Compact metadata and state labels."
+      }
     },
     "shadows": [
-      { "name": "press-lift", "value": "8px 8px 0 #101114", "purpose": "Primary action and selected-paper elevation." },
-      { "name": "quiet-lift", "value": "4px 4px 0 rgba(16,17,20,.22)", "purpose": "Standard panel depth." }
+      {
+        "name": "press-lift",
+        "value": "8px 8px 0 #101114",
+        "purpose": "Primary action and selected-paper elevation."
+      },
+      {
+        "name": "quiet-lift",
+        "value": "4px 4px 0 rgba(16,17,20,.22)",
+        "purpose": "Standard panel depth."
+      }
     ],
     "motion": [
-      { "name": "press-ease", "value": "cubic-bezier(.16, 1, .3, 1)", "purpose": "Button and panel state changes; disabled under reduced motion." }
+      {
+        "name": "press-ease",
+        "value": "cubic-bezier(.16, 1, .3, 1)",
+        "purpose": "Button and panel state changes; disabled under reduced motion."
+      }
     ],
     "breakpoints": [
       { "name": "compact", "value": "720px" },
@@ -31,16 +164,55 @@
     ]
   },
   "components": [
-    { "name": "Primary Button", "kind": "button", "refersTo": "button-primary", "description": "The single strongest action on a surface.", "html": "<button class=\"ds-btn-primary\">CONFIRMAR CITA</button>", "css": ".ds-btn-primary{background:#F13B87;color:#101114;padding:14px 20px;border:1px solid #101114;border-radius:2px;box-shadow:4px 4px 0 #101114;font:800 12px Archivo,sans-serif;letter-spacing:.1em}.ds-btn-primary:hover{transform:translate(2px,2px);box-shadow:2px 2px 0 #101114}.ds-btn-primary:focus-visible{outline:3px solid #FFB400;outline-offset:3px}" },
-    { "name": "Operational Field", "kind": "input", "refersTo": "field", "description": "A native-looking field with print-system focus treatment.", "html": "<input class=\"ds-field\" value=\"Nombre de cliente\" aria-label=\"Nombre de cliente\">", "css": ".ds-field{background:#F1EEE6;color:#101114;border:1px solid #101114;border-radius:2px;padding:10px 12px;font:400 14px Archivo,sans-serif}.ds-field:hover{border-color:#F13B87}.ds-field:focus-visible{outline:3px solid #FFB400;outline-offset:2px;border-color:#F13B87}" },
-    { "name": "Paper Panel", "kind": "card", "refersTo": "panel", "description": "A calm task container with a physical offset.", "html": "<section class=\"ds-panel\"><strong>AGENDA DEL DÍA</strong><p>Estados claros. Siguiente acción visible.</p></section>", "css": ".ds-panel{background:#F1EEE6;color:#101114;border:1px solid #101114;border-radius:4px;box-shadow:4px 4px 0 rgba(16,17,20,.22);padding:20px;font:400 14px Archivo,sans-serif}.ds-panel strong{display:block;font:800 12px Archivo,sans-serif;letter-spacing:.1em}.ds-panel p{margin:8px 0 0}" }
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single strongest action on a surface.",
+      "html": "<button class=\"ds-btn-primary\">CONFIRMAR CITA</button>",
+      "css": ".ds-btn-primary{background:#F13B87;color:#101114;padding:14px 20px;border:1px solid #101114;border-radius:2px;box-shadow:4px 4px 0 #101114;font:800 12px Archivo,sans-serif;letter-spacing:.1em}.ds-btn-primary:hover{transform:translate(2px,2px);box-shadow:2px 2px 0 #101114}.ds-btn-primary:focus-visible{outline:3px solid #FFB400;outline-offset:3px}"
+    },
+    {
+      "name": "Operational Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "A native-looking field with print-system focus treatment.",
+      "html": "<input class=\"ds-field\" value=\"Nombre de cliente\" aria-label=\"Nombre de cliente\">",
+      "css": ".ds-field{background:#F1EEE6;color:#101114;border:1px solid #101114;border-radius:2px;padding:10px 12px;font:400 14px Archivo,sans-serif}.ds-field:hover{border-color:#F13B87}.ds-field:focus-visible{outline:3px solid #FFB400;outline-offset:2px;border-color:#F13B87}"
+    },
+    {
+      "name": "Paper Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A calm task container with a physical offset.",
+      "html": "<section class=\"ds-panel\"><strong>AGENDA DEL DÍA</strong><p>Estados claros. Siguiente acción visible.</p></section>",
+      "css": ".ds-panel{background:#F1EEE6;color:#101114;border:1px solid #101114;border-radius:4px;box-shadow:4px 4px 0 rgba(16,17,20,.22);padding:20px;font:400 14px Archivo,sans-serif}.ds-panel strong{display:block;font:800 12px Archivo,sans-serif;letter-spacing:.1em}.ds-panel p{margin:8px 0 0}"
+    }
   ],
   "narrative": {
     "northStar": "Editioned Service Press",
     "overview": "BookSmart treats a booking system like a limited-run service bulletin: ink-black fields, utilitarian silver rules, fluorescent pink actions, and marigold registration marks. Marketing is loud enough to make the operating system memorable; booking and administration use the same materials with a calmer, task-first density.",
-    "keyCharacteristics": ["Ink-black base with paper surfaces and fluorescent operational signals.", "Condensed display type only for statements; workhorse sans serif for tasks.", "Square-edged panels, thin rules, and print-registration state markers."],
-    "rules": [{ "name": "The Two-Ink Rule", "body": "One task state gets one signal color; pink is never used merely as decoration inside operational screens.", "section": "colors" }],
-    "dos": ["Do use registration ticks and halftone only to frame or identify a real state.", "Do keep booking and administrative task text at normal reading sizes.", "Do preserve visible keyboard focus and native date, time, checkbox, and select affordances."],
-    "donts": ["Don't use decorative gradients, glass, or neon glows.", "Don't turn appointment status into a decorative badge collection; state color must remain explicit in text.", "Don't use display lettering for form labels, table data, or error recovery."]
+    "keyCharacteristics": [
+      "Ink-black base with paper surfaces and fluorescent operational signals.",
+      "Condensed display type only for statements; workhorse sans serif for tasks.",
+      "Square-edged panels, thin rules, and print-registration state markers."
+    ],
+    "rules": [
+      {
+        "name": "The Two-Ink Rule",
+        "body": "One task state gets one signal color; pink is never used merely as decoration inside operational screens.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do use registration ticks and halftone only to frame or identify a real state.",
+      "Do keep booking and administrative task text at normal reading sizes.",
+      "Do preserve visible keyboard focus and native date, time, checkbox, and select affordances."
+    ],
+    "donts": [
+      "Don't use decorative gradients, glass, or neon glows.",
+      "Don't turn appointment status into a decorative badge collection; state color must remain explicit in text.",
+      "Don't use display lettering for form labels, table data, or error recovery."
+    ]
   }
 }

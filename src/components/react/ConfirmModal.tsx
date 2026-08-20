@@ -40,7 +40,9 @@ export default function ConfirmModal({
     }
     if (event.key !== 'Tab') return;
 
-    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
     if (!focusable?.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -57,12 +59,25 @@ export default function ConfirmModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.6)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
       onKeyDown={handleKeyDown}
     >
-      <div ref={dialogRef} role={isDangerous ? 'alertdialog' : 'dialog'} aria-modal="true" aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-message" className="surface-card w-full max-w-md rounded-2xl p-6 shadow-2xl">
-        <h2 id="confirm-modal-title" className="text-lg font-bold text-main mb-2">{title}</h2>
-        <p id="confirm-modal-message" className="text-sm text-subtle mb-6">{message}</p>
+      <div
+        ref={dialogRef}
+        role={isDangerous ? 'alertdialog' : 'dialog'}
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+        aria-describedby="confirm-modal-message"
+        className="surface-card w-full max-w-md rounded-2xl p-6 shadow-2xl"
+      >
+        <h2 id="confirm-modal-title" className="text-lg font-bold text-main mb-2">
+          {title}
+        </h2>
+        <p id="confirm-modal-message" className="text-sm text-subtle mb-6">
+          {message}
+        </p>
 
         <div className="flex gap-3 justify-end">
           <button
@@ -77,9 +92,7 @@ export default function ConfirmModal({
             type="button"
             onClick={onConfirm}
             className={`px-6 py-2 rounded-xl text-sm font-semibold transition-colors ${
-              isDangerous
-                ? 'text-white font-semibold'
-                : 'btn-primary'
+              isDangerous ? 'text-white font-semibold' : 'btn-primary'
             }`}
             style={
               isDangerous

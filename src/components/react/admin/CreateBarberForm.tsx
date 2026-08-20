@@ -75,7 +75,9 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
     { value: DATA.BILLING_CYCLE.MONTH_3, label: BILLING_CYCLE_LABEL[DATA.BILLING_CYCLE.MONTH_3] },
     { value: DATA.BILLING_CYCLE.MONTH_12, label: BILLING_CYCLE_LABEL[DATA.BILLING_CYCLE.MONTH_12] },
   ];
-  const businessTypeOptions: FancySelectOption<string>[] = Object.entries(BUSINESS_TYPE_LABEL).map(([value, label]) => ({ value, label }));
+  const businessTypeOptions: FancySelectOption<string>[] = Object.entries(BUSINESS_TYPE_LABEL).map(
+    ([value, label]) => ({ value, label }),
+  );
 
   // Auto-generate slug from name
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,7 +154,11 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
               aria-invalid={Boolean(fieldErrors.name)}
               aria-describedby={fieldErrors.name ? 'business-name-error' : undefined}
             />
-            {fieldErrors.name && <p id="business-name-error" className="error-message text-xs mt-1" role="alert">{fieldErrors.name}</p>}
+            {fieldErrors.name && (
+              <p id="business-name-error" className="error-message text-xs mt-1" role="alert">
+                {fieldErrors.name}
+              </p>
+            )}
           </div>
 
           <div>
@@ -172,33 +178,74 @@ export default function CreateBarberForm({ onSuccess }: CreateBarberFormProps) {
               disabled={loading}
               className="field-input"
               aria-invalid={Boolean(fieldErrors.slug)}
-              aria-describedby={fieldErrors.slug ? 'business-slug-hint business-slug-error' : 'business-slug-hint'}
+              aria-describedby={
+                fieldErrors.slug ? 'business-slug-hint business-slug-error' : 'business-slug-hint'
+              }
             />
-            <p id="business-slug-hint" className="field-hint text-xs mt-1">URL: /b/{slug}</p>
-            {fieldErrors.slug && <p id="business-slug-error" className="error-message text-xs mt-1" role="alert">{fieldErrors.slug}</p>}
+            <p id="business-slug-hint" className="field-hint text-xs mt-1">
+              URL: /b/{slug}
+            </p>
+            {fieldErrors.slug && (
+              <p id="business-slug-error" className="error-message text-xs mt-1" role="alert">
+                {fieldErrors.slug}
+              </p>
+            )}
           </div>
 
           <div>
-            <label htmlFor="business-owner-email" className="field-label block text-sm font-medium mb-1">
+            <label
+              htmlFor="business-owner-email"
+              className="field-label block text-sm font-medium mb-1"
+            >
               Propietario inicial (correo electrónico)
             </label>
-            <input id="business-owner-email" type="email" value={ownerEmail} onChange={(event) => {
-              setOwnerEmail(event.target.value);
-              clearFieldError('ownerEmail');
-            }} placeholder="customer@example.com" required disabled={loading} className="field-input" aria-invalid={Boolean(fieldErrors.ownerEmail)} aria-describedby={fieldErrors.ownerEmail ? 'business-owner-email-hint business-owner-email-error' : 'business-owner-email-hint'} />
-            <p id="business-owner-email-hint" className="field-hint text-xs mt-1">Debe corresponder a una cuenta Customer existente. Al crear el negocio, esa cuenta se promoverá a Storeadmin y recibirá su primera asignación.</p>
-            {fieldErrors.ownerEmail && <p id="business-owner-email-error" className="error-message text-xs mt-1" role="alert">{fieldErrors.ownerEmail}</p>}
+            <input
+              id="business-owner-email"
+              type="email"
+              value={ownerEmail}
+              onChange={(event) => {
+                setOwnerEmail(event.target.value);
+                clearFieldError('ownerEmail');
+              }}
+              placeholder="customer@example.com"
+              required
+              disabled={loading}
+              className="field-input"
+              aria-invalid={Boolean(fieldErrors.ownerEmail)}
+              aria-describedby={
+                fieldErrors.ownerEmail
+                  ? 'business-owner-email-hint business-owner-email-error'
+                  : 'business-owner-email-hint'
+              }
+            />
+            <p id="business-owner-email-hint" className="field-hint text-xs mt-1">
+              Debe corresponder a una cuenta Customer existente. Al crear el negocio, esa cuenta se
+              promoverá a Storeadmin y recibirá su primera asignación.
+            </p>
+            {fieldErrors.ownerEmail && (
+              <p
+                id="business-owner-email-error"
+                className="error-message text-xs mt-1"
+                role="alert"
+              >
+                {fieldErrors.ownerEmail}
+              </p>
+            )}
           </div>
 
           <div>
             <label className="field-label block text-sm font-medium mb-1">Tipo de negocio</label>
-            <FancySelect value={businessType} onChange={(value) => setBusinessType(value as BusinessType)} options={businessTypeOptions} disabled={loading} menuClassName="super-admin-select-menu" />
+            <FancySelect
+              value={businessType}
+              onChange={(value) => setBusinessType(value as BusinessType)}
+              options={businessTypeOptions}
+              disabled={loading}
+              menuClassName="super-admin-select-menu"
+            />
           </div>
 
           <div>
-            <label className="field-label block text-sm font-medium mb-1">
-              Plan inicial
-            </label>
+            <label className="field-label block text-sm font-medium mb-1">Plan inicial</label>
             <FancySelect
               value={plan}
               onChange={(nextPlan) => setPlan(nextPlan as Plan)}
