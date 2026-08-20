@@ -19,8 +19,8 @@ const publicBusinessRouteFallback = {
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://juancgomezs.github.io',
-	base: process.env.NODE_ENV === 'production' ? '/booksmart/' : '/',
+	site: 'https://booksmart.is-local.org',
+	base: '/',
 	vite: {
 		plugins: [publicBusinessRouteFallback, tailwindcss()],
 	},
