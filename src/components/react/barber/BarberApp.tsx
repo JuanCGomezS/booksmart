@@ -12,13 +12,15 @@ import type { CatalogItem, PublicBookingProduct, PublicBookingService, PublicBoo
 import PublicBusinessLocationMap from '../business/PublicBusinessLocationMap';
 import PublicBookingWidget from './PublicBookingWidget';
 import PublicFlipCard from './PublicFlipCard';
+import PublicAppointmentsPanel from './PublicAppointmentsPanel';
+import LoginForm from '../LoginForm';
 
-type BarberTab = 'inicio' | 'agendar' | 'catalogo' | 'productos' | 'ubicacion';
+type BarberTab = 'inicio' | 'agendar' | 'catalogo' | 'productos' | 'ubicacion' | 'cuenta';
 type DeferredResource<T> = { status: 'idle' | 'loading' | 'ready' | 'error'; data: T[]; error: string };
 type PublicBusinessLoadFailure = { title: string; description: string; retry: boolean };
 type AccountMenu = { name: string; email: string; photoUrl?: string; roleLabel: string; roleLink?: { label: string; href: string }; note?: string };
 const emptyDeferredResource = <T,>(): DeferredResource<T> => ({ status: 'idle', data: [], error: '' });
-const TAB_LABELS: Record<BarberTab, string> = { inicio: 'Inicio', agendar: 'Agendar', catalogo: 'Galería', productos: 'Productos', ubicacion: 'Ubicación' };
+const TAB_LABELS: Record<BarberTab, string> = { inicio: 'Inicio', agendar: 'Agendar', catalogo: 'Galería', productos: 'Productos', ubicacion: 'Ubicación', cuenta: 'Mis agendamientos' };
 const DAYS: Record<number, string> = { 0: 'Domingo', 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado' };
 
 function getBarberIdFromPath(pathname: string) { const parts = pathname.split('/').filter(Boolean); const index = parts.indexOf('b'); return index === -1 || !parts[index + 1] ? null : decodeURIComponent(parts[index + 1]); }
@@ -79,7 +81,7 @@ export default function BarberApp() {
   const [products, setProducts] = useState<DeferredResource<PublicBookingProduct>>(emptyDeferredResource);
   const [services, setServices] = useState<PublicBookingService[]>([]);
   const [staff, setStaff] = useState<PublicBookingStaff[]>([]);
-  const [tab, setTab] = useState<BarberTab>('inicio');
+  const [tab, setTab] = useState<BarberTab>(() => new URLSearchParams(window.location.search).has('account') ? 'cuenta' : 'inicio');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<PublicBusinessLoadFailure | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
@@ -171,6 +173,7 @@ export default function BarberApp() {
         {tab === 'catalogo' && <CatalogContent state={catalog} reload={() => void loadCatalog(true)} />}
         {tab === 'productos' && <ProductsContent state={products} retry={() => setReloadVersion((value) => value + 1)} whatsappUrl={whatsappUrl} />}
         {tab === 'ubicacion' && <PublicLocationContent address={address} coordinates={barber.config.location} openStreetMapUrl={openStreetMapUrl} />}
+        {tab === 'cuenta' && (new URLSearchParams(window.location.search).get('account') === 'login' ? <LoginForm /> : <PublicAppointmentsPanel businessId={barber.id} />)}
       </section>
     </main>
   </div>;
@@ -228,11 +231,11 @@ function PublicBusinessHeader({ business, homeUrl }: { business: PublicBusiness;
               <AccountAvatar account={account} />
               <div><strong>{account.name}</strong><span>{account.email}</span></div>
             </div>
-            <div className="account-menu-role public-business-account-role"><span>{account.roleLabel}</span>{account.roleLink && <a href={account.roleLink.href} onClick={closeMenu}>{account.roleLink.label}</a>}{account.note && <p>{account.note}</p>}</div>
+            <div className="account-menu-role public-business-account-role"><span>{account.roleLabel}</span><a href={`${homeUrl}?account=bookings`} onClick={closeMenu}>Mis agendamientos</a>{account.roleLink && <a href={account.roleLink.href} onClick={closeMenu}>{account.roleLink.label}</a>}{account.note && <p>{account.note}</p>}</div>
             <button type="button" className="account-menu-button public-business-account-logout" onClick={() => void logout()}>Cerrar sesión</button>
           </> : <div className="public-business-account-guest">
-            <a className="account-menu-button" href={`${baseUrl}login?returnTo=${returnTo}`} onClick={closeMenu}>Iniciar sesión</a>
-            <a className="account-menu-button account-menu-option" href={`${baseUrl}login?mode=register&returnTo=${returnTo}`} onClick={closeMenu}>Crear cuenta</a>
+            <a className="account-menu-button" href={`${homeUrl}?account=login`} onClick={closeMenu}>Iniciar sesión</a>
+            <a className="account-menu-button account-menu-option" href={`${homeUrl}?account=login&mode=register`} onClick={closeMenu}>Crear cuenta</a>
           </div>}
         </div>}
       </div>

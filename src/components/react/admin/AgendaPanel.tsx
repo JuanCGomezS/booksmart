@@ -59,7 +59,7 @@ export default function AgendaPanel({ businessId, staffId, claimStaffId = staffI
   const days = useMemo(() => calendarDays(month), [month]);
   const selectMonth = (nextMonth: string) => { setMonth(nextMonth); setSelectedDate((current) => current.startsWith(nextMonth) ? current : `${nextMonth}-01`); };
   const retryLoad = () => setRevision((value) => value + 1);
-  const updateStatus = async (appointment: WorkspaceAppointment, status: Extract<AppointmentStatus, 'done' | 'no_show' | 'cancelled'>) => {
+  const updateStatus = async (appointment: WorkspaceAppointment, status: Extract<AppointmentStatus, 'confirmed' | 'done' | 'no_show' | 'cancelled'>) => {
     setUpdating(appointment.id);
     setUpdateErrors((current) => ({ ...current, [appointment.id]: '' }));
     try {
@@ -160,6 +160,7 @@ export default function AgendaPanel({ businessId, staffId, claimStaffId = staffI
               </div>
             </details>}
 
+            {appointment.status === 'pending' && !canClaim && <div className="bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] px-2.5 py-2"><button type="button" disabled={updating === appointment.id} onClick={() => void updateStatus(appointment, 'confirmed')} className="btn-primary min-h-11 rounded px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50">{updating === appointment.id ? 'Actualizando…' : 'Aprobar agendamiento'}</button></div>}
             {canClaim && <div className="bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] px-2.5 py-2" aria-label={`Actualizar estado de la solicitud de ${appointment.clientName}`}><button type="button" disabled={updating === appointment.id} onClick={() => void claimAppointment(appointment)} className="btn-primary min-h-11 rounded px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50">{updating === appointment.id ? 'Asignando…' : appointment.capacityStaffId === claimStaffId ? 'Confirmar' : 'Asumir'}</button></div>}
             {updateErrors[appointment.id] && <p className="border-t border-[var(--border)] px-2.5 py-2 text-sm text-main" role="alert" aria-live="polite">{updateErrors[appointment.id]}</p>}
           </article>;

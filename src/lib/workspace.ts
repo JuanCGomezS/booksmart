@@ -169,7 +169,7 @@ export async function getWorkspaceMonthAgenda(
 export async function updateWorkspaceAppointmentStatus(
   businessId: string,
   appointmentId: string,
-  status: Extract<AppointmentStatus, 'done' | 'no_show' | 'cancelled'>,
+  status: Extract<AppointmentStatus, 'confirmed' | 'done' | 'no_show' | 'cancelled'>,
 ): Promise<void> {
   await updateDoc(doc(db, 'barbers', businessId, 'appointments', appointmentId), {
     status,

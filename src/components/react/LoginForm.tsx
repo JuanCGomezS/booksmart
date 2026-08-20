@@ -60,7 +60,12 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
   }, []);
 
   const redirectCustomer = () => {
-    const returnTo = getSafeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), baseUrl);
+    const params = new URLSearchParams(window.location.search);
+    const returnTo = getSafeReturnTo(params.get('returnTo'), baseUrl);
+    if (params.get('account') === 'login') {
+      window.location.href = `${window.location.pathname}?account=bookings`;
+      return;
+    }
     window.location.href = returnTo || `${baseUrl}account`;
   };
 
@@ -91,6 +96,10 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
 
       if (onSuccess) onSuccess(user.uid);
 
+      if (new URLSearchParams(window.location.search).get('account') === 'login') {
+        window.location.href = `${window.location.pathname}?account=bookings`;
+        return;
+      }
       const returnTo = getSafeReturnTo(new URLSearchParams(window.location.search).get('returnTo'), baseUrl);
       if (returnTo) {
         window.location.href = returnTo;
