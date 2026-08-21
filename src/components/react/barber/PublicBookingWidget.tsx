@@ -145,6 +145,30 @@ function BookingProductThumbnail({ product }: { product: PublicBookingProduct })
   );
 }
 
+function BookingStaffAvatar({ member }: { member: PublicBookingStaff }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [member.photoUrl]);
+  const initial = member.name.trim().slice(0, 1).toLocaleUpperCase('es-CO') || '•';
+
+  if (member.photoUrl && !failed) {
+    return (
+      <img
+        className="booking-staff-avatar"
+        src={member.photoUrl}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <span className="booking-staff-avatar booking-staff-avatar-placeholder" aria-hidden="true">
+      {initial}
+    </span>
+  );
+}
+
 export default function PublicBookingWidget({
   business,
   products: publicProducts,
@@ -784,14 +808,18 @@ export default function PublicBookingWidget({
                     <legend className="text-sm font-semibold text-main">
                       Profesional <span className="font-normal text-subtle">(opcional)</span>
                     </legend>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="booking-provider-grid">
                       <button
                         type="button"
-                        className={`booking-provider min-h-11 ${staffId === '' ? 'is-selected' : ''}`}
+                        className={`booking-provider booking-provider-any min-h-11 ${staffId === '' ? 'is-selected' : ''}`}
                         aria-pressed={staffId === ''}
                         onClick={() => chooseStaff('')}
                       >
-                        Cualquier profesional
+                        <span className="booking-provider-any-icon" aria-hidden="true">✦</span>
+                        <span>
+                          <strong>Cualquier profesional</strong>
+                          <small>Te asignaremos el mejor horario</small>
+                        </span>
                       </button>
                       {compatibleStaff.map((member) => (
                         <button
@@ -801,7 +829,12 @@ export default function PublicBookingWidget({
                           aria-pressed={staffId === member.id}
                           onClick={() => chooseStaff(member.id)}
                         >
-                          {member.name}
+                          <BookingStaffAvatar member={member} />
+                          <span className="booking-provider-copy">
+                            <strong>{member.name}</strong>
+                            <small>{staffId === member.id ? 'Profesional seleccionado' : 'Ver disponibilidad'}</small>
+                          </span>
+                          <span className="booking-provider-check" aria-hidden="true">✓</span>
                         </button>
                       ))}
                     </div>

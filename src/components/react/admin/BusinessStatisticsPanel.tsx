@@ -127,7 +127,7 @@ export default function BusinessStatisticsPanel({ businessId }: { businessId: st
       )}
       {data && (
         <>
-          <div className="mt-6 grid gap-3 sm:grid-cols-4">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <article className="surface-soft rounded-xl p-4">
               <p className="text-sm text-subtle">Total de citas</p>
               <p className="mt-1 text-3xl font-bold text-main">{data.total}</p>
@@ -138,14 +138,26 @@ export default function BusinessStatisticsPanel({ businessId }: { businessId: st
               <p className="mt-1 text-xs text-subtle">Solo citas completadas.</p>
             </article>
             <article className="surface-soft rounded-xl p-4">
+              <p className="text-sm text-subtle">Ingresos proyectados</p>
+              <p className="mt-1 text-2xl font-bold text-main">{money(data.projectedRevenue)}</p>
+              <p className="mt-1 text-xs text-subtle">Pendientes y confirmadas.</p>
+            </article>
+            <article className="surface-soft rounded-xl p-4">
+              <p className="text-sm text-subtle">Ticket promedio</p>
+              <p className="mt-1 text-2xl font-bold text-main">{money(data.averageTicket)}</p>
+              <p className="mt-1 text-xs text-subtle">Por cita completada.</p>
+            </article>
+            <article className="surface-soft rounded-xl p-4">
               <p className="text-sm text-subtle">Completadas</p>
               <p className="mt-1 text-3xl font-bold text-main">{data.statuses.done}</p>
             </article>
             <article className="surface-soft rounded-xl p-4">
-              <p className="text-sm text-subtle">Pendientes y confirmadas</p>
-              <p className="mt-1 text-3xl font-bold text-main">
-                {data.statuses.pending + data.statuses.confirmed}
-              </p>
+              <p className="text-sm text-subtle">Tasa de finalización</p>
+              <p className="mt-1 text-3xl font-bold text-main">{Math.round(data.completionRate * 100)}%</p>
+            </article>
+            <article className="surface-soft rounded-xl p-4">
+              <p className="text-sm text-subtle">No asistió</p>
+              <p className="mt-1 text-3xl font-bold text-main">{Math.round(data.noShowRate * 100)}%</p>
             </article>
           </div>
           <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -189,7 +201,7 @@ export default function BusinessStatisticsPanel({ businessId }: { businessId: st
           </div>
           {data.services.length > 0 && (
             <div className="mt-6">
-              <h3 className="font-semibold text-main">Servicios más solicitados</h3>
+              <h3 className="font-semibold text-main">Servicios con más ingresos</h3>
               <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {data.services.map((service) => (
                   <li
@@ -197,7 +209,7 @@ export default function BusinessStatisticsPanel({ businessId }: { businessId: st
                     className="surface-soft flex justify-between rounded-lg px-3 py-2 text-sm"
                   >
                     <span className="truncate text-subtle">{service.name}</span>
-                    <strong className="ml-3 text-main">{service.total}</strong>
+                    <span className="ml-3 text-right"><strong className="block text-main">{money(service.revenue)}</strong><small className="text-subtle">{service.total} citas</small></span>
                   </li>
                 ))}
               </ol>

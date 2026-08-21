@@ -382,7 +382,7 @@ export type PublicBookingService = Pick<
 };
 
 /** Strict booking-only professional fields returned by the public callable. */
-export type PublicBookingStaff = Pick<BarberStaff, 'id' | 'name' | 'schedule'> & {
+export type PublicBookingStaff = Pick<BarberStaff, 'id' | 'name' | 'photoUrl' | 'schedule'> & {
   active: true;
 };
 

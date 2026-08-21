@@ -61,6 +61,8 @@ type PublicBusinessResponse = {
   staff: Array<{
     id: string;
     name: string;
+    /** Public profile image explicitly allowlisted for the booking experience. */
+    photoUrl?: string;
     active: true;
     schedule?: Record<
       string,
@@ -499,7 +501,14 @@ function publicStaffDto(
   const name = publicString(staff.name, 120);
   if (!name || staff.active !== true) return null;
   const schedule = publicStaffSchedule(staff.schedule);
-  return { id, name, active: true, ...(schedule ? { schedule } : {}) };
+  const photoUrl = publicString(staff.photoUrl, 2_048);
+  return {
+    id,
+    name,
+    active: true,
+    ...(photoUrl ? { photoUrl } : {}),
+    ...(schedule ? { schedule } : {}),
+  };
 }
 
 function publicProductDto(

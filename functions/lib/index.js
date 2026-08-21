@@ -353,7 +353,14 @@ function publicStaffDto(id, staff) {
     if (!name || staff.active !== true)
         return null;
     const schedule = publicStaffSchedule(staff.schedule);
-    return { id, name, active: true, ...(schedule ? { schedule } : {}) };
+    const photoUrl = publicString(staff.photoUrl, 2_048);
+    return {
+        id,
+        name,
+        active: true,
+        ...(photoUrl ? { photoUrl } : {}),
+        ...(schedule ? { schedule } : {}),
+    };
 }
 function publicProductDto(id, product) {
     const name = publicString(product.name, 120);
