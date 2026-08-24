@@ -18,6 +18,19 @@ service cloud.firestore {
       return isSuperadmin() || (role() == 'storeadmin' && resource.data.businessIds is list &&
         user().data.businessIds is list && resource.data.businessIds.hasAny(user().data.businessIds));
     }
+    // A Customer may create only their own inactive staff profile while the same
+    // transaction binds their account to a valid, unexpired enrollment-code document.
+    function redeemsStaffEnrollment(businessId, staffId) {
+      let nextUser = getAfter(/databases/$(database)/documents/users/$(request.auth.uid));
+      let code = nextUser.data.enrollmentCode;
+      return signedIn() && staffId == request.auth.uid && role() == 'customer' &&
+        nextUser.data.role == 'staff' && nextUser.data.staffId == staffId &&
+        nextUser.data.businessIds == [businessId] && code is string &&
+        exists(/databases/$(database)/documents/staffEnrollmentCodes/$(code)) &&
+        get(/databases/$(database)/documents/staffEnrollmentCodes/$(code)).data.businessId == businessId &&
+        request.resource.data.accountUid == request.auth.uid &&
+        request.resource.data.active == false && request.resource.data.accountStatus == 'inactive';
+    }
 
     // Accounts: users manage their own profile; Superadmin and the matching
     // Storeadmin may manage accounts assigned to one of their businesses.
@@ -39,10 +52,16 @@ service cloud.firestore {
 
       // Staff can access only their own profile, schedule and assigned agenda.
       match /barbers/{staffId} {
+        allow create: if redeemsStaffEnrollment(businessId, staffId);
         allow read, update: if isStaffInBusiness(businessId) && staffId == request.auth.uid;
       }
       match /appointments/{appointmentId} {
-        allow read, update: if (isStaffInBusiness(businessId) && resource.data.barberId == request.auth.uid) ||
+        // Staff read their own appointments and the pending capacity offer reserved for them.
+        // The query must constrain both assignmentState and capacityStaffId.
+        allow read, update: if (isStaffInBusiness(businessId) &&
+          (resource.data.barberId == request.auth.uid ||
+            (resource.data.assignmentState == 'unassigned' &&
+              resource.data.capacityStaffId == request.auth.uid))) ||
           (signedIn() && resource.data.customerUid == request.auth.uid);
       }
 

@@ -4,6 +4,7 @@ import {
   LEGAL_CONSENT_VERSION,
   signIn,
   signOut,
+  requestPasswordReset,
   signUpClient,
 } from '../../lib/auth';
 import { normalizeUserRole } from '../../lib/roles';
@@ -11,11 +12,15 @@ import { getSafeReturnTo } from '../../lib/return-to';
 import { notifyError } from './FloatingNotifications';
 
 interface LoginFormProps {
+  /** Starts the form in registration when embedded in a public-business account dialog. */
+  initialMode?: 'login' | 'register';
+  /** Destination after a successful public-business account login or registration. */
+  accountRedirect?: string;
   onSuccess?: (uid: string) => void;
   onError?: (error: string) => void;
 }
 
-function authenticationErrorMessage(error: unknown, mode: 'login' | 'register'): string {
+function authenticationErrorMessage(error: unknown, mode: 'login' | 'register' | 'reset'): string {
   const code =
     typeof error === 'object' && error !== null && 'code' in error
       ? (error as { code?: string }).code
@@ -46,27 +51,38 @@ function authenticationErrorMessage(error: unknown, mode: 'login' | 'register'):
     case 'registration/profile-creation-recovery-failed':
       return 'No pudimos configurar tu perfil ni revertir por completo la cuenta. No intentes registrarte otra vez: inicia sesión o contacta al soporte para revisar el acceso.';
     default:
+      if (mode === 'reset')
+        return 'No fue posible enviar el enlace. Verifica tu conexión e inténtalo nuevamente.';
       return mode === 'login'
         ? 'No fue posible iniciar sesión. Verifica tus datos e inténtalo nuevamente.'
         : 'No fue posible crear la cuenta. Verifica tus datos e inténtalo nuevamente.';
   }
 }
 
-export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
+export default function LoginForm({
+  initialMode = 'login',
+  accountRedirect,
+  onSuccess,
+  onError,
+}: LoginFormProps) {
   const baseUrl = import.meta.env.BASE_URL;
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'reset'>(initialMode);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
 
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
-    const urlMode = search.get('mode') === 'register' ? 'register' : 'login';
-    setMode(urlMode);
-  }, []);
+    setMode(search.get('mode') === 'register' ? 'register' : initialMode);
+  }, [initialMode]);
 
   const redirectCustomer = () => {
+    if (accountRedirect) {
+      window.location.href = accountRedirect;
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     const returnTo = getSafeReturnTo(params.get('returnTo'), baseUrl);
     if (params.get('account') === 'login') {
@@ -81,6 +97,13 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
     setLoading(true);
 
     try {
+      if (mode === 'reset') {
+        await requestPasswordReset(email);
+        // Deliberately generic: it does not reveal whether this email has an account.
+        setResetEmailSent(true);
+        return;
+      }
+
       if (mode === 'register') {
         await signUpClient(name.trim(), email, password, {
           version: LEGAL_CONSENT_VERSION,
@@ -103,6 +126,10 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
 
       if (onSuccess) onSuccess(user.uid);
 
+      if (accountRedirect) {
+        window.location.href = accountRedirect;
+        return;
+      }
       if (new URLSearchParams(window.location.search).get('account') === 'login') {
         window.location.href = `${window.location.pathname}?account=bookings`;
         return;
@@ -138,12 +165,18 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
         </button>
         <div className="surface-card rounded-2xl p-5">
           <h1 className="text-3xl font-bold text-center mb-2 text-main">
-            {mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+            {mode === 'login'
+              ? 'Iniciar sesión'
+              : mode === 'register'
+                ? 'Crear cuenta'
+                : 'Recupera tu contraseña'}
           </h1>
           <p className="text-center text-subtle mb-8">
             {mode === 'login'
               ? 'Inicia sesión para administrar tu negocio o unirte como parte del personal.'
-              : 'Crea tu cuenta y luego únete a un negocio con su código.'}
+              : mode === 'register'
+                ? 'Crea tu cuenta y luego únete a un negocio con su código.'
+                : 'Te enviaremos un enlace seguro para que puedas crear una nueva contraseña.'}
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -233,47 +266,92 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
               />
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-subtle mb-1">
-                Contraseña
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                disabled={loading}
-                className="w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--secondary)] disabled:opacity-50"
-                style={{
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface-soft)',
-                  color: 'var(--text-primary)',
-                }}
-              />
-            </div>
+            {mode !== 'reset' && (
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-subtle mb-1">
+                  Contraseña
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  disabled={loading}
+                  className="w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--secondary)] disabled:opacity-50"
+                  style={{
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface-soft)',
+                    color: 'var(--text-primary)',
+                  }}
+                />
+              </div>
+            )}
+
+            {mode === 'reset' && resetEmailSent && (
+              <div className="password-reset-success" role="status">
+                <span aria-hidden="true">✓</span>
+                <p>
+                  Si existe una cuenta asociada a <strong>{email}</strong>, recibirás un enlace en
+                  unos minutos. Revisa también la carpeta de spam.
+                </p>
+              </div>
+            )}
 
             <button
               type="submit"
               disabled={loading}
               className="btn-primary w-full font-semibold py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-6 cursor-pointer"
             >
-              {loading ? 'Cargando…' : mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+              {loading
+                ? 'Enviando…'
+                : mode === 'login'
+                  ? 'Iniciar sesión'
+                  : mode === 'register'
+                    ? 'Crear cuenta'
+                    : 'Enviar enlace de recuperación'}
             </button>
           </form>
+
+          {mode === 'login' && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode('reset');
+                setResetEmailSent(false);
+              }}
+              className="mt-4 w-full text-sm font-semibold text-subtle hover:text-[var(--secondary)] transition-colors cursor-pointer"
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          )}
 
           <button
             type="button"
             onClick={() => {
               setMode((prev) => (prev === 'login' ? 'register' : 'login'));
+              setResetEmailSent(false);
             }}
-            className="mt-6 w-full text-sm font-semibold text-subtle hover:text-[var(--secondary)] transition-colors cursor-pointer"
+            className="mt-3 w-full text-sm font-semibold text-subtle hover:text-[var(--secondary)] transition-colors cursor-pointer"
           >
             {mode === 'login'
               ? '¿No tienes una cuenta? Crea una'
               : '¿Ya tienes una cuenta? Inicia sesión'}
           </button>
+
+          {mode === 'reset' && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode('login');
+                setResetEmailSent(false);
+              }}
+              className="mt-3 w-full text-sm font-semibold text-subtle hover:text-[var(--secondary)] transition-colors cursor-pointer"
+            >
+              ← Volver a iniciar sesión
+            </button>
+          )}
 
           <p className="mt-3 text-center text-xs text-subtle">
             Las personas pueden agendar desde la página pública sin iniciar sesión.

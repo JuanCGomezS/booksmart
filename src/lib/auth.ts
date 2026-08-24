@@ -3,6 +3,7 @@
 import {
   createUserWithEmailAndPassword,
   deleteUser,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -43,6 +44,11 @@ export class RegistrationRecoveryError extends Error {
 export async function signIn(email: string, password: string): Promise<FirebaseUser> {
   const credential = await signInWithEmailAndPassword(auth, email, password);
   return credential.user;
+}
+
+/** Sends Firebase's secure password-reset link. The email appearance is configured in Firebase Auth. */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await sendPasswordResetEmail(auth, email.trim());
 }
 
 /**

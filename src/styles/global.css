@@ -1401,6 +1401,32 @@ textarea {
   box-shadow: none;
 }
 
+.password-reset-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--success) 45%, var(--border));
+  border-radius: 0.625rem;
+  background: color-mix(in srgb, var(--success) 9%, var(--surface));
+  padding: 0.8rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.password-reset-success > span {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--success);
+  color: var(--on-success, white);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
 .public-booking-refinement main {
   max-width: 68rem;
 }
@@ -1583,7 +1609,9 @@ textarea {
   object-fit: cover;
   background: var(--surface);
   box-shadow: 0 0.25rem 0.8rem color-mix(in srgb, var(--text-primary) 14%, transparent);
-  transition: transform 180ms var(--motion), box-shadow 180ms var(--motion);
+  transition:
+    transform 180ms var(--motion),
+    box-shadow 180ms var(--motion);
 }
 
 .public-booking-refinement .booking-provider:hover:not(:disabled) .booking-staff-avatar {
@@ -2718,12 +2746,19 @@ button.public-business-text-action {
 }
 
 .public-business-flip-card {
-  min-height: 26rem;
+  min-height: 0;
+}
+
+/* The card owns its proportions; source images are only cropped into that frame. */
+.public-business-catalog-card,
+.public-business-product-card {
+  aspect-ratio: 3 / 4;
 }
 
 .public-business-flip-card-inner {
   display: grid;
-  min-height: inherit;
+  height: 100%;
+  min-height: 0;
   transform-style: preserve-3d;
   transition: transform 420ms var(--motion);
 }
@@ -2737,6 +2772,7 @@ button.public-business-text-action {
   grid-area: 1 / 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--public-card-frame);
   border-radius: 1.5rem 0.55rem 1.5rem 0.55rem;
@@ -2770,10 +2806,12 @@ button.public-business-text-action {
 }
 
 .public-business-card-image {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 100%;
+  min-height: 0;
   object-fit: cover;
   filter: saturate(0.86) contrast(1.04);
 }
@@ -3000,10 +3038,12 @@ button.public-business-text-action {
 }
 
 .public-business-card-placeholder {
+  position: absolute;
+  inset: 0;
   display: grid;
   width: 100%;
   height: 100%;
-  min-height: 100%;
+  min-height: 0;
   place-items: center;
   align-content: center;
   gap: 0.65rem;
@@ -3178,7 +3218,7 @@ button.public-business-text-action {
 }
 
 .public-business-product-card {
-  min-height: 23rem;
+  min-height: 0;
 }
 
 .public-business-product-card .public-business-flip-card-front {
@@ -3206,11 +3246,12 @@ button.public-business-text-action {
 }
 
 .public-business-product-placeholder {
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: grid;
   width: 100%;
   height: 100%;
-  min-height: 23rem;
+  min-height: 0;
   place-items: center;
   align-content: center;
   gap: 0.45rem;
@@ -4053,26 +4094,27 @@ button.public-business-text-action {
   }
 
   .public-business-flip-card {
-    min-height: 18rem;
+    min-height: 0;
   }
 
   .public-business-catalog-card.is-flipped .public-business-flip-card-inner,
   .public-business-product-card.is-flipped .public-business-flip-card-inner {
-    min-height: max-content;
+    height: 100%;
+    min-height: 0;
   }
 
   .public-business-catalog-card.is-flipped .public-business-flip-card-back,
   .public-business-product-card.is-flipped .public-business-flip-card-back {
-    min-height: max-content;
-    overflow: visible;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .public-business-product-card {
-    min-height: 18rem;
+    min-height: 0;
   }
 
   .public-business-product-placeholder {
-    min-height: 18rem;
+    min-height: 0;
   }
 
   .public-business-catalog-card .public-business-flip-card-content,

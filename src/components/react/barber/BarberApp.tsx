@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import '../../../styles/public-auth-modal.css';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { getBarberCatalog } from '../../../lib/barbers';
@@ -181,6 +182,11 @@ export default function BarberApp() {
   const [logoFailed, setLogoFailed] = useState(false);
   const [coverFailed, setCoverFailed] = useState(false);
   const [reloadVersion, setReloadVersion] = useState(0);
+  const [authMode, setAuthMode] = useState<'login' | 'register' | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('account') !== 'login') return null;
+    return params.get('mode') === 'register' ? 'register' : 'login';
+  });
   const canBook = usePublicBookingAvailability(barber);
 
   useEffect(() => setBarberSlug(getBarberIdFromPath(window.location.pathname)), []);
@@ -317,7 +323,11 @@ export default function BarberApp() {
       data-public-theme={theme.id}
       style={themeVariables}
     >
-      <PublicBusinessHeader business={barber} homeUrl={publicHome} />
+      <PublicBusinessHeader
+        business={barber}
+        homeUrl={publicHome}
+        onOpenAuth={(mode) => setAuthMode(mode)}
+      />
       <main className="public-business-shell">
         <section
           className={`public-business-hero ${barber.config.coverUrl && !coverFailed ? 'has-cover' : ''}`}
@@ -458,14 +468,39 @@ export default function BarberApp() {
               openStreetMapUrl={openStreetMapUrl}
             />
           )}
-          {tab === 'cuenta' &&
-            (new URLSearchParams(window.location.search).get('account') === 'login' ? (
-              <LoginForm />
-            ) : (
-              <PublicAppointmentsPanel businessId={barber.id} />
-            ))}
+          {tab === 'cuenta' && <PublicAppointmentsPanel businessId={barber.id} />}
         </section>
       </main>
+      {authMode && (
+        <div
+          className="public-auth-modal"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setAuthMode(null);
+          }}
+        >
+          <div
+            className="public-auth-modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label={authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
+          >
+            <button
+              type="button"
+              className="public-auth-modal-close"
+              aria-label="Cerrar"
+              onClick={() => setAuthMode(null)}
+            >
+              ×
+            </button>
+            <LoginForm
+              key={authMode}
+              initialMode={authMode}
+              accountRedirect={`${publicHome}?account=bookings`}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -473,9 +508,11 @@ export default function BarberApp() {
 function PublicBusinessHeader({
   business,
   homeUrl,
+  onOpenAuth,
 }: {
   business: PublicBusiness;
   homeUrl: string;
+  onOpenAuth: (mode: 'login' | 'register') => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [account, setAccount] = useState<AccountMenu | null>(null);
@@ -604,20 +641,26 @@ function PublicBusinessHeader({
                 </>
               ) : (
                 <div className="public-business-account-guest">
-                  <a
+                  <button
+                    type="button"
                     className="account-menu-button"
-                    href={`${homeUrl}?account=login`}
-                    onClick={closeMenu}
+                    onClick={() => {
+                      closeMenu();
+                      onOpenAuth('login');
+                    }}
                   >
                     Iniciar sesión
-                  </a>
-                  <a
+                  </button>
+                  <button
+                    type="button"
                     className="account-menu-button account-menu-option"
-                    href={`${homeUrl}?account=login&mode=register`}
-                    onClick={closeMenu}
+                    onClick={() => {
+                      closeMenu();
+                      onOpenAuth('register');
+                    }}
                   >
                     Crear cuenta
-                  </a>
+                  </button>
                 </div>
               )}
             </div>

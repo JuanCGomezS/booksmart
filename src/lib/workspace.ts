@@ -129,6 +129,7 @@ export async function getWorkspaceAgenda(
           query(
             appointments,
             where('assignmentState', '==', 'unassigned'),
+            where('capacityStaffId', '==', staffId),
             where('bookingDate', '==', bookingDate),
           ),
         )
@@ -190,6 +191,7 @@ export async function getWorkspaceMonthAgenda(
           query(
             appointments,
             where('assignmentState', '==', 'unassigned'),
+            where('capacityStaffId', '==', staffId),
             where('bookingDate', '>=', range.start),
             where('bookingDate', '<', range.end),
           ),
