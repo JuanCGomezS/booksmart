@@ -149,7 +149,6 @@ function isSubscriptionOperational(
 
 // Cache de configuración de barbería
 const BARBER_CACHE_TTL = 60 * 60 * 1000; // 1 hora
-const BARBER_CATALOG_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 horas
 const BARBER_PRODUCTS_CACHE_TTL = 30 * 60 * 1000; // 30 minutos
 
 export function invalidatePublicBusinessCaches(barberId: string): void {
@@ -176,9 +175,11 @@ export async function getBarberConfig(barberId: string): Promise<PublicBusiness 
   const cached = localStorage.getItem(cacheKey);
 
   if (cached) {
-    const { data, expiresAt } = JSON.parse(cached);
-    if (Date.now() < expiresAt && isPublicBusinessOperational(data)) {
-      return data;
+    try {
+      const { data, expiresAt } = JSON.parse(cached);
+      if (Date.now() < expiresAt && isPublicBusinessOperational(data)) return data;
+    } catch {
+      localStorage.removeItem(cacheKey);
     }
   }
 
@@ -317,6 +318,8 @@ export async function createBarber(
       },
     };
     const docRef = doc(collection(db, 'barbers'));
+    // SAFETY: barberData has every business field that toPublicBusiness reads.
+    const publicBusiness = { id: docRef.id, ...barberData } as unknown as Barber;
     const enrollmentCode = generateStaffEnrollmentCode();
     await runTransaction(db, async (transaction) => {
       const ownerSnapshot = await transaction.get(ownerRef);
@@ -339,7 +342,7 @@ export async function createBarber(
       transaction.set(docRef, barberData);
       transaction.set(
         doc(db, PUBLIC_BUSINESSES_COLLECTION, docRef.id),
-        toPublicBusiness({ id: docRef.id, ...barberData } as unknown as Barber),
+        toPublicBusiness(publicBusiness),
       );
       transaction.set(doc(db, 'staffEnrollmentCodes', enrollmentCode), {
         businessId: docRef.id,
@@ -351,6 +354,7 @@ export async function createBarber(
       });
       transaction.update(ownerRef, ownerUpdates);
     });
+    // SAFETY: this creation path populates every required Barber field; Firestore resolves sentinels.
     return {
       id: docRef.id,
       ...barberData,
@@ -640,9 +644,11 @@ export async function getBarberMetrics(barberId: string): Promise<BarberMetrics 
   const cached = localStorage.getItem(cacheKey);
 
   if (cached) {
-    const { data, expiresAt, version } = JSON.parse(cached);
-    if (version === 2 && Date.now() < expiresAt) {
-      return data;
+    try {
+      const { data, expiresAt, version } = JSON.parse(cached);
+      if (version === 2 && Date.now() < expiresAt) return data;
+    } catch {
+      localStorage.removeItem(cacheKey);
     }
   }
 
@@ -721,42 +727,6 @@ export async function getBarberMetrics(barberId: string): Promise<BarberMetrics 
 }
 
 /**
- * Obtener catálogo público de una barbería (con cache en localStorage)
- */
-export async function getBarberCatalog(barberId: string): Promise<CatalogItem[]> {
-  const cacheKey = `barber_catalog_${barberId}`;
-  const cached = localStorage.getItem(cacheKey);
-
-  if (cached) {
-    const { data, expiresAt } = JSON.parse(cached);
-    if (Date.now() < expiresAt) {
-      return data as CatalogItem[];
-    }
-  }
-
-  try {
-    const catalogRef = collection(db, 'barbers', barberId, 'catalog');
-    const catalogDocs = await getDocs(catalogRef);
-    const items = catalogDocs.docs.map(
-      (catalogDoc) => ({ id: catalogDoc.id, ...catalogDoc.data() }) as CatalogItem,
-    );
-
-    localStorage.setItem(
-      cacheKey,
-      JSON.stringify({
-        data: items,
-        expiresAt: Date.now() + BARBER_CATALOG_CACHE_TTL,
-      }),
-    );
-
-    return items;
-  } catch (error) {
-    console.error('Error fetching barber catalog:', error);
-    throw error;
-  }
-}
-
-/**
  * Obtener productos activos de una barbería (con cache en localStorage)
  */
 export async function getBarberProducts(barberId: string): Promise<Product[]> {
@@ -764,9 +734,11 @@ export async function getBarberProducts(barberId: string): Promise<Product[]> {
   const cached = localStorage.getItem(cacheKey);
 
   if (cached) {
-    const { data, expiresAt } = JSON.parse(cached);
-    if (Date.now() < expiresAt) {
-      return data as Product[];
+    try {
+      const { data, expiresAt } = JSON.parse(cached);
+      if (Date.now() < expiresAt) return data as Product[];
+    } catch {
+      localStorage.removeItem(cacheKey);
     }
   }
 

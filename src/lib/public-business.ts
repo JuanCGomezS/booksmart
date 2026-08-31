@@ -4,6 +4,7 @@ import { app } from './firebase';
 import type {
   Barber,
   BusinessCoordinates,
+  PublicCatalogItem,
   PublicBookingProduct,
   PublicBookingService,
   PublicBookingStaff,
@@ -16,6 +17,7 @@ export const PUBLIC_BUSINESSES_COLLECTION = 'publicBusinesses';
 type PublicBusinessCallableResponse = {
   business: Record<string, unknown> & { id: string; bookingEnabledUntil?: string };
   products: PublicBookingProduct[];
+  catalog?: PublicCatalogItem[];
   services: PublicBookingService[];
   staff: PublicBookingStaff[];
 };
@@ -23,6 +25,7 @@ type PublicBusinessCallableResponse = {
 export type PublicBusinessPageData = {
   business: PublicBusiness;
   products: PublicBookingProduct[];
+  catalog: PublicCatalogItem[];
   services: PublicBookingService[];
   staff: PublicBookingStaff[];
 };
@@ -248,10 +251,21 @@ export async function loadPublicBusinessBySlug(slug: string): Promise<PublicBusi
         typeof product.price === 'number' &&
         Number.isFinite(product.price),
     ),
+    catalog: (Array.isArray(payload.catalog) ? payload.catalog : []).filter(
+      (item) =>
+        typeof item.id === 'string' &&
+        typeof item.title === 'string' &&
+        typeof item.imageUrl === 'string' &&
+        Array.isArray(item.tags) &&
+        item.tags.every((tag) => typeof tag === 'string'),
+    ),
     services: (Array.isArray(payload.services) ? payload.services : []).filter(
       (service) =>
         typeof service.id === 'string' &&
         typeof service.name === 'string' &&
+        typeof service.price === 'number' &&
+        Number.isFinite(service.price) &&
+        service.price >= 0 &&
         service.active === true &&
         Number.isInteger(service.duration) &&
         service.duration > 0 &&

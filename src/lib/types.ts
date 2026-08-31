@@ -373,10 +373,19 @@ export interface PublicBookingProduct {
   tags?: string[];
 }
 
+/** Allowlisted gallery fields returned by the public callable. */
+export interface PublicCatalogItem {
+  id: string;
+  title: string;
+  description?: string;
+  imageUrl: string;
+  tags: string[];
+}
+
 /** Strict booking-only service fields returned by the public callable. */
 export type PublicBookingService = Pick<
   Service,
-  'id' | 'name' | 'duration' | 'bufferMinutes' | 'staffIds'
+  'id' | 'name' | 'price' | 'duration' | 'bufferMinutes' | 'staffIds'
 > & {
   active: true;
 };

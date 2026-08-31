@@ -1,8 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import '../../../styles/public-auth-modal.css';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { getBarberCatalog } from '../../../lib/barbers';
 import { getUserRecord, signOut } from '../../../lib/auth';
 import { auth, db } from '../../../lib/firebase';
 import { customThemeCssVariables, resolvePublicTheme } from '../../../lib/public-theme';
@@ -10,7 +9,7 @@ import { normalizeUserRole } from '../../../lib/roles';
 import { isPublicBookingAvailable } from '../../../lib/booking';
 import { loadPublicBusinessBySlug } from '../../../lib/public-business';
 import type {
-  CatalogItem,
+  PublicCatalogItem,
   PublicBookingProduct,
   PublicBookingService,
   PublicBookingStaff,
@@ -87,9 +86,6 @@ function formatPrice(price: number) {
     currency: 'COP',
     maximumFractionDigits: 0,
   }).format(price);
-}
-function currentBusinessUrl() {
-  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 function initialsFor(name: string) {
   return (
@@ -169,7 +165,8 @@ function usePublicBookingAvailability(business: PublicBusiness | null): boolean 
 export default function BarberApp() {
   const [barberSlug, setBarberSlug] = useState<string | null>(null);
   const [barber, setBarber] = useState<PublicBusiness | null>(null);
-  const [catalog, setCatalog] = useState<DeferredResource<CatalogItem>>(emptyDeferredResource);
+  const [catalog, setCatalog] =
+    useState<DeferredResource<PublicCatalogItem>>(emptyDeferredResource);
   const [products, setProducts] =
     useState<DeferredResource<PublicBookingProduct>>(emptyDeferredResource);
   const [services, setServices] = useState<PublicBookingService[]>([]);
@@ -202,7 +199,7 @@ export default function BarberApp() {
       try {
         const data = await loadPublicBusinessBySlug(barberSlug);
         setBarber(data.business);
-        setCatalog(emptyDeferredResource());
+        setCatalog({ status: 'ready', data: data.catalog, error: '' });
         setProducts({ status: 'ready', data: data.products, error: '' });
         setServices(data.services);
         setStaff(data.staff);
@@ -262,24 +259,6 @@ export default function BarberApp() {
       active = false;
     };
   }, [barber]);
-
-  const loadCatalog = async (force = false) => {
-    if (!barber || (!force && catalog.status !== 'idle')) return;
-    setCatalog((current) => ({ ...current, status: 'loading', error: '' }));
-    try {
-      setCatalog({ status: 'ready', data: await getBarberCatalog(barber.id), error: '' });
-    } catch (cause) {
-      console.error(cause);
-      setCatalog((current) => ({
-        ...current,
-        status: 'error',
-        error: 'No pudimos cargar la Galería. Inténtalo nuevamente.',
-      }));
-    }
-  };
-  useEffect(() => {
-    if (tab === 'catalogo') void loadCatalog();
-  }, [tab, barber?.id]);
 
   if (loading) return <PublicState title="Cargando negocio..." />;
   if (error)
@@ -451,9 +430,7 @@ export default function BarberApp() {
               whatsappUrl={whatsappUrl}
             />
           )}
-          {tab === 'catalogo' && (
-            <CatalogContent state={catalog} reload={() => void loadCatalog(true)} />
-          )}
+          {tab === 'catalogo' && <CatalogContent state={catalog} />}
           {tab === 'productos' && (
             <ProductsContent
               state={products}
@@ -521,7 +498,6 @@ function PublicBusinessHeader({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const resolutionRef = useRef(0);
   const baseUrl = import.meta.env.BASE_URL;
-  const returnTo = encodeURIComponent(currentBusinessUrl());
 
   useEffect(
     () =>
@@ -930,16 +906,9 @@ function BusinessOverview({
     </div>
   );
 }
-function CatalogContent({
-  state,
-  reload,
-}: {
-  state: DeferredResource<CatalogItem>;
-  reload: () => void;
-}) {
-  if (state.status === 'loading')
+function CatalogContent({ state }: { state: DeferredResource<PublicCatalogItem> }) {
+  if (state.status === 'idle' || state.status === 'loading')
     return <PublicCollectionState kind="loading" label="Cargando Galería..." />;
-  if (state.status === 'error') return <ErrorMessage message={state.error} retry={reload} />;
   if (!state.data.length)
     return <PublicCollectionState kind="empty" label="Todavía no hay fotos publicadas." />;
 
@@ -958,7 +927,7 @@ function CatalogContent({
   );
 }
 
-function CatalogCard({ item }: { item: CatalogItem }) {
+function CatalogCard({ item }: { item: PublicCatalogItem }) {
   const description =
     typeof item.description === 'string' && item.description.trim()
       ? item.description.trim()
@@ -1042,7 +1011,6 @@ function ProductCard({
         <>
           <ProductVisual product={product} />
           <div className="public-business-flip-card-content">
-            <p className="public-business-product-label">Producto disponible</p>
             <div className="public-business-card-heading">
               <h3>{product.name}</h3>
               <p className="public-business-product-price">{formatPrice(product.price)}</p>
@@ -1083,7 +1051,7 @@ function ProductCard({
     />
   );
 }
-function CatalogVisual({ item }: { item: CatalogItem }) {
+function CatalogVisual({ item }: { item: PublicCatalogItem }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [item.imageUrl]);
   if (!failed)

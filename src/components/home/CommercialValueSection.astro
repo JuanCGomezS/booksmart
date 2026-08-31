@@ -1,0 +1,241 @@
+---
+const whatsappUrl = 'https://wa.me/3013971483';
+---
+
+<section id="por-que-booksmart" class="landing-refinement section-shell commercial-section px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+  <div class="mx-auto max-w-6xl">
+    <header class="commercial-heading">
+      <p class="press-kicker">Una operación que se puede ver</p>
+      <h2>Cuando cada parte tiene su lugar, el negocio se siente distinto.</h2>
+      <p>
+        No se trata de añadir tareas. Se trata de conectar la agenda, el equipo y la oferta
+        para que el negocio deje de depender de conversaciones dispersas.
+      </p>
+    </header>
+
+    <div class="commercial-demo surface-card">
+      <div class="commercial-demo-copy">
+        <p class="press-label">Mira el cambio en contexto</p>
+        <div class="commercial-demo-controls" role="group" aria-label="Aspectos de la operación">
+          <button type="button" class="commercial-demo-control is-active" data-view="agenda" aria-pressed="true">
+            Agenda
+          </button>
+          <button type="button" class="commercial-demo-control" data-view="equipo" aria-pressed="false">
+            Equipo
+          </button>
+          <button type="button" class="commercial-demo-control" data-view="vitrina" aria-pressed="false">
+            Vitrina
+          </button>
+        </div>
+
+        <div class="commercial-demo-summary" aria-live="polite">
+          <section data-summary="agenda">
+            <p class="commercial-demo-index">01</p>
+            <h3>Una solicitud deja de perderse en el chat.</h3>
+            <p>El cliente consulta los servicios y solicita una cita desde una página pública del negocio.</p>
+          </section>
+          <section data-summary="equipo" hidden>
+            <p class="commercial-demo-index">02</p>
+            <h3>El equipo sabe qué sigue y a quién le corresponde.</h3>
+            <p>Horarios, solicitudes y responsables se consultan desde la misma operación.</p>
+          </section>
+          <section data-summary="vitrina" hidden>
+            <p class="commercial-demo-index">03</p>
+            <h3>Tu oferta puede hablar antes de que el cliente escriba.</h3>
+            <p>Servicios, productos y galería quedan disponibles para consultar en el sitio público.</p>
+          </section>
+        </div>
+      </div>
+
+      <div class="commercial-demo-canvas" aria-label="Demostración visual de la operación">
+        <section class="commercial-demo-screen is-active" data-screen="agenda">
+          <div class="commercial-demo-bar">
+            <span>AGENDA DE HOY</span><strong>3 solicitudes</strong>
+          </div>
+          <div class="commercial-demo-slots">
+            <div class="commercial-demo-slot"><time>09:00</time><span>Corte clásico</span><b>Confirmada</b></div>
+            <div class="commercial-demo-slot commercial-demo-slot-active"><time>11:30</time><span>Color + lavado</span><b>Nueva</b></div>
+            <div class="commercial-demo-slot"><time>15:00</time><span>Diseño de barba</span><b>Pendiente</b></div>
+          </div>
+          <p class="commercial-demo-caption">Una solicitud entra. La operación sabe dónde ponerla.</p>
+        </section>
+
+        <section class="commercial-demo-screen" data-screen="equipo" hidden>
+          <div class="commercial-demo-bar">
+            <span>OPERACIÓN DEL EQUIPO</span><strong>martes</strong>
+          </div>
+          <div class="commercial-demo-team">
+            <div><span class="commercial-demo-avatar">A</span><p><strong>Andrés</strong><small>09:00 — 17:00</small></p><b>2 citas</b></div>
+            <div><span class="commercial-demo-avatar">M</span><p><strong>María</strong><small>10:00 — 18:00</small></p><b>1 cita</b></div>
+            <div><span class="commercial-demo-avatar">J</span><p><strong>Juan</strong><small>12:00 — 20:00</small></p><b>Disponible</b></div>
+          </div>
+          <p class="commercial-demo-caption">Cada horario tiene un responsable visible.</p>
+        </section>
+
+        <section class="commercial-demo-screen" data-screen="vitrina" hidden>
+          <div class="commercial-demo-bar">
+            <span>VITRINA PÚBLICA</span><strong>actualizada</strong>
+          </div>
+          <div class="commercial-demo-showcase">
+            <div><span class="commercial-demo-image commercial-demo-image-cut"></span><strong>Cortes</strong><small>Galería de estilos</small></div>
+            <div><span class="commercial-demo-image commercial-demo-image-product"></span><strong>Productos</strong><small>Precio y detalle</small></div>
+            <div><span class="commercial-demo-image commercial-demo-image-service"></span><strong>Servicios</strong><small>Tiempo y reserva</small></div>
+          </div>
+          <p class="commercial-demo-caption">Lo que ofreces se puede consultar antes de iniciar una conversación.</p>
+        </section>
+      </div>
+    </div>
+
+    <footer class="commercial-close">
+      <p>La inversión no compra más pantallas. Compra una operación que puedes entender, revisar y mejorar.</p>
+      <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" class="btn-primary px-6 py-3 text-base">
+        Hablemos de tu negocio <span aria-hidden="true">↗</span>
+      </a>
+    </footer>
+  </div>
+</section>
+
+<script>
+  const demo = document.querySelector<HTMLElement>('.commercial-demo');
+
+  if (demo) {
+    const controls = demo.querySelectorAll<HTMLButtonElement>('.commercial-demo-control');
+    const summaries = demo.querySelectorAll<HTMLElement>('[data-summary]');
+    const screens = demo.querySelectorAll<HTMLElement>('[data-screen]');
+
+    const selectView = (view: string) => {
+      controls.forEach((control) => {
+        const selected = control.dataset.view === view;
+        control.classList.toggle('is-active', selected);
+        control.setAttribute('aria-pressed', String(selected));
+      });
+      summaries.forEach((summary) => {
+        summary.hidden = summary.dataset.summary !== view;
+      });
+      screens.forEach((screen) => {
+        const selected = screen.dataset.screen === view;
+        screen.hidden = !selected;
+        screen.classList.toggle('is-active', selected);
+        if (selected && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          screen.animate(
+            [
+              { clipPath: 'inset(0 100% 0 0)', opacity: 0.4, transform: 'translateX(-1rem)' },
+              { clipPath: 'inset(0 0 0 0)', opacity: 1, transform: 'translateX(0)' },
+            ],
+            { duration: 420, easing: 'cubic-bezier(.16, 1, .3, 1)' },
+          );
+        }
+      });
+    };
+
+    controls.forEach((control) => {
+      control.addEventListener('click', () => {
+        if (control.dataset.view) selectView(control.dataset.view);
+      });
+    });
+  }
+</script>
+
+<style>
+  .commercial-section { color: var(--text-primary); }
+
+  .commercial-heading {
+    display: grid;
+    gap: 1.25rem;
+    margin: 0 auto clamp(2.75rem, 6vw, 4.5rem);
+    max-width: 48rem;
+    text-align: center;
+  }
+
+  .commercial-heading .press-kicker { margin: 0; }
+  .commercial-heading h2 {
+    font-size: clamp(2.75rem, 6.2vw, 5.2rem);
+    font-weight: 780;
+    letter-spacing: -.045em;
+    line-height: .92;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .commercial-heading > p:last-child {
+    color: var(--text-secondary);
+    font-size: 1.05rem;
+    line-height: 1.65;
+    margin: 0 auto;
+    max-width: 41rem;
+  }
+
+  .commercial-demo { display: grid; overflow: hidden; }
+  .commercial-demo-copy { display: grid; gap: 1.5rem; padding: clamp(1.5rem, 4vw, 3rem); }
+  .commercial-demo-copy .press-label { color: var(--accent-text); }
+
+  .commercial-demo-controls { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .commercial-demo-control {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: .82rem;
+    font-weight: 750;
+    min-height: 2.5rem;
+    padding: .55rem .8rem;
+    transition: background-color 180ms var(--motion), color 180ms var(--motion), transform 180ms var(--motion);
+  }
+
+  .commercial-demo-control:hover { color: var(--text-primary); transform: translateY(-1px); }
+  .commercial-demo-control.is-active { background: var(--secondary); border-color: var(--secondary); color: var(--on-secondary); }
+  .commercial-demo-control:focus-visible { outline: 3px solid var(--secondary); outline-offset: 3px; }
+
+  .commercial-demo-summary section { display: grid; gap: .75rem; }
+  .commercial-demo-index { color: var(--secondary); font-size: .8rem; font-weight: 800; letter-spacing: .08em; margin: 0; }
+  .commercial-demo-summary h3 { font-size: clamp(1.8rem, 3.2vw, 2.8rem); letter-spacing: -.04em; line-height: 1; margin: 0; }
+  .commercial-demo-summary section > p:last-child { color: var(--text-secondary); line-height: 1.6; margin: 0; max-width: 31rem; }
+
+  .commercial-demo-canvas { background: var(--surface-soft); border-top: 1px solid var(--border); min-height: 27rem; padding: clamp(1rem, 3vw, 2rem); }
+  .commercial-demo-screen { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow); display: grid; gap: 1.25rem; min-height: 100%; padding: clamp(1rem, 3vw, 1.75rem); }
+  .commercial-demo-bar { align-items: center; border-bottom: 1px solid var(--border); display: flex; font-size: .7rem; font-weight: 800; justify-content: space-between; letter-spacing: .08em; padding-bottom: .9rem; }
+  .commercial-demo-bar span { color: var(--text-secondary); }
+  .commercial-demo-bar strong { color: var(--accent-text); }
+
+  .commercial-demo-slots { display: grid; gap: .6rem; }
+  .commercial-demo-slot { align-items: center; border: 1px solid var(--border); display: grid; gap: .75rem; grid-template-columns: 3.1rem 1fr auto; min-height: 4rem; padding: .7rem; }
+  .commercial-demo-slot time { color: var(--accent-text); font-size: .84rem; font-weight: 800; }
+  .commercial-demo-slot span { font-size: .9rem; font-weight: 700; }
+  .commercial-demo-slot b { color: var(--text-secondary); font-size: .7rem; font-weight: 750; text-align: right; }
+  .commercial-demo-slot-active { background: color-mix(in srgb, var(--secondary) 14%, var(--surface)); border-color: var(--secondary); }
+  .commercial-demo-slot-active b { color: var(--accent-text); }
+
+  .commercial-demo-team { display: grid; gap: .6rem; }
+  .commercial-demo-team > div { align-items: center; border-bottom: 1px solid var(--border); display: grid; gap: .75rem; grid-template-columns: 2.3rem 1fr auto; padding: .7rem 0; }
+  .commercial-demo-avatar { align-items: center; background: var(--secondary); color: var(--on-secondary); display: flex; font-size: .78rem; font-weight: 800; height: 2.3rem; justify-content: center; width: 2.3rem; }
+  .commercial-demo-team p { display: grid; gap: .15rem; margin: 0; }
+  .commercial-demo-team strong { font-size: .9rem; }
+  .commercial-demo-team small, .commercial-demo-team b { color: var(--text-secondary); font-size: .7rem; }
+  .commercial-demo-team b { color: var(--accent-text); text-align: right; }
+
+  .commercial-demo-showcase { display: grid; gap: .7rem; grid-template-columns: repeat(3, 1fr); }
+  .commercial-demo-showcase > div { display: grid; gap: .45rem; min-width: 0; }
+  .commercial-demo-showcase strong { font-size: .82rem; }
+  .commercial-demo-showcase small { color: var(--text-secondary); font-size: .68rem; line-height: 1.35; }
+  .commercial-demo-image { border: 1px solid var(--border); display: block; height: clamp(5rem, 13vw, 8rem); position: relative; }
+  .commercial-demo-image::after { background: var(--secondary); content: ''; height: .55rem; left: .55rem; position: absolute; top: .55rem; width: .55rem; }
+  .commercial-demo-image-cut { background: linear-gradient(140deg, var(--primary) 0 44%, var(--surface-soft) 44% 66%, var(--secondary) 66%); }
+  .commercial-demo-image-product { background: linear-gradient(35deg, var(--surface-soft) 0 38%, var(--primary) 38% 68%, var(--accent) 68%); }
+  .commercial-demo-image-service { background: linear-gradient(145deg, var(--secondary) 0 34%, var(--surface) 34% 63%, var(--primary) 63%); }
+
+  .commercial-demo-caption { align-self: end; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: .82rem; line-height: 1.45; margin: 0; padding-top: 1rem; }
+  .commercial-close { align-items: center; display: flex; flex-direction: column; gap: 1.5rem; justify-content: space-between; padding: clamp(2.25rem, 5vw, 4rem) 0 0; }
+  .commercial-close > p { font-size: clamp(1.25rem, 2.3vw, 1.85rem); font-weight: 700; letter-spacing: -.035em; line-height: 1.1; margin: 0; max-width: 34rem; text-align: center; }
+
+  @media (min-width: 860px) {
+    .commercial-demo { grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr); }
+    .commercial-demo-canvas { border-left: 1px solid var(--border); border-top: 0; }
+    .commercial-close { flex-direction: row; }
+    .commercial-close > p { text-align: left; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .commercial-demo-control { transition: none; }
+  }
+</style>

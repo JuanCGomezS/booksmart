@@ -50,9 +50,17 @@ type PublicBusinessResponse = {
     imageUrl?: string;
     tags?: string[];
   }>;
+  catalog: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    imageUrl: string;
+    tags: string[];
+  }>;
   services: Array<{
     id: string;
     name: string;
+    price: number;
     active: true;
     duration: number;
     bufferMinutes?: number;
@@ -475,6 +483,9 @@ function publicServiceDto(
   if (
     !name ||
     service.active !== true ||
+    typeof service.price !== 'number' ||
+    !Number.isFinite(service.price) ||
+    service.price < 0 ||
     !Number.isInteger(service.duration) ||
     service.duration <= 0
   )
@@ -487,6 +498,7 @@ function publicServiceDto(
   return {
     id,
     name,
+    price: service.price,
     active: true,
     duration: service.duration,
     bufferMinutes: serviceBufferMinutes(service.bufferMinutes),
@@ -540,6 +552,29 @@ function publicProductDto(
   };
 }
 
+function publicCatalogDto(
+  id: string,
+  catalogItem: DocumentData,
+): PublicBusinessResponse['catalog'][number] | null {
+  const title = publicString(catalogItem.title, 120);
+  const imageUrl = publicString(catalogItem.imageUrl, 2_048);
+  if (!title || !imageUrl) return null;
+  const tags = Array.isArray(catalogItem.tags)
+    ? catalogItem.tags
+        .flatMap((tag: unknown) => (publicString(tag, 80) ? [publicString(tag, 80)!] : []))
+        .slice(0, 20)
+    : [];
+  return {
+    id,
+    title,
+    imageUrl,
+    tags,
+    ...(publicString(catalogItem.description, 1_000)
+      ? { description: publicString(catalogItem.description, 1_000) }
+      : {}),
+  };
+}
+
 export const getPublicBusinessBySlug = onCall<
   PublicBusinessRequest,
   Promise<PublicBusinessResponse>
@@ -556,8 +591,9 @@ export const getPublicBusinessBySlug = onCall<
   const business = businessSnapshot.data();
   if (!isBusinessOperational(business, now)) throw publicUnavailable();
 
-  const [productsSnapshot, servicesSnapshot, staffSnapshot] = await Promise.all([
+  const [productsSnapshot, catalogSnapshot, servicesSnapshot, staffSnapshot] = await Promise.all([
     db.collection(`barbers/${businessSnapshot.id}/products`).where('active', '==', true).get(),
+    db.collection(`barbers/${businessSnapshot.id}/catalog`).get(),
     db.collection(`barbers/${businessSnapshot.id}/services`).where('active', '==', true).get(),
     db.collection(`barbers/${businessSnapshot.id}/barbers`).where('active', '==', true).get(),
   ]);
@@ -565,6 +601,10 @@ export const getPublicBusinessBySlug = onCall<
     business: publicBusinessDto(businessSnapshot.id, business, now),
     products: productsSnapshot.docs.flatMap((product) => {
       const dto = publicProductDto(product.id, product.data());
+      return dto ? [dto] : [];
+    }),
+    catalog: catalogSnapshot.docs.flatMap((catalogItem) => {
+      const dto = publicCatalogDto(catalogItem.id, catalogItem.data());
       return dto ? [dto] : [];
     }),
     services: servicesSnapshot.docs.flatMap((service) => {

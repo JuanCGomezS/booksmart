@@ -333,6 +333,9 @@ function publicServiceDto(id, service) {
     const name = publicString(service.name, 120);
     if (!name ||
         service.active !== true ||
+        typeof service.price !== 'number' ||
+        !Number.isFinite(service.price) ||
+        service.price < 0 ||
         !Number.isInteger(service.duration) ||
         service.duration <= 0)
         return null;
@@ -342,6 +345,7 @@ function publicServiceDto(id, service) {
     return {
         id,
         name,
+        price: service.price,
         active: true,
         duration: service.duration,
         bufferMinutes: serviceBufferMinutes(service.bufferMinutes),
@@ -385,6 +389,26 @@ function publicProductDto(id, product) {
         ...(tags.length ? { tags } : {}),
     };
 }
+function publicCatalogDto(id, catalogItem) {
+    const title = publicString(catalogItem.title, 120);
+    const imageUrl = publicString(catalogItem.imageUrl, 2_048);
+    if (!title || !imageUrl)
+        return null;
+    const tags = Array.isArray(catalogItem.tags)
+        ? catalogItem.tags
+            .flatMap((tag) => (publicString(tag, 80) ? [publicString(tag, 80)] : []))
+            .slice(0, 20)
+        : [];
+    return {
+        id,
+        title,
+        imageUrl,
+        tags,
+        ...(publicString(catalogItem.description, 1_000)
+            ? { description: publicString(catalogItem.description, 1_000) }
+            : {}),
+    };
+}
 exports.getPublicBusinessBySlug = (0, https_1.onCall)(async (request) => {
     const slug = typeof request.data?.slug === 'string' ? request.data.slug.trim() : '';
     if (!slug || slug.length > 160)
@@ -397,8 +421,9 @@ exports.getPublicBusinessBySlug = (0, https_1.onCall)(async (request) => {
     const business = businessSnapshot.data();
     if (!isBusinessOperational(business, now))
         throw publicUnavailable();
-    const [productsSnapshot, servicesSnapshot, staffSnapshot] = await Promise.all([
+    const [productsSnapshot, catalogSnapshot, servicesSnapshot, staffSnapshot] = await Promise.all([
         db.collection(`barbers/${businessSnapshot.id}/products`).where('active', '==', true).get(),
+        db.collection(`barbers/${businessSnapshot.id}/catalog`).get(),
         db.collection(`barbers/${businessSnapshot.id}/services`).where('active', '==', true).get(),
         db.collection(`barbers/${businessSnapshot.id}/barbers`).where('active', '==', true).get(),
     ]);
@@ -406,6 +431,10 @@ exports.getPublicBusinessBySlug = (0, https_1.onCall)(async (request) => {
         business: publicBusinessDto(businessSnapshot.id, business, now),
         products: productsSnapshot.docs.flatMap((product) => {
             const dto = publicProductDto(product.id, product.data());
+            return dto ? [dto] : [];
+        }),
+        catalog: catalogSnapshot.docs.flatMap((catalogItem) => {
+            const dto = publicCatalogDto(catalogItem.id, catalogItem.data());
             return dto ? [dto] : [];
         }),
         services: servicesSnapshot.docs.flatMap((service) => {

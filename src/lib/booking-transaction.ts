@@ -48,7 +48,10 @@ export interface PublicBookingConfiguration {
   business: Pick<PublicBusiness, 'active' | 'workingHours'> & {
     config: { booking?: BookingSettings };
   };
-  service: Pick<Service, 'id' | 'active' | 'duration' | 'bufferMinutes' | 'staffIds'>;
+  service: Pick<
+    Service,
+    'id' | 'name' | 'price' | 'active' | 'duration' | 'bufferMinutes' | 'staffIds'
+  >;
   staff: Pick<BarberStaff, 'id' | 'active' | 'schedule'>;
   /** Every compatible staff member loaded for a normal "any professional" booking. */
   compatibleStaff?: Array<Pick<BarberStaff, 'id' | 'active' | 'schedule'>>;
@@ -230,9 +233,11 @@ function firebaseAdapters(firestore: Firestore): BookingAdapters<DocumentReferen
   return {
     transaction: {
       run: (update) =>
-        runTransaction(firestore, (transaction: Transaction) =>
-          update(transaction as unknown as Parameters<typeof update>[0]),
-        ),
+        runTransaction(firestore, (transaction: Transaction) => {
+          // SAFETY: local adapters share the transaction methods required by BookingAdapters.
+          const adaptedTransaction = transaction as unknown as Parameters<typeof update>[0];
+          return update(adaptedTransaction);
+        }),
     },
     references: {
       business: (businessId) => doc(firestore, PUBLIC_BUSINESSES_COLLECTION, businessId),
@@ -312,11 +317,10 @@ export async function createClientBooking<Reference = DocumentReference>(
       return errorResult(error);
     }
   }
-  const adapters =
-    options.adapters ||
-    (firebaseAdapters(
-      options.firestore || (await import('./firebase')).db,
-    ) as unknown as BookingAdapters<Reference>);
+  const firestoreAdapters = firebaseAdapters(options.firestore || (await import('./firebase')).db);
+  // SAFETY: Firebase document references satisfy the adapter reference contract.
+  const genericFirestoreAdapters = firestoreAdapters as unknown as BookingAdapters<Reference>;
+  const adapters = options.adapters || genericFirestoreAdapters;
   const { references } = adapters;
   const appointmentRef = references.appointment(request.businessId);
 
