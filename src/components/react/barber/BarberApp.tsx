@@ -1034,7 +1034,7 @@ function ProductCard({
             <p>{description}</p>
             <p className="public-business-product-back-price">{formatPrice(product.price)}</p>
           </div>
-          <div className="public-business-card-back-actions">
+          {/* <div className="public-business-card-back-actions">
             {whatsappUrl && (
               <a
                 className="public-business-flip-card-toggle public-business-product-contact"
@@ -1045,7 +1045,7 @@ function ProductCard({
                 Consultar por WhatsApp <span aria-hidden="true">↗</span>
               </a>
             )}
-          </div>
+          </div> */}
         </div>
       )}
     />
