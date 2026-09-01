@@ -622,9 +622,9 @@ textarea {
   right: 0;
   bottom: 0;
   left: 0;
-  height: 3px;
+  height: 4px;
   background: currentColor;
-  opacity: 0.78;
+  opacity: 0.92;
   transform-origin: right center;
   animation: notification-lifetime var(--notification-duration) linear both;
 }
@@ -657,6 +657,7 @@ textarea {
 .floating-notification-content {
   min-width: 0;
   padding: 0.125rem 0;
+  overflow-wrap: anywhere;
 }
 
 .floating-notification p {
@@ -672,7 +673,7 @@ textarea {
 
 .floating-notification-message {
   margin-top: 0.25rem !important;
-  color: var(--text-primary);
+  color: inherit;
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.45;
@@ -1399,6 +1400,204 @@ textarea {
 
 .login-refinement .surface-card input {
   box-shadow: none;
+}
+
+.login-refinement .auth-sheet {
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.login-refinement .auth-back,
+.login-refinement .auth-inline-back,
+.login-refinement .auth-label-row button,
+.login-refinement .auth-switch button {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.login-refinement .auth-back {
+  margin-bottom: 1rem;
+}
+
+.login-refinement .auth-inline-back {
+  margin-bottom: 1.5rem;
+}
+
+.login-refinement .auth-sheet h1 {
+  max-width: 22ch;
+  margin: 0 auto;
+  color: var(--text-primary);
+  font-size: clamp(1.65rem, 3vw, 2.5rem);
+  font-weight: 750;
+  letter-spacing: -0.045em;
+  line-height: 1.03;
+  text-align: center;
+}
+
+.login-refinement .auth-intro {
+  max-width: 34ch;
+  margin: 0.75rem auto 1.5rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  text-align: center;
+}
+
+.login-refinement .auth-actions,
+.login-refinement .auth-form {
+  display: grid;
+  gap: 0.875rem;
+}
+
+.login-refinement .auth-provider-button {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-weight: 700;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+.login-refinement .auth-provider-button:hover:not(:disabled) {
+  border-color: var(--secondary);
+  background: var(--surface-soft);
+  transform: translateY(-1px);
+}
+
+.login-refinement .auth-registration-alternative {
+  display: grid;
+  width: 100%;
+  gap: 0.875rem;
+  margin-top: 1.5rem;
+}
+
+.login-refinement .auth-registration-alternative .auth-provider-button {
+  width: 100%;
+}
+
+.login-refinement .auth-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.login-refinement .auth-divider::before,
+.login-refinement .auth-divider::after {
+  height: 1px;
+  background: color-mix(in srgb, var(--border) 78%, transparent);
+  content: '';
+}
+
+.login-refinement .auth-google-mark {
+  display: grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 2px;
+  background: var(--surface-soft);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.login-refinement .auth-mail-mark {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.login-refinement .auth-form {
+  margin-top: 1.75rem;
+}
+
+.login-refinement .auth-form > div {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.login-refinement .auth-form label {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.login-refinement .auth-form input {
+  width: 100%;
+  min-height: 3.1rem;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--text-primary));
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--surface-soft) 86%, var(--surface));
+  color: var(--text-primary);
+  padding: 0.7rem 0.85rem;
+}
+
+.login-refinement .auth-form input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.82;
+}
+
+.login-refinement .auth-form input:focus {
+  border-color: var(--secondary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--secondary) 28%, transparent);
+  outline: none;
+}
+
+.login-refinement .auth-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.login-refinement .auth-label-row button,
+.login-refinement .auth-switch button,
+.login-refinement .auth-legal-notice a {
+  color: var(--secondary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+}
+
+.login-refinement .auth-submit {
+  min-height: 3.25rem;
+  margin-top: 0.75rem;
+}
+
+.login-refinement .auth-legal-notice {
+  margin: 1.25rem auto 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.login-refinement .auth-switch,
+.login-refinement .auth-footnote {
+  margin-top: 1.25rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.login-refinement .auth-footnote {
+  padding-top: 1.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  font-size: 0.72rem;
 }
 
 .password-reset-success {

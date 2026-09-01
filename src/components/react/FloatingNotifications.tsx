@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type NotificationTone = 'success' | 'error';
 
@@ -10,7 +11,7 @@ type Notification = {
   revision: number;
   paused: boolean;
 };
-type NotificationDetail = Pick<Notification, 'message' | 'tone'>;
+type NotificationDetail = Pick<Notification, 'message' | 'tone'> & { duration?: number };
 type NotificationTimer = { timeout?: number; startedAt: number; remaining: number };
 
 const notificationEvent = 'booksmart:notification';
@@ -20,15 +21,24 @@ const notificationDuration: Record<NotificationTone, number> = {
   error: 8000,
 };
 
-export function notify(message: string, tone: NotificationTone) {
+function resolveDuration(tone: NotificationTone, requestedDuration?: number): number {
+  if (!Number.isFinite(requestedDuration)) return notificationDuration[tone];
+  return Math.min(Math.max(requestedDuration as number, 1500), 30000);
+}
+
+export function notify(message: string, tone: NotificationTone, duration?: number) {
   if (!message || typeof window === 'undefined') return;
   window.dispatchEvent(
-    new CustomEvent<NotificationDetail>(notificationEvent, { detail: { message, tone } }),
+    new CustomEvent<NotificationDetail>(notificationEvent, {
+      detail: { message, tone, duration: resolveDuration(tone, duration) },
+    }),
   );
 }
 
-export const notifySuccess = (message: string) => notify(message, 'success');
-export const notifyError = (message: string) => notify(message, 'error');
+export const notifySuccess = (message: string, duration?: number) =>
+  notify(message, 'success', duration);
+export const notifyError = (message: string, duration?: number) =>
+  notify(message, 'error', duration);
 
 const toneContent: Record<NotificationTone, { label: string; icon: React.ReactNode }> = {
   success: {
@@ -106,9 +116,13 @@ export default function FloatingNotifications() {
 
   useEffect(() => {
     const receive = (event: Event) => {
-      const { message, tone } = (event as CustomEvent<NotificationDetail>).detail;
+      const {
+        message,
+        tone,
+        duration: requestedDuration,
+      } = (event as CustomEvent<NotificationDetail>).detail;
       const id = `${tone}:${message}`;
-      const duration = notificationDuration[tone];
+      const duration = resolveDuration(tone, requestedDuration);
       const existingTimer = timers.current.get(id);
       const paused = existingTimer !== undefined && existingTimer.timeout === undefined;
       clearTimer(id);

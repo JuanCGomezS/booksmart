@@ -559,15 +559,15 @@ export default function PublicBookingWidget({
     !selectedService && 'elige un servicio',
     !bookingDate && 'selecciona una fecha',
     !slot && 'elige un horario',
-    !nameValid && 'ingresa un nombre de 1 a 120 caracteres',
+    !nameValid && 'ingresa un nombre',
     (!phoneValid || !phoneLengthValid) &&
-      'ingresa un celular colombiano válido de máximo 40 caracteres',
+      'ingresa un celular válido',
     emailRequested &&
       (!emailValid || (customerFields?.email === 'required' && !emailValue)) &&
       'ingresa un correo electrónico válido',
     addressRequested &&
       (!addressValid || (customerFields?.address === 'required' && !addressValue)) &&
-      'ingresa una dirección de máximo 240 caracteres',
+      'ingresa una dirección válida',
     !bookingNoteValid && `reduce la nota a ${BOOKING_NOTE_MAX_LENGTH} caracteres o menos`,
     requiresPrivacyAcceptance &&
       !consent &&
@@ -1139,9 +1139,9 @@ export default function PublicBookingWidget({
                   />
                 </label>
                 <label className="space-y-1">
-                  <span className="field-label text-sm">Celular colombiano</span>
+                  <span className="field-label text-sm">Celular</span>
                   <input
-                    className="field-input"
+                    className="field-input opacity-50"
                     value={clientPhone}
                     maxLength={40}
                     onChange={(event) => setClientPhone(event.target.value)}
@@ -1196,19 +1196,16 @@ export default function PublicBookingWidget({
                   </label>
                 )}
               </div>
-              <p id="phone-hint" className="text-xs text-subtle">
-                Ejemplo: 300 123 4567
-              </p>
               <label className="block space-y-1">
                 <span className="field-label text-sm">
                   Nota para el negocio <span className="font-normal text-subtle">(opcional)</span>
                 </span>
                 <textarea
-                  className="field-textarea min-h-24"
+                  className="field-textarea min-h-24 opacity-50"
                   value={bookingNote}
                   maxLength={BOOKING_NOTE_MAX_LENGTH}
                   onChange={(event) => setBookingNote(event.target.value)}
-                  placeholder="Ej.: llegaré unos minutos tarde, prefiero cierto producto o color."
+                  placeholder="Ej.: prefiero cierto producto o color."
                   aria-describedby="booking-note-hint"
                   aria-invalid={!bookingNoteValid}
                 />

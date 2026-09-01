@@ -3,8 +3,10 @@
 import {
   createUserWithEmailAndPassword,
   deleteUser,
+  GoogleAuthProvider,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type User as FirebaseUser,
@@ -23,19 +25,25 @@ export type LegalConsent = {
 export class RegistrationRecoveryError extends Error {
   constructor(
     code:
-      'registration/profile-creation-reverted' | 'registration/profile-creation-recovery-failed',
+      | 'registration/profile-creation-reverted'
+      | 'registration/profile-creation-recovery-failed'
+      | 'registration/profile-creation-failed',
   ) {
     super(
       code === 'registration/profile-creation-reverted'
         ? 'No se pudo crear el perfil y se revirtió la cuenta.'
-        : 'No se pudo crear el perfil ni revertir completamente la cuenta.',
+        : code === 'registration/profile-creation-failed'
+          ? 'No se pudo crear el perfil de la cuenta.'
+          : 'No se pudo crear el perfil ni revertir completamente la cuenta.',
     );
     this.name = 'RegistrationRecoveryError';
     this.code = code;
   }
 
   readonly code:
-    'registration/profile-creation-reverted' | 'registration/profile-creation-recovery-failed';
+    | 'registration/profile-creation-reverted'
+    | 'registration/profile-creation-recovery-failed'
+    | 'registration/profile-creation-failed';
 }
 
 /**
@@ -54,15 +62,12 @@ export async function requestPasswordReset(email: string): Promise<void> {
 /**
  * Registro público: siempre crea el rol customer. No se requiere para reservar.
  */
-export async function signUpClient(
+async function createCustomerProfile(
+  user: FirebaseUser,
   name: string,
-  email: string,
-  password: string,
   legalConsent: LegalConsent,
-): Promise<FirebaseUser> {
-  const credential = await createUserWithEmailAndPassword(auth, email, password);
-  const user = credential.user;
-
+  deleteAccountOnFailure: boolean,
+): Promise<void> {
   try {
     await setDoc(doc(db, 'users', user.uid), {
       uid: user.uid,
@@ -77,6 +82,11 @@ export async function signUpClient(
     });
   } catch (profileError) {
     console.error('Error creating customer profile; attempting account recovery:', profileError);
+
+    if (!deleteAccountOnFailure) {
+      await firebaseSignOut(auth);
+      throw new RegistrationRecoveryError('registration/profile-creation-failed');
+    }
 
     try {
       await deleteUser(user);
@@ -94,8 +104,47 @@ export async function signUpClient(
 
     throw new RegistrationRecoveryError('registration/profile-creation-reverted');
   }
+}
+
+export async function signUpClient(
+  name: string,
+  email: string,
+  password: string,
+  legalConsent: LegalConsent,
+): Promise<FirebaseUser> {
+  const credential = await createUserWithEmailAndPassword(auth, email, password);
+  await createCustomerProfile(credential.user, name, legalConsent, true);
+  return credential.user;
+}
+
+/** Starts a Google sign-in flow and returns the authenticated user. */
+export async function signInWithGoogle(): Promise<FirebaseUser> {
+  const provider = new GoogleAuthProvider();
+  const credential = await signInWithPopup(auth, provider);
+  return credential.user;
+}
+
+/** Registers a Google-authenticated customer after explicit legal consent. */
+export async function completeGoogleClientRegistration(
+  user: FirebaseUser,
+  name: string,
+  legalConsent: LegalConsent,
+): Promise<FirebaseUser> {
+  const existingProfile = await getDoc(doc(db, 'users', user.uid));
+
+  if (!existingProfile.exists()) {
+    const profileName = name || user.displayName || user.email?.split('@')[0] || 'Cliente';
+    await createCustomerProfile(user, profileName, legalConsent, false);
+  }
 
   return user;
+}
+
+export async function signUpClientWithGoogle(
+  name: string,
+  legalConsent: LegalConsent,
+): Promise<FirebaseUser> {
+  return completeGoogleClientRegistration(await signInWithGoogle(), name, legalConsent);
 }
 
 /**
