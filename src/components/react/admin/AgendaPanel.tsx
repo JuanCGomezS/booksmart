@@ -22,6 +22,25 @@ const STATUS_LABEL: Record<AppointmentStatus, string> = {
 };
 const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
+function getWhatsappUrl(phone: string) {
+  const normalized = phone.replace(/\D/g, '');
+  const colombianMobile =
+    normalized.length === 10 && normalized.startsWith('3') ? `57${normalized}` : normalized;
+  return `https://wa.me/${colombianMobile}`;
+}
+
+function getTelephoneUrl(phone: string) {
+  const digits = phone.replace(/\D/g, '');
+  return phone.startsWith('+') ? `tel:+${digits}` : `tel:${digits}`;
+}
+
+function displayPhoneNumber(phone: string) {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 12 && digits.startsWith('573')
+    ? phone.replace(/^\+?57[\s-]*/, '')
+    : phone;
+}
+
 function monthOf(date: string) {
   return date.slice(0, 7);
 }
@@ -419,14 +438,45 @@ export default function AgendaPanel({
                             </summary>
                             <div className="space-y-2 border-t border-[color-mix(in_srgb,var(--border)_72%,transparent)] px-2.5 py-2.5">
                               {phone && (
-                                <a
-                                  className="block truncate font-medium text-main underline decoration-[var(--border)] underline-offset-2 hover:decoration-current"
-                                  href={`tel:${phone}`}
-                                  aria-label={`Llamar a ${appointment.clientName}: ${phone}`}
-                                  title={phone}
-                                >
-                                  {phone}
-                                </a>
+                                <div className="flex items-center gap-2">
+                                  <p>{displayPhoneNumber(phone)}</p>
+                                  <a
+                                    className="inline-flex size-9 items-center justify-center rounded-full border border-[var(--border)] text-main transition-colors hover:border-[var(--secondary)] hover:bg-[color-mix(in_srgb,var(--secondary)_12%,transparent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--secondary)]"
+                                    href={getTelephoneUrl(phone)}
+                                    aria-label={`Llamar a ${appointment.clientName}`}
+                                    title="Llamar"
+                                  >
+                                    <svg
+                                      aria-hidden="true"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      className="size-4"
+                                    >
+                                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.64a2 2 0 0 1-.45 2.11L8 9.75a16 16 0 0 0 6 6l1.28-1.28a2 2 0 0 1 2.11-.45c.86.29 1.74.5 2.64.62A2 2 0 0 1 22 16.92Z" />
+                                    </svg>
+                                  </a>
+                                  <a
+                                    className="inline-flex size-9 items-center justify-center rounded-full border border-[var(--border)] text-main transition-colors hover:border-[var(--secondary)] hover:bg-[color-mix(in_srgb,var(--secondary)_12%,transparent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--secondary)]"
+                                    href={getWhatsappUrl(phone)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    aria-label={`Escribir por WhatsApp a ${appointment.clientName}`}
+                                    title="Escribir por WhatsApp"
+                                  >
+                                    <svg
+                                      aria-hidden="true"
+                                      viewBox="0 0 24 24"
+                                      fill="currentColor"
+                                      className="size-4"
+                                    >
+                                      <path d="M12 2a10 10 0 0 0-8.48 15.3L2 22l4.84-1.49A10 10 0 1 0 12 2Zm0 18.18a8.17 8.17 0 0 1-4.16-1.14l-.3-.18-2.87.88.94-2.78-.2-.29A8.18 8.18 0 1 1 12 20.18Zm4.49-6.13c-.25-.13-1.47-.73-1.7-.81-.23-.08-.4-.13-.57.13-.17.25-.66.81-.81.98-.15.17-.3.19-.55.06a6.68 6.68 0 0 1-1.97-1.21 7.39 7.39 0 0 1-1.36-1.7c-.14-.25-.01-.39.11-.52.11-.11.25-.3.38-.45.13-.15.17-.25.25-.42.08-.17.04-.32-.02-.45-.06-.13-.57-1.37-.78-1.88-.21-.5-.42-.43-.57-.43h-.49c-.17 0-.45.06-.68.32-.23.25-.89.87-.89 2.13s.91 2.47 1.04 2.64c.13.17 1.8 2.75 4.36 3.86.61.26 1.08.42 1.45.54.61.19 1.16.16 1.6.1.49-.07 1.47-.6 1.68-1.17.21-.57.21-1.06.15-1.17-.06-.1-.23-.16-.48-.29Z" />
+                                    </svg>
+                                  </a>
+                                </div>
                               )}
                               {email && (
                                 <a

@@ -485,6 +485,7 @@ textarea {
 .field-input::placeholder,
 .field-textarea::placeholder {
   color: var(--text-secondary);
+  opacity: 0.30;
 }
 
 .field-input:hover:not(:disabled),

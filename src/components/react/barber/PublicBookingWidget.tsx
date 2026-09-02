@@ -560,8 +560,7 @@ export default function PublicBookingWidget({
     !bookingDate && 'selecciona una fecha',
     !slot && 'elige un horario',
     !nameValid && 'ingresa un nombre',
-    (!phoneValid || !phoneLengthValid) &&
-      'ingresa un celular válido',
+    (!phoneValid || !phoneLengthValid) && 'ingresa un celular válido',
     emailRequested &&
       (!emailValid || (customerFields?.email === 'required' && !emailValue)) &&
       'ingresa un correo electrónico válido',
@@ -815,7 +814,9 @@ export default function PublicBookingWidget({
                         aria-pressed={staffId === ''}
                         onClick={() => chooseStaff('')}
                       >
-                        <span className="booking-provider-any-icon" aria-hidden="true">✦</span>
+                        <span className="booking-provider-any-icon" aria-hidden="true">
+                          ✦
+                        </span>
                         <span>
                           <strong>Cualquier profesional</strong>
                           <small>Te asignaremos el mejor horario</small>
@@ -832,9 +833,15 @@ export default function PublicBookingWidget({
                           <BookingStaffAvatar member={member} />
                           <span className="booking-provider-copy">
                             <strong>{member.name}</strong>
-                            <small>{staffId === member.id ? 'Profesional seleccionado' : 'Ver disponibilidad'}</small>
+                            <small>
+                              {staffId === member.id
+                                ? 'Profesional seleccionado'
+                                : 'Ver disponibilidad'}
+                            </small>
                           </span>
-                          <span className="booking-provider-check" aria-hidden="true">✓</span>
+                          <span className="booking-provider-check" aria-hidden="true">
+                            ✓
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -1141,7 +1148,7 @@ export default function PublicBookingWidget({
                 <label className="space-y-1">
                   <span className="field-label text-sm">Celular</span>
                   <input
-                    className="field-input opacity-50"
+                    className="field-input"
                     value={clientPhone}
                     maxLength={40}
                     onChange={(event) => setClientPhone(event.target.value)}
@@ -1201,7 +1208,7 @@ export default function PublicBookingWidget({
                   Nota para el negocio <span className="font-normal text-subtle">(opcional)</span>
                 </span>
                 <textarea
-                  className="field-textarea min-h-24 opacity-50"
+                  className="field-textarea min-h-24"
                   value={bookingNote}
                   maxLength={BOOKING_NOTE_MAX_LENGTH}
                   onChange={(event) => setBookingNote(event.target.value)}
