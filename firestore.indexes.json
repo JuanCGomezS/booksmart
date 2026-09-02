@@ -21,7 +21,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "assignmentState", "order": "ASCENDING" },
-        { "fieldPath": "capacityStaffId", "order": "ASCENDING" },
         { "fieldPath": "bookingDate", "order": "ASCENDING" }
       ]
     },

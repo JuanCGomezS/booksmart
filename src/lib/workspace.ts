@@ -96,7 +96,7 @@ function monthRange(
   return legacyStart && legacyEnd ? { start, end, legacyStart, legacyEnd } : null;
 }
 
-/** Reads one Colombia-local day only. Staff queries must include their assigned legacy barberId. */
+/** Reads one Colombia-local day, plus all unassigned requests available for self-assignment. */
 export async function getWorkspaceAgenda(
   businessId: string,
   bookingDate: string,
@@ -129,7 +129,6 @@ export async function getWorkspaceAgenda(
           query(
             appointments,
             where('assignmentState', '==', 'unassigned'),
-            where('capacityStaffId', '==', staffId),
             where('bookingDate', '==', bookingDate),
           ),
         )
@@ -191,7 +190,6 @@ export async function getWorkspaceMonthAgenda(
           query(
             appointments,
             where('assignmentState', '==', 'unassigned'),
-            where('capacityStaffId', '==', staffId),
             where('bookingDate', '>=', range.start),
             where('bookingDate', '<', range.end),
           ),

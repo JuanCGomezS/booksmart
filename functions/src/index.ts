@@ -999,89 +999,180 @@ export const createPublicBooking = onCall(async (request) => {
   return { appointmentId };
 });
 
-/**
- * Confirms only the capacity offer reserved for a Storeadmin's linked
- * professional profile. The Admin SDK transaction keeps the existing
- * first-valid-claim semantics without broadening browser Firestore writes.
- */
-export const claimStoreadminCapacityAppointment = onCall(async (request) => {
-  const input = request.data as { businessId?: unknown; appointmentId?: unknown };
+function appointmentInput(value: unknown): { businessId: string; appointmentId: string } {
+  const input = value as { businessId?: unknown; appointmentId?: unknown };
   if (
-    !request.auth ||
     typeof input?.businessId !== 'string' ||
     !input.businessId ||
     typeof input.appointmentId !== 'string' ||
     !input.appointmentId
-  ) {
-    throw new HttpsError('invalid-argument', 'Invalid appointment claim.');
-  }
+  )
+    throw new HttpsError('invalid-argument', 'Invalid appointment request.');
+  return { businessId: input.businessId, appointmentId: input.appointmentId };
+}
 
-  const actorId = request.auth.uid;
-  const appointmentRef = db.doc(`barbers/${input.businessId}/appointments/${input.appointmentId}`);
+async function actorForBusiness(
+  transaction: FirebaseFirestore.Transaction,
+  actorId: string,
+  businessId: string,
+) {
+  const actor = (await transaction.get(db.doc(`users/${actorId}`))).data();
+  const staffId = typeof actor?.staffId === 'string' ? actor.staffId : '';
+  const belongsToBusiness =
+    Array.isArray(actor?.businessIds) && actor.businessIds.includes(businessId);
+  const isStaff =
+    actor?.role === 'staff' &&
+    staffId === actorId &&
+    Array.isArray(actor?.businessIds) &&
+    actor.businessIds.length === 1 &&
+    belongsToBusiness;
+  const isStoreadmin = actor?.role === 'storeadmin' && belongsToBusiness;
+  if (!isStaff && !isStoreadmin)
+    throw new HttpsError('permission-denied', 'Not authorized for this business.');
+  const canSelfAssign =
+    isStaff ||
+    (isStoreadmin && staffId === actorId && actor?.professionalBusinessId === businessId);
+  return { isStaff, staffId, canSelfAssign };
+}
+
+function canSetAppointmentStatus(appointment: DocumentData | undefined, status: string): boolean {
+  if (!appointment) return false;
+  if (status === 'confirmed') return appointment.status === 'pending';
+  if (
+    !['done', 'no_show', 'cancelled'].includes(status) ||
+    !['pending', 'confirmed'].includes(appointment.status)
+  )
+    return false;
+  const endedAt = businessLocalDateTime(appointment.bookingDate, appointment.endTime);
+  return endedAt !== null && endedAt.getTime() <= Date.now();
+}
+
+export const updateAppointmentStatus = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication is required.');
+  const { businessId, appointmentId } = appointmentInput(request.data);
+  const status = (request.data as { status?: unknown }).status;
+  if (!['confirmed', 'done', 'no_show', 'cancelled'].includes(status as string))
+    throw new HttpsError('invalid-argument', 'Invalid appointment status.');
+
   await db.runTransaction(async (transaction) => {
-    const actorRef = db.doc(`users/${actorId}`);
-    const actorSnapshot = await transaction.get(actorRef);
-    const actor = actorSnapshot.data();
-    const actorStaffId = typeof actor?.staffId === 'string' ? actor.staffId : '';
-    const hasBusiness =
-      Array.isArray(actor?.businessIds) && actor.businessIds.includes(input.businessId);
-    if (
-      actor?.role !== 'storeadmin' ||
-      actorStaffId !== actorId ||
-      actor?.professionalBusinessId !== input.businessId ||
-      !hasBusiness
-    ) {
-      throw new HttpsError('permission-denied', 'Not authorized to claim this appointment.');
-    }
+    const { isStaff, staffId } = await actorForBusiness(transaction, request.auth!.uid, businessId);
+    const appointmentRef = db.doc(`barbers/${businessId}/appointments/${appointmentId}`);
+    const appointmentSnapshot = await transaction.get(appointmentRef);
+    const appointment = appointmentSnapshot.data();
+    const staffCanUpdate =
+      appointment?.barberId === staffId ||
+      (appointment?.assignmentState === 'unassigned' && status === 'confirmed');
+    if (!canSetAppointmentStatus(appointment, status as string))
+      throw new HttpsError('failed-precondition', 'Invalid appointment status transition.');
+    if (!appointment)
+      throw new HttpsError('failed-precondition', 'Appointment is no longer available.');
+    if (isStaff && !staffCanUpdate)
+      throw new HttpsError('permission-denied', 'Not authorized to update this appointment.');
 
+    const lockOwnerId =
+      typeof appointment?.barberId === 'string'
+        ? appointment.barberId
+        : typeof appointment?.capacityStaffId === 'string'
+          ? appointment.capacityStaffId
+          : '';
+    const intervalIds = Array.isArray(appointment?.occupiedIntervalIds)
+      ? appointment.occupiedIntervalIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    const lockRefs =
+      ['done', 'no_show', 'cancelled'].includes(status as string) && lockOwnerId
+        ? intervalIds.map((intervalId) =>
+            db.doc(
+              `barbers/${businessId}/bookingLocks/${appointment.bookingDate}/staff/${lockOwnerId}/intervals/${intervalId}`,
+            ),
+          )
+        : [];
+    const locks = await Promise.all(lockRefs.map((reference) => transaction.get(reference)));
+
+    transaction.update(appointmentRef, { status, updatedAt: FieldValue.serverTimestamp() });
+    locks.forEach((lock, index) => {
+      if (lock.exists && lock.data()?.appointmentId === appointmentId)
+        transaction.delete(lockRefs[index]);
+    });
+  });
+});
+
+export const claimAppointment = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication is required.');
+  const { businessId, appointmentId } = appointmentInput(request.data);
+
+  await db.runTransaction(async (transaction) => {
+    const { staffId, canSelfAssign } = await actorForBusiness(
+      transaction,
+      request.auth!.uid,
+      businessId,
+    );
+    if (!canSelfAssign)
+      throw new HttpsError('permission-denied', 'Not authorized to claim this appointment.');
+    const appointmentRef = db.doc(`barbers/${businessId}/appointments/${appointmentId}`);
     const [appointmentSnapshot, staffSnapshot] = await Promise.all([
       transaction.get(appointmentRef),
-      transaction.get(db.doc(`barbers/${input.businessId}/barbers/${actorStaffId}`)),
+      transaction.get(db.doc(`barbers/${businessId}/barbers/${staffId}`)),
     ]);
     const appointment = appointmentSnapshot.data();
     if (
       !appointmentSnapshot.exists ||
       appointment?.assignmentState !== 'unassigned' ||
-      appointment?.capacityStaffId !== actorStaffId ||
-      !blockingAppointmentStatuses.has(appointment?.status)
-    ) {
+      !blockingAppointmentStatuses.has(appointment?.status) ||
+      !staffSnapshot.exists ||
+      staffSnapshot.data()?.active !== true
+    )
       throw new HttpsError('failed-precondition', 'Appointment is no longer available.');
-    }
-    if (!staffSnapshot.exists || staffSnapshot.data()?.active !== true) {
-      throw new HttpsError('failed-precondition', 'Professional profile is not available.');
-    }
 
-    const [serviceSnapshot, ...capacityLocks] = await Promise.all([
-      transaction.get(db.doc(`barbers/${input.businessId}/services/${appointment.serviceId}`)),
-      ...(Array.isArray(appointment.occupiedIntervalIds)
-        ? appointment.occupiedIntervalIds
-        : []
-      ).map((intervalId) =>
-        transaction.get(
-          db.doc(
-            `barbers/${input.businessId}/bookingLocks/${appointment.bookingDate}/staff/${actorStaffId}/intervals/${intervalId}`,
-          ),
-        ),
+    const intervalIds = Array.isArray(appointment.occupiedIntervalIds)
+      ? appointment.occupiedIntervalIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    const capacityStaffId =
+      typeof appointment.capacityStaffId === 'string' ? appointment.capacityStaffId : '';
+    if (!capacityStaffId || !intervalIds.length)
+      throw new HttpsError('failed-precondition', 'Appointment is no longer available.');
+
+    const capacityLockRefs = intervalIds.map((intervalId) =>
+      db.doc(
+        `barbers/${businessId}/bookingLocks/${appointment.bookingDate}/staff/${capacityStaffId}/intervals/${intervalId}`,
       ),
+    );
+    const staffLockRefs = intervalIds.map((intervalId) =>
+      db.doc(
+        `barbers/${businessId}/bookingLocks/${appointment.bookingDate}/staff/${staffId}/intervals/${intervalId}`,
+      ),
+    );
+    const [serviceSnapshot, capacityLocks, staffLocks] = await Promise.all([
+      transaction.get(db.doc(`barbers/${businessId}/services/${appointment.serviceId}`)),
+      Promise.all(capacityLockRefs.map((reference) => transaction.get(reference))),
+      capacityStaffId === staffId
+        ? Promise.resolve([])
+        : Promise.all(staffLockRefs.map((reference) => transaction.get(reference))),
     ]);
     const service = serviceSnapshot.data();
     if (
       !serviceSnapshot.exists ||
       service?.active !== true ||
-      (Array.isArray(service.staffIds) && !service.staffIds.includes(actorStaffId)) ||
-      capacityLocks.length === 0 ||
-      capacityLocks.some(
-        (lock) => !lock.exists || lock.data()?.appointmentId !== input.appointmentId,
-      )
-    ) {
+      (Array.isArray(service.staffIds) && !service.staffIds.includes(staffId)) ||
+      capacityLocks.some((lock) => !lock.exists || lock.data()?.appointmentId !== appointmentId) ||
+      staffLocks.some((lock) => lock.exists)
+    )
       throw new HttpsError('failed-precondition', 'Appointment is no longer available.');
-    }
 
     transaction.update(appointmentRef, {
       assignmentState: 'assigned',
-      barberId: actorStaffId,
+      barberId: staffId,
       capacityStaffId: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    if (capacityStaffId !== staffId) {
+      capacityLockRefs.forEach((reference) => transaction.delete(reference));
+      staffLockRefs.forEach((reference, index) =>
+        transaction.set(reference, {
+          ...capacityLocks[index].data(),
+          staffId,
+          createdAt: FieldValue.serverTimestamp(),
+        }),
+      );
+    }
   });
 });

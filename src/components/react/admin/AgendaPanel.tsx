@@ -1,14 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getBogotaDateTime, getBookingDate } from '../../../lib/booking';
 import type { AppointmentStatus } from '../../../lib/types';
-import {
-  claimStoreadminCapacityAppointment,
-  claimUnassignedAppointment,
-} from '../../../lib/booking-transaction';
+import { claimAppointment, updateAppointmentStatus } from '../../../lib/booking-transaction';
 import {
   getWorkspaceMonthAgenda,
   isWorkspaceAgendaIndexError,
-  updateWorkspaceAppointmentStatus,
   type WorkspaceAppointment,
 } from '../../../lib/workspace';
 
@@ -77,14 +73,12 @@ export default function AgendaPanel({
   claimStaffId = staffId,
   profileName,
   staffNames = {},
-  capacityConfirmationOnly = false,
 }: {
   businessId: string;
   staffId?: string;
   claimStaffId?: string;
   profileName?: string;
   staffNames?: Readonly<Record<string, string>>;
-  capacityConfirmationOnly?: boolean;
 }) {
   const today = getBookingDate(new Date());
   const [month, setMonth] = useState(() => monthOf(today));
@@ -145,7 +139,7 @@ export default function AgendaPanel({
     setUpdating(appointment.id);
     setUpdateErrors((current) => ({ ...current, [appointment.id]: '' }));
     try {
-      await updateWorkspaceAppointmentStatus(businessId, appointment.id, status);
+      await updateAppointmentStatus(businessId, appointment.id, status);
       setAppointments((items) =>
         items.map((item) => (item.id === appointment.id ? { ...item, status } : item)),
       );
@@ -159,16 +153,12 @@ export default function AgendaPanel({
       setUpdating(null);
     }
   };
-  const claimAppointment = async (appointment: WorkspaceAppointment) => {
+  const autoAssignAppointment = async (appointment: WorkspaceAppointment) => {
     if (!claimStaffId) return;
     setUpdating(appointment.id);
     setUpdateErrors((current) => ({ ...current, [appointment.id]: '' }));
     try {
-      const result = capacityConfirmationOnly
-        ? await claimStoreadminCapacityAppointment(businessId, appointment.id)
-        : await claimUnassignedAppointment(businessId, appointment, claimStaffId, {
-            loadedAgenda: appointments,
-          });
+      const result = await claimAppointment(businessId, appointment.id);
       if (result.ok === false) {
         setUpdateErrors((current) => ({ ...current, [appointment.id]: result.message }));
         return;
@@ -331,10 +321,7 @@ export default function AgendaPanel({
                 <div className="space-y-3">
                   {selectedAppointments.map((appointment) => {
                     const unassigned = appointment.assignmentState === 'unassigned';
-                    const canClaim =
-                      unassigned &&
-                      claimStaffId &&
-                      (!capacityConfirmationOnly || appointment.capacityStaffId === claimStaffId);
+                    const canClaim = unassigned && claimStaffId;
                     const appointmentEnded = hasAppointmentEnded(
                       appointment.bookingDate,
                       appointment.endTime,
@@ -360,7 +347,7 @@ export default function AgendaPanel({
                       Number(Boolean(phone)) + Number(Boolean(email)) + Number(Boolean(address));
                     const extraDetailCount = requestedProducts.length + (note ? 1 : 0);
                     const detailCount = contactCount + extraDetailCount;
-                    const hasFinalStatusActions = appointmentEnded && !canClaim;
+                    const hasFinalStatusActions = appointmentEnded && !unassigned;
                     const hasExpandableDetails = detailCount > 0 || hasFinalStatusActions;
                     const detailsSummary = contactCount
                       ? `Contacto${extraDetailCount ? ' y detalles' : ''}${hasFinalStatusActions ? ' y cierre' : ''}`
@@ -535,37 +522,31 @@ export default function AgendaPanel({
                           </details>
                         )}
 
-                        {appointment.status === 'pending' && !canClaim && (
-                          <div className="bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] px-2.5 py-2">
-                            <button
-                              type="button"
-                              disabled={updating === appointment.id}
-                              onClick={() => void updateStatus(appointment, 'confirmed')}
-                              className="btn-primary min-h-11 rounded px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {updating === appointment.id
-                                ? 'Actualizando…'
-                                : 'Aprobar agendamiento'}
-                            </button>
-                          </div>
-                        )}
-                        {canClaim && (
+                        {(appointment.status === 'pending' || canClaim) && (
                           <div
-                            className="bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] px-2.5 py-2"
-                            aria-label={`Actualizar estado de la solicitud de ${appointment.clientName}`}
+                            className="flex flex-wrap gap-2 bg-[color-mix(in_srgb,var(--accent)_8%,var(--surface))] px-2.5 py-2"
+                            aria-label={`Acciones de la solicitud de ${appointment.clientName}`}
                           >
-                            <button
-                              type="button"
-                              disabled={updating === appointment.id}
-                              onClick={() => void claimAppointment(appointment)}
-                              className="btn-primary min-h-11 rounded px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {updating === appointment.id
-                                ? 'Asignando…'
-                                : appointment.capacityStaffId === claimStaffId
-                                  ? 'Confirmar'
-                                  : 'Asumir'}
-                            </button>
+                            {appointment.status === 'pending' && (
+                              <button
+                                type="button"
+                                disabled={updating === appointment.id}
+                                onClick={() => void updateStatus(appointment, 'confirmed')}
+                                className="btn-primary min-h-11 flex-1 basis-32 rounded px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {updating === appointment.id ? 'Actualizando…' : 'Aprobar'}
+                              </button>
+                            )}
+                            {canClaim && (
+                              <button
+                                type="button"
+                                disabled={updating === appointment.id}
+                                onClick={() => void autoAssignAppointment(appointment)}
+                                className="btn-primary min-h-11 flex-1 basis-32 rounded px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {updating === appointment.id ? 'Asignando…' : 'Autoasignar'}
+                              </button>
+                            )}
                           </div>
                         )}
                         {updateErrors[appointment.id] && (

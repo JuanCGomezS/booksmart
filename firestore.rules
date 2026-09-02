@@ -56,12 +56,9 @@ service cloud.firestore {
         allow read, update: if isStaffInBusiness(businessId) && staffId == request.auth.uid;
       }
       match /appointments/{appointmentId} {
-        // Staff read their own appointments and the pending capacity offer reserved for them.
-        // The query must constrain both assignmentState and capacityStaffId.
-        allow read, update: if (isStaffInBusiness(businessId) &&
+        allow read: if (isStaffInBusiness(businessId) &&
           (resource.data.barberId == request.auth.uid ||
-            (resource.data.assignmentState == 'unassigned' &&
-              resource.data.capacityStaffId == request.auth.uid))) ||
+            resource.data.assignmentState == 'unassigned')) ||
           (signedIn() && resource.data.customerUid == request.auth.uid);
       }
 

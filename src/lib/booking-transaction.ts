@@ -195,12 +195,12 @@ function validClientDetails(
     name.length <= 120 &&
     phone.length >= 1 &&
     phone.length <= 40 &&
-    (!emailRequested
-      ? !email
-      : emailValid && (customerFields.email !== 'required' || email.length > 0)) &&
-    (!addressRequested
-      ? !address
-      : address.length <= 240 && (customerFields.address !== 'required' || address.length > 0)) &&
+    (emailRequested
+      ? emailValid && (customerFields.email !== 'required' || email.length > 0)
+      : !email) &&
+    (addressRequested
+      ? address.length <= 240 && (customerFields.address !== 'required' || address.length > 0)
+      : !address) &&
     (!bookingRequestsAdditionalCustomerData(customerFields) ||
       request.acceptedBookingPrivacy === true)
   );
@@ -263,9 +263,8 @@ function firebaseAdapters(firestore: Firestore): BookingAdapters<DocumentReferen
 }
 
 function firestoreErrorCode(error: unknown): string | undefined {
-  return typeof error === 'object' && error !== null && 'code' in error
-    ? String((error as { code?: unknown }).code)
-    : undefined;
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  return String((error as { code?: unknown }).code).replace(/^functions\//, '');
 }
 
 function errorResult(error: unknown): ClientBookingFailure {
@@ -674,15 +673,14 @@ export async function claimUnassignedAppointment(
   }
 }
 
-/** Confirms an offer reserved for the signed-in Storeadmin's own professional profile. */
-export async function claimStoreadminCapacityAppointment(
+export async function claimAppointment(
   businessId: string,
   appointmentId: string,
 ): Promise<ClaimAppointmentResult> {
   try {
     const claim = httpsCallable<{ businessId: string; appointmentId: string }, void>(
       getFunctions(app),
-      'claimStoreadminCapacityAppointment',
+      'claimAppointment',
     );
     await claim({ businessId, appointmentId });
     return { ok: true };
@@ -696,4 +694,16 @@ export async function claimStoreadminCapacityAppointment(
           message: result.message,
         };
   }
+}
+
+export async function updateAppointmentStatus(
+  businessId: string,
+  appointmentId: string,
+  status: 'confirmed' | 'done' | 'no_show' | 'cancelled',
+): Promise<void> {
+  const update = httpsCallable<{ businessId: string; appointmentId: string; status: string }, void>(
+    getFunctions(app),
+    'updateAppointmentStatus',
+  );
+  await update({ businessId, appointmentId, status });
 }

@@ -334,7 +334,6 @@ export default function BusinessAdminPage({
             claimStaffId={staffId}
             profileName={profileName}
             staffNames={staffNames}
-            capacityConfirmationOnly={!isStaff && hasOwnProfessionalProfile}
           />
         )}
         {tab === 'perfil' && staffId && (
