@@ -1,11 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.claimAppointment = exports.updateAppointmentStatus = exports.createPublicBooking = exports.getPublicBusinessBySlug = void 0;
+exports.claimAppointment = exports.updateAppointmentStatus = exports.createPublicBooking = exports.getPublicBusinessBySlug = exports.improvePublicAssistantContext = exports.askPublicBusinessAssistant = void 0;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const node_crypto_1 = require("node:crypto");
 (0, app_1.initializeApp)();
+var public_assistant_js_1 = require("./public-assistant.js");
+Object.defineProperty(exports, "askPublicBusinessAssistant", { enumerable: true, get: function () { return public_assistant_js_1.askPublicBusinessAssistant; } });
+Object.defineProperty(exports, "improvePublicAssistantContext", { enumerable: true, get: function () { return public_assistant_js_1.improvePublicAssistantContext; } });
 const db = (0, firestore_1.getFirestore)();
 const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -316,6 +319,10 @@ function publicBusinessDto(id, business, now) {
                 }
                 : {}),
             theme: publicThemeDto(config.theme),
+            ...(publicString(config.publicAssistantProfile, 6_000) ||
+                publicString(config.publicAssistantContext, 6_000)
+                ? { publicAssistantEnabled: true }
+                : {}),
             booking: {
                 minimumNoticeMinutes: booking.minimumNoticeMinutes,
                 bookingHorizonDays: booking.bookingHorizonDays,
@@ -409,6 +416,13 @@ function publicCatalogDto(id, catalogItem) {
             : {}),
     };
 }
+async function canManageBusiness(actorId, businessId) {
+    const actor = (await db.doc(`users/${actorId}`).get()).data();
+    return (actor?.role === 'superadmin' ||
+        (actor?.role === 'storeadmin' &&
+            Array.isArray(actor.businessIds) &&
+            actor.businessIds.includes(businessId)));
+}
 exports.getPublicBusinessBySlug = (0, https_1.onCall)(async (request) => {
     const slug = typeof request.data?.slug === 'string' ? request.data.slug.trim() : '';
     if (!slug || slug.length > 160)
@@ -427,8 +441,17 @@ exports.getPublicBusinessBySlug = (0, https_1.onCall)(async (request) => {
         db.collection(`barbers/${businessSnapshot.id}/services`).where('active', '==', true).get(),
         db.collection(`barbers/${businessSnapshot.id}/barbers`).where('active', '==', true).get(),
     ]);
+    const publicBusiness = publicBusinessDto(businessSnapshot.id, business, now);
+    if (request.auth && (await canManageBusiness(request.auth.uid, businessSnapshot.id))) {
+        const config = business.config;
+        const profile = config &&
+            (publicString(config.publicAssistantProfile, 6_000) ||
+                publicString(config.publicAssistantContext, 6_000));
+        if (profile)
+            publicBusiness.config.publicAssistantProfile = profile;
+    }
     return {
-        business: publicBusinessDto(businessSnapshot.id, business, now),
+        business: publicBusiness,
         products: productsSnapshot.docs.flatMap((product) => {
             const dto = publicProductDto(product.id, product.data());
             return dto ? [dto] : [];

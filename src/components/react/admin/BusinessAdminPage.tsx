@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { UploadTask } from 'firebase/storage';
 import {
   getBarberManagedCollection,
@@ -35,6 +36,7 @@ import FancySelect, { type FancySelectOption } from '../FancySelect';
 import { notifyError, notifySuccess } from '../FloatingNotifications';
 import ProfessionalProfileForm from './ProfessionalProfileForm';
 import BusinessStatisticsPanel from './BusinessStatisticsPanel';
+import PublicAssistantConfiguration from './PublicAssistantConfiguration';
 
 type Business = Barber | PublicBusiness;
 type Tab =
@@ -42,6 +44,7 @@ type Tab =
   | 'perfil'
   | 'horario'
   | 'negocio'
+  | 'asistente'
   | 'contenido'
   | 'reservas'
   | 'suscripcion'
@@ -140,7 +143,7 @@ function getInitialSubscriptionStatus(business: Barber): SubscriptionStatus {
 function getInitialSubscriptionStart(business: Barber, billingCycle: BillingCycle): Date {
   return (
     toDate(business.subscriptionStartsAt) ||
-    (!business.trialUsed ? toDate(business.trialStartedAt) : null) ||
+    (business.trialUsed ? null : toDate(business.trialStartedAt)) ||
     (toDate(business.planExpiresAt)
       ? inferSubscriptionStart(toDate(business.planExpiresAt)!, billingCycle)
       : null) ||
@@ -217,6 +220,7 @@ export default function BusinessAdminPage({
             ] as Array<[Tab, string]>)
           : []),
         ['negocio', 'Negocio'],
+        ['asistente', 'Asistente'],
         ['contenido', 'Contenido'],
         ['reservas', 'Agendamiento'],
         ...(global ? ([['suscripcion', 'Suscripción']] as Array<[Tab, string]>) : []),
@@ -356,6 +360,13 @@ export default function BusinessAdminPage({
             logoUrl={business.config.logoUrl}
             coverUrl={business.config.coverUrl}
             onSave={saveBusiness}
+          />
+        )}
+        {tab === 'asistente' && (
+          <PublicAssistantConfiguration
+            businessId={business.id}
+            initialContext={business.config.publicAssistantProfile}
+            onChange={onRefresh}
           />
         )}
         {contentActivated && (

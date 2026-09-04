@@ -186,6 +186,9 @@ export function toPublicBusiness(business: Barber): Omit<PublicBusiness, 'id'> {
       ...(config.socialLinks ? { socialLinks: config.socialLinks } : {}),
       ...(config.theme ? { theme: config.theme } : {}),
       ...(config.booking ? { booking: toPublicBookingSettings(config.booking) } : {}),
+      ...(config.publicAssistantProfile?.trim() || config.publicAssistantContext?.trim()
+        ? { publicAssistantEnabled: true }
+        : {}),
     },
     workingHours: normalizeWorkingHours(business.workingHours),
   };
@@ -214,6 +217,16 @@ export function readPublicBusiness(data: Record<string, unknown>, id: string): P
       ...(config.socialLinks ? { socialLinks: config.socialLinks } : {}),
       ...(config.theme ? { theme: config.theme } : {}),
       ...(config.booking ? { booking: toPublicBookingSettings(config.booking) } : {}),
+      ...(config.publicAssistantEnabled === true ? { publicAssistantEnabled: true } : {}),
+      ...(typeof (config.publicAssistantProfile || config.publicAssistantContext) === 'string' &&
+      (config.publicAssistantProfile || config.publicAssistantContext)?.trim()
+        ? {
+            publicAssistantProfile: (config.publicAssistantProfile ||
+              config.publicAssistantContext)!
+              .trim()
+              .slice(0, 6_000),
+          }
+        : {}),
     },
     workingHours: normalizeWorkingHours(business.workingHours),
   };

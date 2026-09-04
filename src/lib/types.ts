@@ -173,6 +173,10 @@ export interface Barber {
     };
     /** Optional until a business configures public booking. */
     booking?: BookingSettings;
+    /** Public information used by the business assistant. */
+    publicAssistantContext?: string;
+    /** Published, compact source used by the public assistant. */
+    publicAssistantProfile?: string;
   };
 
   // Horario de atención del local
@@ -211,7 +215,11 @@ export interface PublicBusiness {
     | 'socialLinks'
     | 'theme'
     | 'booking'
-  >;
+    | 'publicAssistantContext'
+    | 'publicAssistantProfile'
+  > & {
+    publicAssistantEnabled?: boolean;
+  };
   workingHours: Barber['workingHours'];
 }
 

@@ -406,6 +406,27 @@ export async function updateBarberBookingSettings(
 }
 
 /** Updates only the existing business-hours field on the root and public projection. */
+export async function updateBarberPublicAssistantContext(
+  barberId: string,
+  context: string,
+): Promise<void> {
+  const value = context.trim();
+  if (value.length > 6_000) throw new Error('El contexto no puede superar 6.000 caracteres.');
+  const batch = writeBatch(db);
+  const updates = {
+    'config.publicAssistantProfile': value || deleteField(),
+    'config.publicAssistantContext': deleteField(),
+    updatedAt: serverTimestamp(),
+  };
+  batch.update(doc(db, 'barbers', barberId), updates);
+  batch.update(doc(db, PUBLIC_BUSINESSES_COLLECTION, barberId), {
+    'config.publicAssistantEnabled': value ? true : deleteField(),
+  });
+  await batch.commit();
+  invalidatePublicBusinessCaches(barberId);
+}
+
+/** Updates only the existing business-hours field on the root and public projection. */
 export async function updateBarberWorkingHours(
   barberId: string,
   workingHours: Barber['workingHours'],
