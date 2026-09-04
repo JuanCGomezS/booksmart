@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 
 initializeApp();
 
+export { askPublicBusinessAssistant, improvePublicAssistantContext } from './public-assistant.js';
+
 const db = getFirestore();
 const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -461,6 +463,10 @@ function publicBusinessDto(
           }
         : {}),
       theme: publicThemeDto(config.theme),
+      ...(publicString(config.publicAssistantProfile, 6_000) ||
+      publicString(config.publicAssistantContext, 6_000)
+        ? { publicAssistantEnabled: true }
+        : {}),
       booking: {
         minimumNoticeMinutes: booking.minimumNoticeMinutes,
         bookingHorizonDays: booking.bookingHorizonDays,
@@ -575,6 +581,16 @@ function publicCatalogDto(
   };
 }
 
+async function canManageBusiness(actorId: string, businessId: string): Promise<boolean> {
+  const actor = (await db.doc(`users/${actorId}`).get()).data();
+  return (
+    actor?.role === 'superadmin' ||
+    (actor?.role === 'storeadmin' &&
+      Array.isArray(actor.businessIds) &&
+      actor.businessIds.includes(businessId))
+  );
+}
+
 export const getPublicBusinessBySlug = onCall<
   PublicBusinessRequest,
   Promise<PublicBusinessResponse>
@@ -597,8 +613,18 @@ export const getPublicBusinessBySlug = onCall<
     db.collection(`barbers/${businessSnapshot.id}/services`).where('active', '==', true).get(),
     db.collection(`barbers/${businessSnapshot.id}/barbers`).where('active', '==', true).get(),
   ]);
+  const publicBusiness = publicBusinessDto(businessSnapshot.id, business, now);
+  if (request.auth && (await canManageBusiness(request.auth.uid, businessSnapshot.id))) {
+    const config = business.config as Record<string, unknown>;
+    const profile =
+      config &&
+      (publicString(config.publicAssistantProfile, 6_000) ||
+        publicString(config.publicAssistantContext, 6_000));
+    if (profile) publicBusiness.config.publicAssistantProfile = profile;
+  }
+
   return {
-    business: publicBusinessDto(businessSnapshot.id, business, now),
+    business: publicBusiness,
     products: productsSnapshot.docs.flatMap((product) => {
       const dto = publicProductDto(product.id, product.data());
       return dto ? [dto] : [];

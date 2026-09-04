@@ -89,7 +89,21 @@ El despliegue de esta frontera debe ser atómico: `firebase.json` ejecuta obliga
 npm run deploy:backend
 ```
 
-No se habilitó App Check ni se usa IP como identificador de la regla. App Check requiere configuración explícita separada antes de activarse.
+### Asistente público con IA
+
+Administración → Asistente permite publicar un contexto adicional del negocio y mejorarlo antes de guardarlo. La página `/b/<slug>` muestra el asistente únicamente cuando ese contexto está publicado. Sus respuestas se construyen sólo con información pública allowlisted del mismo negocio: contexto, servicios, productos, profesionales, horarios, dirección y teléfono.
+
+Antes del primer despliegue del backend, configura la clave exclusivamente como un secreto de Firebase:
+
+```bash
+npx firebase-tools functions:secrets:set OPENROUTER_API_KEY --project barberflow-7ccac
+```
+
+El modelo predeterminado es `inclusionai/ling-3.0-flash-fin:free`. Se puede cambiar con `OPENROUTER_MODEL` en el entorno de Functions. El asistente limita las preguntas a 20 por visitante y día, y a 500 por negocio y día.
+
+El chat público exige Firebase App Check. Registra el sitio con reCAPTCHA Enterprise en Firebase y configura su clave pública como `PUBLIC_FIREBASE_APP_CHECK_SITE_KEY` antes de construir y desplegar el frontend. Sin esa configuración, el asistente rechaza solicitudes públicas. App Check reduce abuso, pero no sustituye la autenticación cuando se necesita identificar contractual o legalmente a una persona.
+
+No se habilitó App Check para los demás flujos existentes. App Check requiere configuración explícita separada antes de activarse.
 
 ### Ubicación pública del negocio
 

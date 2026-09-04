@@ -19,6 +19,7 @@ import PublicBusinessLocationMap from '../business/PublicBusinessLocationMap';
 import PublicBookingWidget from './PublicBookingWidget';
 import PublicFlipCard from './PublicFlipCard';
 import PublicAppointmentsPanel from './PublicAppointmentsPanel';
+import PublicBusinessAssistant from './PublicBusinessAssistant';
 import LoginForm from '../LoginForm';
 
 type BarberTab = 'inicio' | 'agendar' | 'catalogo' | 'productos' | 'ubicacion' | 'cuenta';
@@ -390,8 +391,9 @@ export default function BarberApp() {
             {(Object.keys(TAB_LABELS) as BarberTab[])
               .filter(
                 (key) =>
-                  (canBook || key !== 'agendar') &&
-                  (products.status !== 'ready' || products.data.length > 0 || key !== 'productos'),
+                  ((canBook || key !== 'agendar') && products.status !== 'ready') ||
+                  products.data.length > 0 ||
+                  key !== 'productos',
               )
               .map((key) => (
                 <li key={key}>
@@ -435,7 +437,6 @@ export default function BarberApp() {
             <ProductsContent
               state={products}
               retry={() => setReloadVersion((value) => value + 1)}
-              whatsappUrl={whatsappUrl}
             />
           )}
           {tab === 'ubicacion' && (
@@ -448,6 +449,9 @@ export default function BarberApp() {
           {tab === 'cuenta' && <PublicAppointmentsPanel businessId={barber.id} />}
         </section>
       </main>
+      {barber.config.publicAssistantEnabled === true && (
+        <PublicBusinessAssistant businessName={barber.name} slug={barber.slug} />
+      )}
       {authMode && (
         <div
           className="public-auth-modal"
@@ -967,11 +971,9 @@ function CatalogCard({ item }: { item: PublicCatalogItem }) {
 function ProductsContent({
   state,
   retry,
-  whatsappUrl,
 }: {
   state: DeferredResource<PublicBookingProduct>;
   retry: () => void;
-  whatsappUrl: string | null;
 }) {
   if (state.status === 'loading' || state.status === 'idle')
     return <PublicCollectionState kind="loading" label="Cargando productos..." />;
@@ -987,20 +989,14 @@ function ProductsContent({
       <ul className="public-business-products-grid">
         {state.data.map((product) => (
           <li key={product.id}>
-            <ProductCard product={product} whatsappUrl={whatsappUrl} />
+            <ProductCard product={product} />
           </li>
         ))}
       </ul>
     </div>
   );
 }
-function ProductCard({
-  product,
-  whatsappUrl,
-}: {
-  product: PublicBookingProduct;
-  whatsappUrl: string | null;
-}) {
+function ProductCard({ product }: { product: PublicBookingProduct }) {
   const description =
     product.description || 'Este producto aún no tiene una descripción disponible.';
   return (
