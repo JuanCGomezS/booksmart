@@ -309,6 +309,7 @@ export default function BusinessAdminPage({
           <a
             href={`${import.meta.env.BASE_URL}b/${encodeURIComponent(business.slug)}`}
             className="btn-outline rounded-lg px-3 py-2 text-sm"
+            target="_blank"
           >
             Ver página
           </a>

@@ -61,6 +61,13 @@ service firebase.storage {
 
     // Legacy professional paths can only be deleted through the retired-profile
     // cleanup flow. New uploads must use immutable assets.
+    match /users/{uid}/profile/assets/{assetName} {
+      allow read, delete: if isSignedIn() && request.auth.uid == uid;
+      allow create: if isSignedIn() && request.auth.uid == uid &&
+        assetName.matches('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png|webp)') &&
+        isContentImage();
+    }
+
     match /barbers/{barberId}/{collectionName}/{recordId}/{imageName} {
       allow read: if isOperationalBusiness(barberId);
       allow delete: if ((collectionName != 'barbers' && (isSuperAdmin() || isBusinessAdmin(barberId))) ||

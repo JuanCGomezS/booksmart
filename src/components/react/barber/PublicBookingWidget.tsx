@@ -1,4 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { getUserRecord } from '../../../lib/auth';
+import { auth } from '../../../lib/firebase';
 import {
   bookingRequestsAdditionalCustomerData,
   checkBookingAvailability,
@@ -200,6 +203,11 @@ export default function PublicBookingWidget({
   const [locks, setLocks] = useState<Map<string, Set<string>>>(new Map());
   const [lockLoadFailures, setLockLoadFailures] = useState<Set<string>>(new Set());
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [authStatus, setAuthStatus] = useState<'loading' | 'guest' | 'authenticated'>('loading');
+  const [authenticatedClientUid, setAuthenticatedClientUid] = useState<string | null>(null);
+  const [authenticatedClientName, setAuthenticatedClientName] = useState<string | null>(null);
+  const [authenticatedClientPhone, setAuthenticatedClientPhone] = useState<string | null>(null);
+  const [authenticatedClientAddress, setAuthenticatedClientAddress] = useState<string | null>(null);
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [clientEmail, setClientEmail] = useState('');
@@ -217,6 +225,74 @@ export default function PublicBookingWidget({
   const timeSectionRef = useRef<HTMLDivElement>(null);
   const validationToastRef = useRef<HTMLDivElement>(null);
   const idempotencyKeyRef = useRef<string | null>(null);
+  const authGenerationRef = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!active) return;
+      authGenerationRef.current += 1;
+      setAuthenticatedClientUid(null);
+      setAuthenticatedClientName(null);
+      setAuthenticatedClientPhone(null);
+      setAuthenticatedClientAddress(null);
+      setClientName('');
+      setClientPhone('');
+      setClientEmail('');
+      setClientAddress('');
+      setBookingNote('');
+      setConsent(false);
+      setServiceId('');
+      setStaffId('');
+      setBookingDate('');
+      setCalendarMonth('');
+      setSlot(null);
+      setLocks(new Map());
+      setLockLoadFailures(new Set());
+      setRequestedProductQuantities({});
+      setSubmitError('');
+      setSubmitting(false);
+      setConfirmedStaff(null);
+      setConfirmed(false);
+      setRecoverTime(false);
+      setContextAnnouncement('');
+      setValidationToast('');
+      idempotencyKeyRef.current = null;
+      if (!user) {
+        setAuthStatus('guest');
+        return;
+      }
+      setAuthStatus('loading');
+      void getUserRecord(user.uid)
+        .then((record) => {
+          if (!active || auth.currentUser?.uid !== user.uid) return;
+          const name = [record?.name, record?.displayName, user.displayName]
+            .find((value) => typeof value === 'string' && value.trim())
+            ?.trim();
+          const phone = record?.phone?.trim() || '';
+          const address = record?.address?.trim() || '';
+          const validPhone = COLOMBIAN_PHONE.test(phone.replace(/[\s()-]/g, '')) ? phone : null;
+          const validAddress = address && address.length <= 240 ? address : null;
+          setAuthenticatedClientUid(user.uid);
+          setAuthenticatedClientName(name || null);
+          setAuthenticatedClientPhone(validPhone);
+          setAuthenticatedClientAddress(validAddress);
+          if (validPhone) setClientPhone(validPhone);
+          if (validAddress) setClientAddress(validAddress);
+          setAuthStatus('authenticated');
+        })
+        .catch(() => {
+          if (!active || auth.currentUser?.uid !== user.uid) return;
+          setAuthenticatedClientUid(user.uid);
+          setAuthenticatedClientName(user.displayName?.trim() || null);
+          setAuthStatus('authenticated');
+        });
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
 
   const settings = useMemo(
     () => (policyBusiness ? getBookingSettings(policyBusiness) : null),
@@ -539,12 +615,27 @@ export default function PublicBookingWidget({
   const normalizedBookingNote = normalizeBookingNote(bookingNote);
   const emailValid =
     !emailValue || (emailValue.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue));
-  const nameValid = clientName.trim().length >= 1 && clientName.trim().length <= 120;
+  const bookingClientName =
+    authStatus === 'authenticated' && authenticatedClientUid === auth.currentUser?.uid
+      ? authenticatedClientName || ''
+      : authStatus === 'authenticated'
+        ? ''
+        : clientName;
+  const nameValid = bookingClientName.trim().length >= 1 && bookingClientName.trim().length <= 120;
+  const usesAuthenticatedPhone =
+    authStatus === 'authenticated' &&
+    authenticatedClientUid === auth.currentUser?.uid &&
+    Boolean(authenticatedClientPhone);
+  const usesAuthenticatedAddress =
+    authStatus === 'authenticated' &&
+    authenticatedClientUid === auth.currentUser?.uid &&
+    Boolean(authenticatedClientAddress);
   const phoneLengthValid = clientPhone.replace(/[\s()-]/g, '').length <= 40;
   const addressValid = addressValue.length <= 240;
   const bookingNoteValid = bookingNote.length <= BOOKING_NOTE_MAX_LENGTH;
   const canConfirm = Boolean(
     slot &&
+    authStatus !== 'loading' &&
     nameValid &&
     phoneValid &&
     phoneLengthValid &&
@@ -559,7 +650,12 @@ export default function PublicBookingWidget({
     !selectedService && 'elige un servicio',
     !bookingDate && 'selecciona una fecha',
     !slot && 'elige un horario',
-    !nameValid && 'ingresa un nombre',
+    authStatus === 'loading' && 'espera a que carguemos los datos de tu cuenta',
+    authStatus !== 'loading' &&
+      !nameValid &&
+      (authStatus === 'authenticated'
+        ? 'actualiza el nombre de tu cuenta antes de agendar'
+        : 'ingresa un nombre'),
     (!phoneValid || !phoneLengthValid) && 'ingresa un celular válido',
     emailRequested &&
       (!emailValid || (customerFields?.email === 'required' && !emailValue)) &&
@@ -580,6 +676,16 @@ export default function PublicBookingWidget({
     setValidationToast(`Para enviar la solicitud, ${requirements}.`);
   };
   const submit = async () => {
+    const currentUid = auth.currentUser?.uid || null;
+    const submissionGeneration = authGenerationRef.current;
+    const identityChanged =
+      authStatus === 'loading' ||
+      (authStatus === 'authenticated' && currentUid !== authenticatedClientUid) ||
+      (authStatus === 'guest' && currentUid !== null);
+    if (identityChanged) {
+      setSubmitError('Tu sesión cambió. Revisa tus datos e inténtalo de nuevo.');
+      return;
+    }
     if (!canConfirm) {
       showValidationToast();
       return;
@@ -596,7 +702,7 @@ export default function PublicBookingWidget({
         serviceId: selectedService.id,
         bookingDate,
         startTime: slot.time,
-        clientName,
+        clientName: bookingClientName,
         clientPhone: clientPhone.replace(/[\s()-]/g, ''),
         idempotencyKey: idempotencyKeyRef.current,
         ...(emailRequested ? { clientEmail } : {}),
@@ -614,6 +720,7 @@ export default function PublicBookingWidget({
         ...(staffId ? {} : { compatibleStaff }),
       } satisfies PublicBookingConfiguration,
     );
+    if (authGenerationRef.current !== submissionGeneration) return;
     setSubmitting(false);
     if (result.ok === true) {
       setConfirmedStaff(staffMember);
@@ -1135,30 +1242,34 @@ export default function PublicBookingWidget({
                 </p>
               )}
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="space-y-1">
-                  <span className="field-label text-sm">Nombre</span>
-                  <input
-                    className="field-input"
-                    value={clientName}
-                    maxLength={120}
-                    onChange={(event) => setClientName(event.target.value)}
-                    autoComplete="name"
-                  />
-                </label>
-                <label className="space-y-1">
-                  <span className="field-label text-sm">Celular</span>
-                  <input
-                    className="field-input"
-                    value={clientPhone}
-                    maxLength={40}
-                    onChange={(event) => setClientPhone(event.target.value)}
-                    autoComplete="tel"
-                    inputMode="tel"
-                    placeholder="300 123 4567"
-                    aria-describedby="phone-hint"
-                    aria-invalid={Boolean(clientPhone) && (!phoneValid || !phoneLengthValid)}
-                  />
-                </label>
+                {authStatus === 'guest' && (
+                  <label className="space-y-1">
+                    <span className="field-label text-sm">Nombre</span>
+                    <input
+                      className="field-input"
+                      value={clientName}
+                      maxLength={120}
+                      onChange={(event) => setClientName(event.target.value)}
+                      autoComplete="name"
+                    />
+                  </label>
+                )}
+                {!usesAuthenticatedPhone && (
+                  <label className="space-y-1">
+                    <span className="field-label text-sm">Celular</span>
+                    <input
+                      className="field-input"
+                      value={clientPhone}
+                      maxLength={40}
+                      onChange={(event) => setClientPhone(event.target.value)}
+                      autoComplete="tel"
+                      inputMode="tel"
+                      placeholder="300 123 4567"
+                      aria-describedby="phone-hint"
+                      aria-invalid={Boolean(clientPhone) && (!phoneValid || !phoneLengthValid)}
+                    />
+                  </label>
+                )}
                 {emailRequested && (
                   <label className="space-y-1">
                     <span className="field-label text-sm">
@@ -1181,7 +1292,7 @@ export default function PublicBookingWidget({
                     />
                   </label>
                 )}
-                {addressRequested && (
+                {addressRequested && !usesAuthenticatedAddress && (
                   <label className="space-y-1">
                     <span className="field-label text-sm">
                       Dirección{' '}
