@@ -239,6 +239,11 @@ export interface User {
   name?: string;
   /** Optional external-auth display name, if a profile sync has stored one. */
   displayName?: string;
+  /** Optional contact details used to prefill a signed-in customer's booking request. */
+  phone?: string;
+  address?: string;
+  /** Owner-scoped Storage path for the private personal profile photo. */
+  photoStoragePath?: string;
   role: StoredUserRole;
   /** Canonical business assignments. Staff has exactly one entry. */
   businessIds?: string[];

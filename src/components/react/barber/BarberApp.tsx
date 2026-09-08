@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import '../../../styles/public-auth-modal.css';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
@@ -21,6 +21,8 @@ import PublicFlipCard from './PublicFlipCard';
 import PublicAppointmentsPanel from './PublicAppointmentsPanel';
 import PublicBusinessAssistant from './PublicBusinessAssistant';
 import LoginForm from '../LoginForm';
+import PersonalProfileEditor from '../PersonalProfileEditor';
+import { loadPersonalProfilePhoto } from '../../../lib/personal-profile';
 
 type BarberTab = 'inicio' | 'agendar' | 'catalogo' | 'productos' | 'ubicacion' | 'cuenta';
 type DeferredResource<T> = {
@@ -33,6 +35,7 @@ type AccountMenu = {
   name: string;
   email: string;
   photoUrl?: string;
+  personalPhotoStoragePath?: string;
   roleLabel: string;
   roleLink?: { label: string; href: string };
   note?: string;
@@ -496,29 +499,28 @@ function PublicBusinessHeader({
   onOpenAuth: (mode: 'login' | 'register') => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [account, setAccount] = useState<AccountMenu | null>(null);
   const [brandLogoFailed, setBrandLogoFailed] = useState(false);
   const menuWrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const resolutionRef = useRef(0);
   const baseUrl = import.meta.env.BASE_URL;
+  const refreshAccount = useCallback(() => {
+    const user = auth.currentUser;
+    const resolution = ++resolutionRef.current;
+    if (!user) {
+      setAccount(null);
+      return;
+    }
+    setAccount(fallbackAccount(user));
+    void resolveAccountMenu(user, baseUrl).then((resolved) => {
+      if (resolution === resolutionRef.current && auth.currentUser?.uid === user.uid)
+        setAccount(resolved);
+    });
+  }, [baseUrl]);
 
-  useEffect(
-    () =>
-      onAuthStateChanged(auth, (user) => {
-        const resolution = ++resolutionRef.current;
-        if (!user) {
-          setAccount(null);
-          return;
-        }
-        setAccount(fallbackAccount(user));
-        void resolveAccountMenu(user, baseUrl).then((resolved) => {
-          if (resolution === resolutionRef.current && auth.currentUser?.uid === user.uid)
-            setAccount(resolved);
-        });
-      }),
-    [baseUrl],
-  );
+  useEffect(() => onAuthStateChanged(auth, refreshAccount), [refreshAccount]);
   useEffect(() => setBrandLogoFailed(false), [business.config.logoUrl]);
 
   useEffect(() => {
@@ -593,9 +595,20 @@ function PublicBusinessHeader({
               {account ? (
                 <>
                   <div className="account-menu-identity public-business-account-identity">
-                    <AccountAvatar account={account} />
                     <div>
-                      <strong>{account.name}</strong>
+                      <div className="public-business-account-name-row">
+                        <strong>{account.name}</strong>
+                        <button
+                          type="button"
+                          className="accent-link text-sm font-semibold text-main"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setProfileEditorOpen(true);
+                          }}
+                        >
+                          Editar
+                        </button>
+                      </div>
                       <span>{account.email}</span>
                     </div>
                   </div>
@@ -647,18 +660,42 @@ function PublicBusinessHeader({
           )}
         </div>
       </div>
+      <PersonalProfileEditor
+        open={profileEditorOpen}
+        onClose={() => setProfileEditorOpen(false)}
+        onSaved={refreshAccount}
+      />
     </header>
   );
 }
 
 function AccountAvatar({ account }: { account: AccountMenu }) {
+  const [personalPhotoUrl, setPersonalPhotoUrl] = useState('');
   const [imageFailed, setImageFailed] = useState(false);
-  useEffect(() => setImageFailed(false), [account.photoUrl]);
+  useEffect(() => {
+    let active = true;
+    let objectUrl = '';
+    setImageFailed(false);
+    setPersonalPhotoUrl('');
+    if (!account.personalPhotoStoragePath || !auth.currentUser) return undefined;
+    void loadPersonalProfilePhoto(auth.currentUser.uid, account.personalPhotoStoragePath)
+      .then((url) => {
+        objectUrl = url;
+        if (active) setPersonalPhotoUrl(url);
+        else URL.revokeObjectURL(url);
+      })
+      .catch(() => active && setPersonalPhotoUrl(''));
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [account.personalPhotoStoragePath, account.photoUrl]);
+  const photoUrl = personalPhotoUrl || account.photoUrl;
   return (
     <span className="public-business-avatar" aria-hidden="true">
-      {account.photoUrl && !imageFailed ? (
+      {photoUrl && !imageFailed ? (
         <span className="public-business-avatar-image">
-          <img src={account.photoUrl} alt="" onError={() => setImageFailed(true)} />
+          <img src={photoUrl} alt="" onError={() => setImageFailed(true)} />
         </span>
       ) : (
         initialsFor(account.name)
@@ -685,10 +722,14 @@ async function resolveAccountMenu(user: FirebaseUser, baseUrl: string): Promise<
     const role = normalizeUserRole(userRecord.role);
     const name = userRecord.name || userRecord.displayName || fallback.name;
     const email = userRecord.email || user.email || '';
+    const photoUrl = fallback.photoUrl;
+    const personalPhotoStoragePath = userRecord.photoStoragePath;
     if (role === 'superadmin')
       return {
         name,
         email,
+        photoUrl,
+        personalPhotoStoragePath,
         roleLabel: 'Superadministrador',
         roleLink: { label: 'Ir al panel de control', href: `${baseUrl}admin` },
       };
@@ -700,31 +741,39 @@ async function resolveAccountMenu(user: FirebaseUser, baseUrl: string): Promise<
         email,
         'Administrador del negocio',
         { label: 'Ir a administración', href: `${baseUrl}admin` },
+        photoUrl,
       );
     if (role === 'staff') {
       const businessId =
         userRecord.businessIds?.length === 1 ? userRecord.businessIds[0] : undefined;
       if (!businessId || !userRecord.staffId)
-        return { name, email, roleLabel: 'Personal', note: 'No pudimos verificar tu acceso.' };
+        return {
+          name,
+          email,
+          photoUrl,
+          roleLabel: 'Personal',
+          note: 'No pudimos verificar tu acceso.',
+        };
       const profile = await getDoc(doc(db, 'barbers', businessId, 'barbers', userRecord.staffId));
       if (auth.currentUser?.uid !== user.uid) return fallback;
       const data = profile.data();
       const profileName =
         typeof data?.name === 'string' && data.name.trim() ? data.name.trim() : name;
-      const photoUrl = typeof data?.photoUrl === 'string' ? data.photoUrl : undefined;
+      const professionalPhotoUrl =
+        typeof data?.photoUrl === 'string' ? data.photoUrl : fallback.photoUrl;
       const active = profile.exists() && data?.accountStatus === 'active' && data.active === true;
       return active
         ? {
             name: profileName,
             email,
-            photoUrl,
+            photoUrl: professionalPhotoUrl,
             roleLabel: 'Personal',
             roleLink: { label: 'Ir a administración', href: `${baseUrl}admin` },
           }
         : {
             name: profileName,
             email,
-            photoUrl,
+            photoUrl: professionalPhotoUrl,
             roleLabel: 'Personal',
             roleLink: { label: 'Mi cuenta', href: `${baseUrl}account` },
             note: 'Acceso inactivo',
@@ -733,6 +782,8 @@ async function resolveAccountMenu(user: FirebaseUser, baseUrl: string): Promise<
     return {
       name,
       email,
+      photoUrl,
+      personalPhotoStoragePath,
       roleLabel: 'Cliente',
       roleLink: { label: 'Mi cuenta', href: `${baseUrl}account` },
     };
@@ -749,21 +800,23 @@ async function accountWithProfessionalProfile(
   email: string,
   roleLabel: string,
   roleLink: { label: string; href: string },
+  fallbackPhotoUrl?: string,
 ): Promise<AccountMenu> {
-  if (!businessId || !staffId) return { name, email, roleLabel, roleLink };
+  if (!businessId || !staffId)
+    return { name, email, photoUrl: fallbackPhotoUrl, roleLabel, roleLink };
   try {
     const profile = await getDoc(doc(db, 'barbers', businessId, 'barbers', staffId));
     const data = profile.data();
     return {
       name: typeof data?.name === 'string' && data.name.trim() ? data.name.trim() : name,
       email,
-      photoUrl: typeof data?.photoUrl === 'string' ? data.photoUrl : undefined,
+      photoUrl: typeof data?.photoUrl === 'string' ? data.photoUrl : fallbackPhotoUrl,
       roleLabel,
       roleLink,
     };
   } catch (error) {
     console.warn('Unable to load public business professional profile:', error);
-    return { name, email, roleLabel, roleLink };
+    return { name, email, photoUrl: fallbackPhotoUrl, roleLabel, roleLink };
   }
 }
 

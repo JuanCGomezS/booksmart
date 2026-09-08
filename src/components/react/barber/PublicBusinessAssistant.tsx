@@ -31,11 +31,11 @@ function errorMessage(cause: unknown) {
   return 'No pude responder ahora. Inténtalo de nuevo.';
 }
 
-function SofiaMark() {
+function ChatMark() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
-      <circle cx="12" cy="12" r="4" />
+      <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5 7.8 7.8 0 0 1-3.4-.8L4 20l1.8-4.3A7.5 7.5 0 1 1 20 11.5Z" />
+      <path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01" />
     </svg>
   );
 }
@@ -116,7 +116,7 @@ export default function PublicBusinessAssistant({ businessName, slug }: Props) {
           <header className="sofia-chat-header">
             <div className="sofia-chat-identity">
               <span className="sofia-chat-mark">
-                <SofiaMark />
+                <img src="/images/robot.svg" alt="" />
               </span>
               <div>
                 <h2 id="sofia-title">SofIA</h2>
@@ -197,7 +197,7 @@ export default function PublicBusinessAssistant({ businessName, slug }: Props) {
         onClick={() => (open ? close() : setOpen(true))}
       >
         <span className="sofia-chat-trigger-mark">
-          <SofiaMark />
+          <ChatMark />
         </span>
         <span>SofIA</span>
       </button>
