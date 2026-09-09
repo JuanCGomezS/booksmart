@@ -34,14 +34,12 @@ import ContentManagement from './ContentManagement';
 import OwnSchedulePanel from './OwnSchedulePanel';
 import FancySelect, { type FancySelectOption } from '../FancySelect';
 import { notifyError, notifySuccess } from '../FloatingNotifications';
-import ProfessionalProfileForm from './ProfessionalProfileForm';
 import BusinessStatisticsPanel from './BusinessStatisticsPanel';
 import PublicAssistantConfiguration from './PublicAssistantConfiguration';
 
 type Business = Barber | PublicBusiness;
 type Tab =
   | 'agenda'
-  | 'perfil'
   | 'horario'
   | 'negocio'
   | 'asistente'
@@ -208,17 +206,11 @@ export default function BusinessAdminPage({
   const tabs: Array<[Tab, string]> = isStaff
     ? [
         ['agenda', 'Agenda'],
-        ['perfil', 'Mi perfil profesional'],
         ['horario', 'Mi horario'],
       ]
     : [
         ['agenda', 'Agenda'],
-        ...(canManageOwnSchedule
-          ? ([
-              ['perfil', 'Mi perfil profesional'],
-              ['horario', 'Mi horario'],
-            ] as Array<[Tab, string]>)
-          : []),
+        ...(canManageOwnSchedule ? ([['horario', 'Mi horario']] as Array<[Tab, string]>) : []),
         ['negocio', 'Negocio'],
         ['asistente', 'Asistente'],
         ['contenido', 'Contenido'],
@@ -341,15 +333,6 @@ export default function BusinessAdminPage({
             staffNames={staffNames}
           />
         )}
-        {tab === 'perfil' && staffId && (
-          <ProfessionalProfileForm
-            businessId={business.id}
-            uid={userId}
-            role={isStaff ? 'staff' : 'storeadmin'}
-            initialName={profileName}
-            onChange={onRefresh}
-          />
-        )}
         {canManageOwnSchedule && tab === 'horario' && staffId && (
           <OwnSchedulePanel businessId={business.id} staffId={staffId} />
         )}
@@ -376,7 +359,6 @@ export default function BusinessAdminPage({
               barberId={business.id}
               actorUid={userId}
               role={global ? 'superadmin' : 'storeadmin'}
-              profileName={profileName}
               onChange={onRefresh}
             />
           </div>

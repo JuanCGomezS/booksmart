@@ -17,13 +17,34 @@ const labels: Record<string, string> = {
   done: 'Realizada',
   no_show: 'No asistió',
 };
+const cancellationDeadlineMs = 60 * 60 * 1_000;
+
+function canCancel(item: Item, now: number) {
+  if (!['pending', 'confirmed'].includes(item.status || '')) return false;
+  const date = item.bookingDate?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const time = item.startTime?.match(/^(\d{2}):(\d{2})$/);
+  if (!date || !time) return false;
+  const appointmentAt = new Date(
+    Number(date[1]),
+    Number(date[2]) - 1,
+    Number(date[3]),
+    Number(time[1]),
+    Number(time[2]),
+  ).getTime();
+  return appointmentAt - now > cancellationDeadlineMs;
+}
 
 export default function PublicAppointmentsPanel({ businessId }: { businessId: string }) {
   const [uid, setUid] = useState<string | null>(auth.currentUser?.uid || null);
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => onAuthStateChanged(auth, (user) => setUid(user?.uid || null)), []);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   useEffect(() => {
     if (!uid) {
       setLoading(false);
@@ -97,7 +118,7 @@ export default function PublicAppointmentsPanel({ businessId }: { businessId: st
                   {item.bookingDate} · {item.startTime} · {labels[item.status || ''] || item.status}
                 </p>
               </div>
-              {['pending', 'confirmed'].includes(item.status || '') && (
+              {canCancel(item, now) && (
                 <button
                   type="button"
                   className="btn-outline rounded px-3 py-2 text-sm"

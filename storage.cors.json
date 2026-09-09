@@ -1,0 +1,12 @@
+[
+  {
+    "origin": [
+      "http://localhost:4321",
+      "https://barberflow-7ccac.web.app",
+      "https://barberflow-7ccac.firebaseapp.com"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "ETag"],
+    "maxAgeSeconds": 3600
+  }
+]
