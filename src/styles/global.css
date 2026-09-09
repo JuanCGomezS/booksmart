@@ -1165,6 +1165,24 @@ textarea {
   border-radius: 50%;
 }
 
+.account-menu-site,
+.account-menu-site-profile {
+  --public-bg: var(--account-menu-bg, var(--bg));
+  --public-surface: var(--account-menu-surface, var(--surface));
+  --public-soft: var(--account-menu-soft, var(--surface-soft));
+  --public-ink: var(--account-menu-ink, var(--text-primary));
+  --public-muted: var(--text-secondary);
+  --public-border: var(--account-menu-border, var(--border));
+  --public-action: var(--account-menu-focus, var(--secondary));
+  --public-on-action: var(--on-secondary, var(--text-primary));
+  --public-accent: var(--accent);
+  --public-shadow: color-mix(in srgb, var(--text-primary) 18%, transparent);
+}
+
+.account-menu-guest-intro {
+  border-color: var(--account-menu-border, var(--border));
+}
+
 .account-menu-popover {
   display: grid;
   gap: 0.75rem;

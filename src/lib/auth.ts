@@ -11,7 +11,7 @@ import {
   onAuthStateChanged,
   type User as FirebaseUser,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { DATA } from './data';
 import type { User } from './types';
@@ -198,9 +198,12 @@ export async function isSuperAdmin(): Promise<boolean> {
 /**
  * Obtener el documento del usuario desde Firestore
  */
-export async function getUserRecord(uid: string): Promise<User | null> {
+export async function getUserRecord(
+  uid: string,
+  source: 'default' | 'server' = 'default',
+): Promise<User | null> {
   const userRef = doc(db, 'users', uid);
-  const userSnap = await getDoc(userRef);
+  const userSnap = source === 'server' ? await getDocFromServer(userRef) : await getDoc(userRef);
   return userSnap.exists() ? (userSnap.data() as User) : null;
 }
 

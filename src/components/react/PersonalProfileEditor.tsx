@@ -11,9 +11,10 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onSaved?: () => void | Promise<void>;
+  theme?: 'public' | 'site';
 };
 
-export default function PersonalProfileEditor({ open, onClose, onSaved }: Props) {
+export default function PersonalProfileEditor({ open, onClose, onSaved, theme = 'public' }: Props) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -96,7 +97,8 @@ export default function PersonalProfileEditor({ open, onClose, onSaved }: Props)
 
   if (!open) return null;
 
-  const themeRoot = document.querySelector<HTMLElement>('.public-business');
+  const themeRoot =
+    theme === 'public' ? document.querySelector<HTMLElement>('.public-business') : null;
   const computedTheme = themeRoot ? getComputedStyle(themeRoot) : null;
   const themeStyle = computedTheme
     ? (Object.fromEntries(
@@ -126,7 +128,7 @@ export default function PersonalProfileEditor({ open, onClose, onSaved }: Props)
 
   return createPortal(
     <div
-      className="personal-profile-modal fixed inset-0 z-50 flex items-center justify-center p-4"
+      className={`personal-profile-modal ${theme === 'site' ? 'account-menu-site-profile' : ''} fixed inset-0 z-50 flex items-center justify-center p-4`}
       style={{
         ...themeStyle,
         background: 'color-mix(in srgb, var(--public-bg) 72%, transparent)',

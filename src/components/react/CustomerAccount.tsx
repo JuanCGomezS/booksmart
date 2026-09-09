@@ -6,8 +6,6 @@ import { db } from '../../lib/firebase';
 import { normalizeUserRole } from '../../lib/roles';
 import { joinBusinessWithCode } from '../../lib/staff-enrollment';
 import { notifyError } from './FloatingNotifications';
-import ProfessionalProfileForm from './admin/ProfessionalProfileForm';
-import type { BarberStaff } from '../../lib/types';
 
 export default function CustomerAccount() {
   const baseUrl = import.meta.env.BASE_URL;
@@ -19,7 +17,6 @@ export default function CustomerAccount() {
   const [staffBinding, setStaffBinding] = useState<{ businessId: string; staffId: string } | null>(
     null,
   );
-  const [staffProfile, setStaffProfile] = useState<BarberStaff | null>(null);
   const [verificationAttempt, setVerificationAttempt] = useState(0);
   const overviewHeadingRef = useRef<HTMLHeadingElement>(null);
   const joinHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -93,8 +90,7 @@ export default function CustomerAccount() {
           setState('error');
           return;
         }
-        const profile = { id: staff.id, ...staff.data() } as BarberStaff;
-        setStaffProfile(profile);
+        const profile = staff.data();
         if (profile.accountStatus === 'active') return window.location.replace(`${baseUrl}admin`);
         setState('inactive');
       },
@@ -137,7 +133,7 @@ export default function CustomerAccount() {
         </p>
       </main>
     );
-  if (state === 'inactive' && staffBinding && staffProfile)
+  if (state === 'inactive' && staffBinding)
     return (
       <main className="section-shell min-h-screen">
         <div className="mx-auto flex max-w-xl px-4 py-16">
@@ -152,17 +148,9 @@ export default function CustomerAccount() {
                 Acceso pendiente
               </h1>
               <p className="mt-2 max-w-prose text-sm text-subtle">
-                Tu administrador debe activar el acceso operativo. Mientras tanto puedes completar
-                tu perfil profesional.
+                Tu administrador debe activar el acceso operativo.
               </p>
             </section>
-            <ProfessionalProfileForm
-              businessId={staffBinding.businessId}
-              uid={staffBinding.staffId}
-              role="staff"
-              profile={staffProfile}
-              onChange={() => undefined}
-            />
             <button
               type="button"
               className="btn-outline w-full rounded-lg px-4 py-3 font-semibold"

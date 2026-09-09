@@ -26,9 +26,9 @@ import {
   rotateStaffEnrollmentCode,
   setEnrollmentStaffStatus,
 } from '../../../lib/staff-enrollment';
-import { notifyError } from '../FloatingNotifications';
+import { notifyError, notifySuccess } from '../FloatingNotifications';
 import ConfirmModal from '../ConfirmModal';
-import ProfessionalProfileForm from './ProfessionalProfileForm';
+import { createOwnStoreadminProfessionalProfile } from '../../../lib/professional-profile';
 
 type ContentTab = 'gallery' | 'products' | 'services' | 'staff';
 type ResourceState<T> = LazyResourceState<T>;
@@ -166,13 +166,11 @@ export default function ContentManagement({
   barberId,
   actorUid,
   role,
-  profileName,
   onChange,
 }: {
   barberId: string;
   actorUid: string;
   role: 'storeadmin' | 'superadmin';
-  profileName?: string;
   onChange: () => void;
 }) {
   const [tab, setTab] = useState<ContentTab>('gallery');
@@ -261,7 +259,6 @@ export default function ContentManagement({
             barberId={barberId}
             actorUid={actorUid}
             role={role}
-            profileName={profileName}
             state={staff}
             reload={() => load('barbers', true)}
             onChange={onChange}
@@ -739,7 +736,6 @@ function StaffPanel({
   barberId,
   actorUid,
   role,
-  profileName,
   state,
   reload,
   onChange,
@@ -747,33 +743,46 @@ function StaffPanel({
   barberId: string;
   actorUid: string;
   role: 'storeadmin' | 'superadmin';
-  profileName?: string;
   state: ResourceState<BarberStaff>;
   reload: () => void;
   onChange: () => void;
 }) {
-  const ownProfile = state.data.find((member) => member.id === actorUid) || null;
+  const [creatingOwnProfile, setCreatingOwnProfile] = useState(false);
+  const ownProfile = state.data.some((member) => member.id === actorUid);
+  const createOwnProfile = async () => {
+    if (creatingOwnProfile) return;
+    setCreatingOwnProfile(true);
+    try {
+      await createOwnStoreadminProfessionalProfile(barberId, actorUid);
+      await reload();
+      onChange();
+      notifySuccess('Registro profesional creado.');
+    } catch (error) {
+      notifyError(
+        error instanceof Error ? error.message : 'No fue posible crear el registro profesional.',
+      );
+    } finally {
+      setCreatingOwnProfile(false);
+    }
+  };
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-bold text-main">Personal</h3>
         <p className="mt-1 text-sm text-subtle">
-          Administra la activación y el retiro del personal. Cada profesional completa únicamente su
-          propio perfil; horarios y compatibilidad se gestionan en Agendamiento.
+          Administra la activación y el retiro del personal. Los horarios y la compatibilidad se
+          gestionan en Agendamiento.
         </p>
       </div>
-      {role === 'storeadmin' && (
-        <ProfessionalProfileForm
-          businessId={barberId}
-          uid={actorUid}
-          role="storeadmin"
-          profile={ownProfile}
-          initialName={profileName}
-          onChange={async () => {
-            await reload();
-            onChange();
-          }}
-        />
+      {role === 'storeadmin' && !ownProfile && !state.loading && !state.error && (
+        <button
+          type="button"
+          className="btn-outline rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          disabled={creatingOwnProfile}
+          onClick={() => void createOwnProfile()}
+        >
+          {creatingOwnProfile ? 'Creando registro…' : 'Añadirme al personal'}
+        </button>
       )}
       <DirectEnrollmentControls barberId={barberId} staff={state.data} reload={reload} />
       <ResourceMessage loading={state.loading} error={state.error} retry={reload} />
