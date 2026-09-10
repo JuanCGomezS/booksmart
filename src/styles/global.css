@@ -2985,6 +2985,7 @@ button.public-business-text-action {
 .public-business-flip-card,
 .public-business-product-flip-card {
   min-width: 0;
+  -webkit-perspective: 1200px;
   perspective: 1200px;
 }
 
@@ -3002,12 +3003,14 @@ button.public-business-text-action {
   display: grid;
   height: 100%;
   min-height: 0;
+  -webkit-transform-style: preserve-3d;
   transform-style: preserve-3d;
   transition: transform 420ms var(--motion);
 }
 
 .public-business-flip-card.is-flipped .public-business-flip-card-inner,
 .public-business-product-flip-card.is-flipped .public-business-flip-card-inner {
+  -webkit-transform: rotateY(180deg);
   transform: rotateY(180deg);
 }
 
@@ -3020,7 +3023,10 @@ button.public-business-text-action {
   border: 1px solid var(--public-card-frame);
   border-radius: 1.5rem 0.55rem 1.5rem 0.55rem;
   background: transparent;
+  -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
+  -webkit-transform: rotateY(0deg);
+  transform: rotateY(0deg);
   box-shadow:
     0 0.9rem 2rem color-mix(in srgb, var(--public-shadow) 48%, transparent),
     0.45rem 0.55rem 0 color-mix(in srgb, var(--public-action) 48%, transparent);
@@ -3096,6 +3102,7 @@ button.public-business-text-action {
     ),
     var(--public-card-back-surface);
   padding: 1.25rem;
+  -webkit-transform: rotateY(180deg);
   transform: rotateY(180deg);
   backdrop-filter: blur(18px) saturate(1.12);
   -webkit-backdrop-filter: blur(18px) saturate(1.12);
