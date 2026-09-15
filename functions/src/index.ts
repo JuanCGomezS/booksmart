@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase-admin/app';
+import { getDownloadURL, getStorage } from 'firebase-admin/storage';
 import { FieldValue, getFirestore, type DocumentData } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { createHash } from 'node:crypto';
@@ -512,14 +513,43 @@ function publicServiceDto(
   };
 }
 
-function publicStaffDto(
+async function publicStaffPersonPhoto(businessId: string, id: string, staff: DocumentData) {
+  const uid = publicString(staff.accountUid, 128) || publicString(staff.userId, 128) || id;
+  if (!uid || uid.includes('/')) return undefined;
+  const person = (await db.doc(`users/${uid}`).get()).data();
+  if (
+    !person ||
+    person.staffId !== id ||
+    !Array.isArray(person.businessIds) ||
+    !person.businessIds.includes(businessId) ||
+    (person.role !== 'staff' && person.role !== 'storeadmin') ||
+    (person.role === 'storeadmin' && person.professionalBusinessId !== businessId)
+  )
+    return undefined;
+  const path = publicString(person.photoStoragePath, 2_048);
+  const prefix = `users/${uid}/profile/assets/`;
+  if (!path?.startsWith(prefix)) return undefined;
+  if (
+    !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(jpg|png|webp)$/.test(path.slice(prefix.length))
+  )
+    return undefined;
+  return getDownloadURL(getStorage().bucket().file(path));
+}
+
+async function publicStaffDto(
   id: string,
   staff: DocumentData,
-): PublicBusinessResponse['staff'][number] | null {
+  businessId: string,
+): Promise<PublicBusinessResponse['staff'][number] | null> {
   const name = publicString(staff.name, 120);
   if (!name || staff.active !== true) return null;
   const schedule = publicStaffSchedule(staff.schedule);
-  const photoUrl = publicString(staff.photoUrl, 2_048);
+  let photoUrl: string | undefined;
+  try {
+    photoUrl = await publicStaffPersonPhoto(businessId, id, staff);
+  } catch {
+    console.warn('Unable to resolve public staff photo', { businessId, staffId: id });
+  }
   return {
     id,
     name,
@@ -637,10 +667,13 @@ export const getPublicBusinessBySlug = onCall<
       const dto = publicServiceDto(service.id, service.data());
       return dto ? [dto] : [];
     }),
-    staff: staffSnapshot.docs.flatMap((staff) => {
-      const dto = publicStaffDto(staff.id, staff.data());
-      return dto ? [dto] : [];
-    }),
+    staff: (
+      await Promise.all(
+        staffSnapshot.docs.map((staff) =>
+          publicStaffDto(staff.id, staff.data(), businessSnapshot.id),
+        ),
+      )
+    ).flatMap((staff) => (staff ? [staff] : [])),
   };
 });
 
