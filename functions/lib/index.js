@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.claimAppointment = exports.updateAppointmentStatus = exports.createPublicBooking = exports.getPublicBusinessBySlug = exports.improvePublicAssistantContext = exports.askPublicBusinessAssistant = void 0;
 const app_1 = require("firebase-admin/app");
+const storage_1 = require("firebase-admin/storage");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const node_crypto_1 = require("node:crypto");
@@ -359,12 +360,38 @@ function publicServiceDto(id, service) {
         ...(staffIds ? { staffIds } : {}),
     };
 }
-function publicStaffDto(id, staff) {
+async function publicStaffPersonPhoto(businessId, id, staff) {
+    const uid = publicString(staff.accountUid, 128) || publicString(staff.userId, 128) || id;
+    if (!uid || uid.includes('/'))
+        return undefined;
+    const person = (await db.doc(`users/${uid}`).get()).data();
+    if (!person ||
+        person.staffId !== id ||
+        !Array.isArray(person.businessIds) ||
+        !person.businessIds.includes(businessId) ||
+        (person.role !== 'staff' && person.role !== 'storeadmin') ||
+        (person.role === 'storeadmin' && person.professionalBusinessId !== businessId))
+        return undefined;
+    const path = publicString(person.photoStoragePath, 2_048);
+    const prefix = `users/${uid}/profile/assets/`;
+    if (!path?.startsWith(prefix))
+        return undefined;
+    if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(jpg|png|webp)$/.test(path.slice(prefix.length)))
+        return undefined;
+    return (0, storage_1.getDownloadURL)((0, storage_1.getStorage)().bucket().file(path));
+}
+async function publicStaffDto(id, staff, businessId) {
     const name = publicString(staff.name, 120);
     if (!name || staff.active !== true)
         return null;
     const schedule = publicStaffSchedule(staff.schedule);
-    const photoUrl = publicString(staff.photoUrl, 2_048);
+    let photoUrl;
+    try {
+        photoUrl = await publicStaffPersonPhoto(businessId, id, staff);
+    }
+    catch {
+        console.warn('Unable to resolve public staff photo', { businessId, staffId: id });
+    }
     return {
         id,
         name,
@@ -464,10 +491,7 @@ exports.getPublicBusinessBySlug = (0, https_1.onCall)(async (request) => {
             const dto = publicServiceDto(service.id, service.data());
             return dto ? [dto] : [];
         }),
-        staff: staffSnapshot.docs.flatMap((staff) => {
-            const dto = publicStaffDto(staff.id, staff.data());
-            return dto ? [dto] : [];
-        }),
+        staff: (await Promise.all(staffSnapshot.docs.map((staff) => publicStaffDto(staff.id, staff.data(), businessSnapshot.id)))).flatMap((staff) => (staff ? [staff] : [])),
     };
 });
 /** Normalizes Colombian mobile input without persisting the raw presentation form. */

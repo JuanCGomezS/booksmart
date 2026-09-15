@@ -180,7 +180,10 @@ function AccountAvatar({ account }: { account: Account }) {
     };
   }, [account.personalPhotoStoragePath, account.uid]);
 
-  const photoUrl = personalPhotoUrl || account.photoUrl;
+  const isResolvingAccount = account.note === 'Verificando cuenta...';
+  const photoUrl =
+    personalPhotoUrl ||
+    (!isResolvingAccount && !account.personalPhotoStoragePath ? account.photoUrl : undefined);
   return (
     <span className="account-menu-avatar public-business-avatar" aria-hidden="true">
       {photoUrl && failedPhotoUrl !== photoUrl ? (
