@@ -696,6 +696,17 @@ export async function claimAppointment(
   }
 }
 
+export async function cancelCustomerAppointment(
+  businessId: string,
+  appointmentId: string,
+): Promise<void> {
+  const cancel = httpsCallable<{ businessId: string; appointmentId: string }, void>(
+    getFunctions(app),
+    'cancelCustomerAppointment',
+  );
+  await cancel({ businessId, appointmentId });
+}
+
 export async function updateAppointmentStatus(
   businessId: string,
   appointmentId: string,

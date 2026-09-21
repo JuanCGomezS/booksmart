@@ -3,6 +3,7 @@ import { getDownloadURL, getStorage } from 'firebase-admin/storage';
 import { FieldValue, getFirestore, type DocumentData } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { createHash } from 'node:crypto';
+import { canCustomerCancelAppointment } from './customer-cancellation.js';
 
 initializeApp();
 
@@ -1105,6 +1106,46 @@ function canSetAppointmentStatus(appointment: DocumentData | undefined, status: 
   const endedAt = businessLocalDateTime(appointment.bookingDate, appointment.endTime);
   return endedAt !== null && endedAt.getTime() <= Date.now();
 }
+
+export const cancelCustomerAppointment = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication is required.');
+  const { businessId, appointmentId } = appointmentInput(request.data);
+
+  await db.runTransaction(async (transaction) => {
+    const appointmentRef = db.doc(`barbers/${businessId}/appointments/${appointmentId}`);
+    const appointmentSnapshot = await transaction.get(appointmentRef);
+    const appointment = appointmentSnapshot.data();
+    if (!canCustomerCancelAppointment(appointment, request.auth!.uid))
+      throw new HttpsError('failed-precondition', 'This appointment can no longer be cancelled.');
+
+    const lockOwnerId =
+      typeof appointment?.barberId === 'string'
+        ? appointment.barberId
+        : typeof appointment?.capacityStaffId === 'string'
+          ? appointment.capacityStaffId
+          : '';
+    const intervalIds = Array.isArray(appointment?.occupiedIntervalIds)
+      ? appointment.occupiedIntervalIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    const lockRefs = lockOwnerId
+      ? intervalIds.map((intervalId) =>
+          db.doc(
+            `barbers/${businessId}/bookingLocks/${appointment!.bookingDate}/staff/${lockOwnerId}/intervals/${intervalId}`,
+          ),
+        )
+      : [];
+    const locks = await Promise.all(lockRefs.map((reference) => transaction.get(reference)));
+
+    transaction.update(appointmentRef, {
+      status: 'cancelled',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    locks.forEach((lock, index) => {
+      if (lock.exists && lock.data()?.appointmentId === appointmentId)
+        transaction.delete(lockRefs[index]);
+    });
+  });
+});
 
 export const updateAppointmentStatus = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication is required.');

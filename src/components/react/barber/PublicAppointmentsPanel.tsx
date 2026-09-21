@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, getDocs, query, updateDoc, doc, where } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { cancelCustomerAppointment } from '../../../lib/booking-transaction';
 import { auth, db } from '../../../lib/firebase';
 
 type Item = {
@@ -74,10 +75,7 @@ export default function PublicAppointmentsPanel({ businessId }: { businessId: st
   }, [businessId, uid]);
   const cancel = async (id: string) => {
     try {
-      await updateDoc(doc(db, 'barbers', businessId, 'appointments', id), {
-        status: 'cancelled',
-        updatedAt: new Date(),
-      });
+      await cancelCustomerAppointment(businessId, id);
       setItems((current) =>
         current.map((item) => (item.id === id ? { ...item, status: 'cancelled' } : item)),
       );

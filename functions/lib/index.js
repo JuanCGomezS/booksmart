@@ -1,11 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.claimAppointment = exports.updateAppointmentStatus = exports.createPublicBooking = exports.getPublicBusinessBySlug = exports.improvePublicAssistantContext = exports.askPublicBusinessAssistant = void 0;
+exports.claimAppointment = exports.updateAppointmentStatus = exports.cancelCustomerAppointment = exports.createPublicBooking = exports.getPublicBusinessBySlug = exports.improvePublicAssistantContext = exports.askPublicBusinessAssistant = void 0;
 const app_1 = require("firebase-admin/app");
 const storage_1 = require("firebase-admin/storage");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const node_crypto_1 = require("node:crypto");
+const customer_cancellation_js_1 = require("./customer-cancellation.js");
 (0, app_1.initializeApp)();
 var public_assistant_js_1 = require("./public-assistant.js");
 Object.defineProperty(exports, "askPublicBusinessAssistant", { enumerable: true, get: function () { return public_assistant_js_1.askPublicBusinessAssistant; } });
@@ -819,6 +820,38 @@ function canSetAppointmentStatus(appointment, status) {
     const endedAt = businessLocalDateTime(appointment.bookingDate, appointment.endTime);
     return endedAt !== null && endedAt.getTime() <= Date.now();
 }
+exports.cancelCustomerAppointment = (0, https_1.onCall)(async (request) => {
+    if (!request.auth)
+        throw new https_1.HttpsError('unauthenticated', 'Authentication is required.');
+    const { businessId, appointmentId } = appointmentInput(request.data);
+    await db.runTransaction(async (transaction) => {
+        const appointmentRef = db.doc(`barbers/${businessId}/appointments/${appointmentId}`);
+        const appointmentSnapshot = await transaction.get(appointmentRef);
+        const appointment = appointmentSnapshot.data();
+        if (!(0, customer_cancellation_js_1.canCustomerCancelAppointment)(appointment, request.auth.uid))
+            throw new https_1.HttpsError('failed-precondition', 'This appointment can no longer be cancelled.');
+        const lockOwnerId = typeof appointment?.barberId === 'string'
+            ? appointment.barberId
+            : typeof appointment?.capacityStaffId === 'string'
+                ? appointment.capacityStaffId
+                : '';
+        const intervalIds = Array.isArray(appointment?.occupiedIntervalIds)
+            ? appointment.occupiedIntervalIds.filter((id) => typeof id === 'string')
+            : [];
+        const lockRefs = lockOwnerId
+            ? intervalIds.map((intervalId) => db.doc(`barbers/${businessId}/bookingLocks/${appointment.bookingDate}/staff/${lockOwnerId}/intervals/${intervalId}`))
+            : [];
+        const locks = await Promise.all(lockRefs.map((reference) => transaction.get(reference)));
+        transaction.update(appointmentRef, {
+            status: 'cancelled',
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        locks.forEach((lock, index) => {
+            if (lock.exists && lock.data()?.appointmentId === appointmentId)
+                transaction.delete(lockRefs[index]);
+        });
+    });
+});
 exports.updateAppointmentStatus = (0, https_1.onCall)(async (request) => {
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Authentication is required.');
