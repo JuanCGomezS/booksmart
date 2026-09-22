@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Timestamp } from 'firebase/firestore';
 import { getBogotaDateTime, getBookingDate } from '../../../lib/booking';
 import { CANCELLATION_NOTE_MAX_LENGTH, type AppointmentStatus } from '../../../lib/types';
 import { claimAppointment, updateAppointmentStatus } from '../../../lib/booking-transaction';
 import {
   getWorkspaceMonthAgenda,
   isWorkspaceAgendaIndexError,
+  markAppointmentWhatsappNotified,
   type WorkspaceAppointment,
 } from '../../../lib/workspace';
 
@@ -18,11 +20,90 @@ const STATUS_LABEL: Record<AppointmentStatus, string> = {
 };
 const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
-function getWhatsappUrl(phone: string) {
+function whatsappNotifiedKey(businessId: string) {
+  return `barberflow.whatsappNotified.${businessId}`;
+}
+function readLocalWhatsappNotified(businessId: string) {
+  try {
+    const parsed: unknown = JSON.parse(
+      localStorage.getItem(whatsappNotifiedKey(businessId)) || '[]',
+    );
+    return new Set(
+      Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [],
+    );
+  } catch {
+    return new Set<string>();
+  }
+}
+function rememberLocalWhatsappNotified(businessId: string, appointmentId: string) {
+  const ids = readLocalWhatsappNotified(businessId);
+  ids.add(appointmentId);
+  localStorage.setItem(whatsappNotifiedKey(businessId), JSON.stringify([...ids]));
+}
+function withLocalWhatsappNotified(
+  businessId: string,
+  appointments: WorkspaceAppointment[],
+): WorkspaceAppointment[] {
+  const ids = readLocalWhatsappNotified(businessId);
+  if (ids.size === 0) return appointments;
+  return appointments.map((item) =>
+    item.whatsappNotifiedAt || !ids.has(item.id)
+      ? item
+      : { ...item, whatsappNotifiedAt: Timestamp.now() },
+  );
+}
+
+function getWhatsappUrl(phone: string, text?: string) {
   const normalized = phone.replace(/\D/g, '');
   const colombianMobile =
     normalized.length === 10 && normalized.startsWith('3') ? `57${normalized}` : normalized;
-  return `https://wa.me/${colombianMobile}`;
+  const base = `https://wa.me/${colombianMobile}`;
+  const message = text?.trim();
+  return message ? `${base}?text=${encodeURIComponent(message)}` : base;
+}
+function firstName(name: string) {
+  return name.trim().split(/\s+/)[0] || name.trim();
+}
+function appointmentServiceName(appointment: WorkspaceAppointment) {
+  return typeof appointment.serviceName === 'string' && appointment.serviceName.trim()
+    ? appointment.serviceName.trim()
+    : 'tu servicio';
+}
+function reminderWhatsappText(appointment: WorkspaceAppointment, businessName?: string) {
+  const place = businessName?.trim();
+  return [
+    `Hola ${firstName(appointment.clientName)},`,
+    '',
+    place ? `Te recordamos tu cita en *${place}*:` : 'Te recordamos tu cita:',
+    '',
+    `Fecha: ${displayDay(appointment.bookingDate)}`,
+    `Hora: ${displayTime(appointment.startTime)}`,
+    `Servicio: ${appointmentServiceName(appointment)}`,
+    '',
+    '¡Te esperamos!',
+  ].join('\n');
+}
+function cancellationWhatsappText(
+  appointment: WorkspaceAppointment,
+  businessName?: string,
+  note = '',
+) {
+  const place = businessName?.trim();
+  const reason = note.trim() || appointment.cancellationNote?.trim() || '';
+  return [
+    `Hola ${firstName(appointment.clientName)},`,
+    '',
+    place
+      ? `Lamentamos informarte que tu cita en *${place}* fue cancelada.`
+      : 'Lamentamos informarte que tu cita fue cancelada.',
+    '',
+    `Fecha: ${displayDay(appointment.bookingDate)}`,
+    `Hora: ${displayTime(appointment.startTime)}`,
+    `Servicio: ${appointmentServiceName(appointment)}`,
+    ...(reason ? ['', reason] : []),
+    '',
+    'Si quieres, puedes agendar otra en los horarios disponibles.',
+  ].join('\n');
 }
 
 function getTelephoneUrl(phone: string) {
@@ -101,12 +182,14 @@ type LoadError = '' | 'index' | 'generic';
 
 export default function AgendaPanel({
   businessId,
+  businessName,
   staffId,
   claimStaffId = staffId,
   profileName,
   staffNames = {},
 }: {
   businessId: string;
+  businessName?: string;
   staffId?: string;
   claimStaffId?: string;
   profileName?: string;
@@ -130,7 +213,7 @@ export default function AgendaPanel({
       setLoadError('');
       try {
         const records = await getWorkspaceMonthAgenda(businessId, month, staffId);
-        if (!cancelled) setAppointments(records);
+        if (!cancelled) setAppointments(withLocalWhatsappNotified(businessId, records));
       } catch (cause) {
         console.error(cause);
         if (!cancelled) setLoadError(isWorkspaceAgendaIndexError(cause) ? 'index' : 'generic');
@@ -165,6 +248,15 @@ export default function AgendaPanel({
     setSelectedDate((current) => (current.startsWith(nextMonth) ? current : `${nextMonth}-01`));
   };
   const retryLoad = () => setRevision((value) => value + 1);
+  const markNotified = (appointmentId: string) => {
+    rememberLocalWhatsappNotified(businessId, appointmentId);
+    setAppointments((items) =>
+      items.map((item) =>
+        item.id === appointmentId ? { ...item, whatsappNotifiedAt: Timestamp.now() } : item,
+      ),
+    );
+    void markAppointmentWhatsappNotified(businessId, appointmentId).catch(() => undefined);
+  };
   const updateStatus = async (
     appointment: WorkspaceAppointment,
     status: Extract<AppointmentStatus, 'confirmed' | 'done' | 'no_show' | 'cancelled'>,
@@ -442,17 +534,24 @@ export default function AgendaPanel({
                             </p>
                           </div>
                           <div className="min-w-0">
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-start justify-between gap-2">
                               <p
                                 className="min-w-0 truncate font-semibold leading-5 text-main"
                                 title={serviceName}
                               >
                                 {serviceName}
                               </p>
-                              <span
-                                className={`shrink-0 rounded border px-1.5 py-0.5 text-xs font-semibold leading-4 ${`status-${appointment.status}`}`}
-                              >
-                                {STATUS_LABEL[appointment.status]}
+                              <span className="shrink-0 text-right">
+                                <span
+                                  className={`inline-block rounded border px-1.5 py-0.5 text-xs font-semibold leading-4 ${`status-${appointment.status}`}`}
+                                >
+                                  {STATUS_LABEL[appointment.status]}
+                                </span>
+                                {appointment.whatsappNotifiedAt ? (
+                                  <span className="mt-1 block text-[0.65rem] font-semibold uppercase tracking-wide text-subtle">
+                                    Notificado
+                                  </span>
+                                ) : null}
                               </span>
                             </div>
                             <p
@@ -473,7 +572,7 @@ export default function AgendaPanel({
                         {hasExpandableDetails && (
                           <details
                             className="group bg-[color-mix(in_srgb,var(--surface-soft)_58%,var(--surface))]"
-                            open={showCancelForm || appointment.status === 'cancelled' || undefined}
+                            open={showCancelForm || undefined}
                           >
                             <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-2.5 text-xs font-semibold text-main marker:hidden hover:bg-[var(--surface-soft)]">
                               <span className="flex min-w-0 items-center gap-1.5">
@@ -518,11 +617,17 @@ export default function AgendaPanel({
                                   </a>
                                   <a
                                     className="inline-flex size-9 items-center justify-center rounded-full border border-[var(--border)] text-main transition-colors hover:border-[var(--secondary)] hover:bg-[color-mix(in_srgb,var(--secondary)_12%,transparent)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--secondary)]"
-                                    href={getWhatsappUrl(phone)}
+                                    href={getWhatsappUrl(
+                                      phone,
+                                      appointment.status === 'cancelled'
+                                        ? cancellationWhatsappText(appointment, businessName)
+                                        : reminderWhatsappText(appointment, businessName),
+                                    )}
                                     target="_blank"
                                     rel="noreferrer"
                                     aria-label={`Escribir por WhatsApp a ${appointment.clientName}`}
                                     title="Escribir por WhatsApp"
+                                    onClick={() => markNotified(appointment.id)}
                                   >
                                     <svg
                                       aria-hidden="true"

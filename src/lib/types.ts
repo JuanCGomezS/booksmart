@@ -363,6 +363,7 @@ export interface Appointment {
   cancellationNote?: string;
   cancelledBy?: AppointmentCancelledBy;
   cancelledAt?: Timestamp;
+  whatsappNotifiedAt?: Timestamp;
   /** Optional, informational product request; it never reserves inventory or price. */
   requestedProducts?: AppointmentProductRequest[];
   /** Present only when an authenticated customer made the booking. */

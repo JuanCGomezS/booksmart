@@ -1,4 +1,12 @@
-import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDocs,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
 import { db } from './firebase';
 import { getBogotaDateTime, getBookingDate, parseBookingDate } from './booking';
 import type { Appointment, AppointmentStatus } from './types';
@@ -224,5 +232,15 @@ export async function updateWorkspaceAppointmentStatus(
   await updateDoc(doc(db, 'barbers', businessId, 'appointments', appointmentId), {
     status,
     updatedAt: new Date(),
+  });
+}
+
+export async function markAppointmentWhatsappNotified(
+  businessId: string,
+  appointmentId: string,
+): Promise<void> {
+  await updateDoc(doc(db, 'barbers', businessId, 'appointments', appointmentId), {
+    whatsappNotifiedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
 }
