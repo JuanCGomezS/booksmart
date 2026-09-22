@@ -993,6 +993,15 @@ function RetireProfessionalControl({
   useEffect(() => {
     if (confirming) confirmationHeadingRef.current?.focus();
   }, [confirming]);
+  useEffect(() => {
+    if (member.active !== false) return;
+    void import('../../../lib/staff-enrollment').then(({ cancelAppointmentsForRetiredStaff }) =>
+      cancelAppointmentsForRetiredStaff(barberId, member.id, {
+        accountUid: member.accountUid,
+        userId: member.userId,
+      }),
+    );
+  }, [barberId, member.accountUid, member.active, member.id, member.userId]);
   const cancel = () => {
     setConfirming(false);
     requestAnimationFrame(() => retireButtonRef.current?.focus());

@@ -2993,6 +2993,159 @@ textarea {
   }
 }
 
+.public-appointments {
+  border: 1px solid color-mix(in srgb, var(--public-ink) 14%, transparent);
+  border-radius: 1.25rem;
+  background: color-mix(in srgb, var(--public-surface) 88%, var(--public-soft));
+  padding: 1.35rem 1.25rem 1.4rem;
+}
+
+.public-appointments h2 {
+  margin: 0;
+  color: var(--public-ink);
+  font-size: clamp(1.55rem, 3.4vw, 2.05rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+.public-appointments-copy {
+  max-width: 42ch;
+  margin: 0.7rem 0 0;
+  color: var(--public-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.public-appointments-list {
+  display: grid;
+  gap: 0.7rem;
+  max-height: min(60svh, 36rem);
+  margin: 1.15rem 0 0;
+  padding: 0.15rem 0.2rem 0.15rem 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.public-appointments-item {
+  border: 1px solid color-mix(in srgb, var(--public-ink) 12%, transparent);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--public-soft) 50%, transparent);
+  padding: 0.9rem 1rem;
+}
+
+.public-appointments-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.public-appointments-service {
+  margin: 0;
+  color: var(--public-ink);
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.public-appointments-meta {
+  margin: 0.25rem 0 0;
+  color: var(--public-muted);
+  font-size: 0.88rem;
+}
+
+.public-appointments-status {
+  display: inline-flex;
+  margin: 0.4rem 0 0;
+  border: 1px solid color-mix(in srgb, var(--public-ink) 18%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--public-ink) 8%, transparent);
+  padding: 0.15rem 0.55rem;
+  color: var(--public-ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.public-appointments-status.status-pending {
+  border-color: color-mix(in srgb, var(--public-accent) 42%, transparent);
+  background: color-mix(in srgb, var(--public-accent) 14%, transparent);
+  color: var(--public-ink);
+}
+
+.public-appointments-status.status-confirmed,
+.public-appointments-status.status-done {
+  border-color: color-mix(in srgb, var(--public-action) 40%, transparent);
+  background: color-mix(in srgb, var(--public-action) 14%, transparent);
+  color: var(--public-ink);
+}
+
+.public-appointments-status.status-cancelled,
+.public-appointments-status.status-no_show,
+.public-appointments-status.status-no-show {
+  border-color: color-mix(in srgb, var(--public-ink) 22%, transparent);
+  background: color-mix(in srgb, var(--public-ink) 10%, transparent);
+  color: var(--public-muted);
+}
+
+.public-appointments-note {
+  margin: 0.55rem 0 0;
+  color: var(--public-ink);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.public-appointments-cancel,
+.public-appointments-page {
+  min-height: 2.75rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.88rem;
+}
+
+.public-appointments-form {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid color-mix(in srgb, var(--public-ink) 12%, transparent);
+}
+
+.public-appointments-form label {
+  color: var(--public-ink);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.public-appointments-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.public-appointments-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.95rem;
+}
+
+.public-appointments-pager p {
+  margin: 0;
+  color: var(--public-muted);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.public-appointments-pager div {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .public-business-overview {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(20rem, 0.9fr);

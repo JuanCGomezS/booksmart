@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.claimAppointment = exports.updateAppointmentStatus = exports.cancelCustomerAppointment = exports.createPublicBooking = exports.getPublicBusinessBySlug = exports.improvePublicAssistantContext = exports.askPublicBusinessAssistant = void 0;
+exports.retireProfessional = exports.claimAppointment = exports.updateAppointmentStatus = exports.cancelCustomerAppointment = exports.createPublicBooking = exports.getPublicBusinessBySlug = exports.improvePublicAssistantContext = exports.askPublicBusinessAssistant = void 0;
 const app_1 = require("firebase-admin/app");
 const storage_1 = require("firebase-admin/storage");
 const firestore_1 = require("firebase-admin/firestore");
@@ -971,4 +971,123 @@ exports.claimAppointment = (0, https_1.onCall)(async (request) => {
             }));
         }
     });
+});
+function uniqueStoragePaths(paths) {
+    return [...new Set(paths.filter((path) => Boolean(path)))];
+}
+async function cancelBlockingAppointmentAsSystem(businessId, appointmentId) {
+    await db.runTransaction(async (transaction) => {
+        const appointmentRef = db.doc(`barbers/${businessId}/appointments/${appointmentId}`);
+        const appointmentSnapshot = await transaction.get(appointmentRef);
+        const appointment = appointmentSnapshot.data();
+        if (!appointmentSnapshot.exists ||
+            !appointment ||
+            !['pending', 'confirmed'].includes(appointment.status))
+            return;
+        const lockOwnerId = typeof appointment.barberId === 'string'
+            ? appointment.barberId
+            : typeof appointment.capacityStaffId === 'string'
+                ? appointment.capacityStaffId
+                : '';
+        const intervalIds = Array.isArray(appointment.occupiedIntervalIds)
+            ? appointment.occupiedIntervalIds.filter((id) => typeof id === 'string')
+            : [];
+        const lockRefs = lockOwnerId && typeof appointment.bookingDate === 'string'
+            ? intervalIds.map((intervalId) => db.doc(`barbers/${businessId}/bookingLocks/${appointment.bookingDate}/staff/${lockOwnerId}/intervals/${intervalId}`))
+            : [];
+        const locks = await Promise.all(lockRefs.map((reference) => transaction.get(reference)));
+        transaction.update(appointmentRef, {
+            status: 'cancelled',
+            cancellationNote: cancellation_note_js_1.staffRetirementCancellationNote,
+            cancelledBy: 'system',
+            cancelledAt: firestore_1.FieldValue.serverTimestamp(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        locks.forEach((lock, index) => {
+            if (lock.exists && lock.data()?.appointmentId === appointmentId)
+                transaction.delete(lockRefs[index]);
+        });
+    });
+}
+exports.retireProfessional = (0, https_1.onCall)(async (request) => {
+    if (!request.auth)
+        throw new https_1.HttpsError('unauthenticated', 'Authentication is required.');
+    const businessId = typeof request.data?.businessId === 'string' ? request.data.businessId.trim() : '';
+    const staffId = typeof request.data?.staffId === 'string' ? request.data.staffId.trim() : '';
+    if (!businessId || !staffId)
+        throw new https_1.HttpsError('invalid-argument', 'Invalid retire request.');
+    await db.runTransaction(async (transaction) => {
+        const { isStaff } = await actorForBusiness(transaction, request.auth.uid, businessId);
+        if (isStaff)
+            throw new https_1.HttpsError('permission-denied', 'Not authorized to retire staff.');
+    });
+    const [assigned, capacity] = await Promise.all([
+        db.collection(`barbers/${businessId}/appointments`).where('barberId', '==', staffId).get(),
+        db
+            .collection(`barbers/${businessId}/appointments`)
+            .where('capacityStaffId', '==', staffId)
+            .get(),
+    ]);
+    const appointments = new Map();
+    for (const snapshot of [...assigned.docs, ...capacity.docs]) {
+        const status = snapshot.data()?.status;
+        const assignedToStaff = snapshot.data()?.barberId === staffId;
+        const holdsCapacity = snapshot.data()?.assignmentState === 'unassigned' &&
+            snapshot.data()?.capacityStaffId === staffId;
+        if (['pending', 'confirmed'].includes(status) && (assignedToStaff || holdsCapacity))
+            appointments.set(snapshot.id, snapshot);
+    }
+    for (const appointmentId of appointments.keys())
+        await cancelBlockingAppointmentAsSystem(businessId, appointmentId);
+    const profileRef = db.doc(`barbers/${businessId}/barbers/${staffId}`);
+    const cleanupPaths = await db.runTransaction(async (transaction) => {
+        const profileSnapshot = await transaction.get(profileRef);
+        if (!profileSnapshot.exists)
+            throw new https_1.HttpsError('not-found', 'Professional profile is no longer available.');
+        const profile = profileSnapshot.data() || {};
+        const legacyPhotoPaths = typeof profile.photoUrl === 'string'
+            ? ['jpg', 'png', 'webp'].map((extension) => `barbers/${businessId}/barbers/${staffId}/image.${extension}`)
+            : [];
+        const paths = uniqueStoragePaths([
+            typeof profile.imageStoragePath === 'string' ? profile.imageStoragePath : undefined,
+            ...(Array.isArray(profile.pendingImageCleanupPaths)
+                ? profile.pendingImageCleanupPaths.filter((path) => typeof path === 'string')
+                : []),
+            ...legacyPhotoPaths,
+        ]);
+        const accountUid = typeof profile.accountUid === 'string'
+            ? profile.accountUid
+            : typeof profile.accountStatus === 'string'
+                ? staffId
+                : null;
+        transaction.update(profileRef, {
+            active: false,
+            ...(accountUid
+                ? { accountUid: firestore_1.FieldValue.delete(), accountStatus: firestore_1.FieldValue.delete() }
+                : {}),
+            pendingImageCleanupPaths: paths,
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        if (!accountUid)
+            return paths;
+        const accountRef = db.doc(`users/${accountUid}`);
+        if (profile.accountStatus === 'active' || profile.accountStatus === 'inactive') {
+            transaction.update(accountRef, {
+                role: 'customer',
+                businessIds: firestore_1.FieldValue.delete(),
+                staffId: firestore_1.FieldValue.delete(),
+                professionalBusinessId: firestore_1.FieldValue.delete(),
+                enrollmentCode: firestore_1.FieldValue.delete(),
+                updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            });
+            return paths;
+        }
+        transaction.update(accountRef, {
+            staffId: firestore_1.FieldValue.delete(),
+            professionalBusinessId: firestore_1.FieldValue.delete(),
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+        });
+        return paths;
+    });
+    return { cleanupPaths };
 });
