@@ -7,6 +7,7 @@ const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const node_crypto_1 = require("node:crypto");
 const customer_cancellation_js_1 = require("./customer-cancellation.js");
+const cancellation_note_js_1 = require("./cancellation-note.js");
 (0, app_1.initializeApp)();
 var public_assistant_js_1 = require("./public-assistant.js");
 Object.defineProperty(exports, "askPublicBusinessAssistant", { enumerable: true, get: function () { return public_assistant_js_1.askPublicBusinessAssistant; } });
@@ -818,12 +819,18 @@ function canSetAppointmentStatus(appointment, status) {
         !['pending', 'confirmed'].includes(appointment.status))
         return false;
     const endedAt = businessLocalDateTime(appointment.bookingDate, appointment.endTime);
-    return endedAt !== null && endedAt.getTime() <= Date.now();
+    if (endedAt !== null && endedAt.getTime() <= Date.now())
+        return true;
+    if (status !== 'cancelled')
+        return false;
+    const startAt = businessLocalDateTime(appointment.bookingDate, appointment.startTime);
+    return startAt !== null && startAt.getTime() > Date.now();
 }
 exports.cancelCustomerAppointment = (0, https_1.onCall)(async (request) => {
     if (!request.auth)
         throw new https_1.HttpsError('unauthenticated', 'Authentication is required.');
     const { businessId, appointmentId } = appointmentInput(request.data);
+    const cancellationNote = (0, cancellation_note_js_1.parseCancellationNote)(request.data.cancellationNote);
     await db.runTransaction(async (transaction) => {
         const appointmentRef = db.doc(`barbers/${businessId}/appointments/${appointmentId}`);
         const appointmentSnapshot = await transaction.get(appointmentRef);
@@ -844,6 +851,9 @@ exports.cancelCustomerAppointment = (0, https_1.onCall)(async (request) => {
         const locks = await Promise.all(lockRefs.map((reference) => transaction.get(reference)));
         transaction.update(appointmentRef, {
             status: 'cancelled',
+            cancellationNote,
+            cancelledBy: 'customer',
+            cancelledAt: firestore_1.FieldValue.serverTimestamp(),
             updatedAt: firestore_1.FieldValue.serverTimestamp(),
         });
         locks.forEach((lock, index) => {
@@ -859,6 +869,9 @@ exports.updateAppointmentStatus = (0, https_1.onCall)(async (request) => {
     const status = request.data.status;
     if (!['confirmed', 'done', 'no_show', 'cancelled'].includes(status))
         throw new https_1.HttpsError('invalid-argument', 'Invalid appointment status.');
+    const cancellationNote = status === 'cancelled'
+        ? (0, cancellation_note_js_1.parseCancellationNote)(request.data.cancellationNote)
+        : '';
     await db.runTransaction(async (transaction) => {
         const { isStaff, staffId } = await actorForBusiness(transaction, request.auth.uid, businessId);
         const appointmentRef = db.doc(`barbers/${businessId}/appointments/${appointmentId}`);
@@ -884,7 +897,17 @@ exports.updateAppointmentStatus = (0, https_1.onCall)(async (request) => {
             ? intervalIds.map((intervalId) => db.doc(`barbers/${businessId}/bookingLocks/${appointment.bookingDate}/staff/${lockOwnerId}/intervals/${intervalId}`))
             : [];
         const locks = await Promise.all(lockRefs.map((reference) => transaction.get(reference)));
-        transaction.update(appointmentRef, { status, updatedAt: firestore_1.FieldValue.serverTimestamp() });
+        transaction.update(appointmentRef, {
+            status,
+            updatedAt: firestore_1.FieldValue.serverTimestamp(),
+            ...(status === 'cancelled'
+                ? {
+                    cancellationNote,
+                    cancelledBy: isStaff ? 'staff' : 'storeadmin',
+                    cancelledAt: firestore_1.FieldValue.serverTimestamp(),
+                }
+                : {}),
+        });
         locks.forEach((lock, index) => {
             if (lock.exists && lock.data()?.appointmentId === appointmentId)
                 transaction.delete(lockRefs[index]);

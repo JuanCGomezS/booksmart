@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getBogotaDateTime, getBookingDate } from '../../../lib/booking';
-import type { AppointmentStatus } from '../../../lib/types';
+import { CANCELLATION_NOTE_MAX_LENGTH, type AppointmentStatus } from '../../../lib/types';
 import { claimAppointment, updateAppointmentStatus } from '../../../lib/booking-transaction';
 import {
   getWorkspaceMonthAgenda,
@@ -8,11 +8,7 @@ import {
   type WorkspaceAppointment,
 } from '../../../lib/workspace';
 
-const FINAL_STATUSES: Array<Extract<AppointmentStatus, 'done' | 'no_show' | 'cancelled'>> = [
-  'done',
-  'no_show',
-  'cancelled',
-];
+const FINAL_STATUSES: Array<Extract<AppointmentStatus, 'done' | 'no_show'>> = ['done', 'no_show'];
 const STATUS_LABEL: Record<AppointmentStatus, string> = {
   pending: 'Pendiente',
   confirmed: 'Confirmada',
@@ -84,6 +80,23 @@ function hasAppointmentEnded(bookingDate: string, endTime: string, now = new Dat
   const endsAt = getBogotaDateTime(bookingDate, endTime);
   return endsAt !== null && endsAt <= now;
 }
+function hasAppointmentStarted(bookingDate: string, startTime: string, now = new Date()) {
+  const startsAt = getBogotaDateTime(bookingDate, startTime);
+  return startsAt !== null && startsAt <= now;
+}
+function callableCode(error: unknown): string {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return '';
+  return String((error as { code?: unknown }).code).replace(/^functions\//, '');
+}
+function statusUpdateErrorMessage(error: unknown, cancelled: boolean): string {
+  if (!cancelled) return 'No fue posible actualizar el estado. Inténtalo nuevamente.';
+  const code = callableCode(error);
+  if (code === 'invalid-argument') return 'Escribe un motivo de cancelación (1 a 500 caracteres).';
+  if (code === 'failed-precondition') return 'Esta cita no se puede cancelar en este momento.';
+  if (code === 'permission-denied' || code === 'unauthenticated')
+    return 'No tienes permiso para cancelar esta cita.';
+  return 'No fue posible cancelar. Inténtalo nuevamente.';
+}
 type LoadError = '' | 'index' | 'generic';
 
 export default function AgendaPanel({
@@ -108,6 +121,7 @@ export default function AgendaPanel({
   const [revision, setRevision] = useState(0);
   const [updating, setUpdating] = useState<string | null>(null);
   const [updateErrors, setUpdateErrors] = useState<Record<string, string>>({});
+  const [cancelDraft, setCancelDraft] = useState<{ id: string; note: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,19 +168,40 @@ export default function AgendaPanel({
   const updateStatus = async (
     appointment: WorkspaceAppointment,
     status: Extract<AppointmentStatus, 'confirmed' | 'done' | 'no_show' | 'cancelled'>,
+    cancellationNote?: string,
   ) => {
+    const note = cancellationNote?.trim() || '';
+    if (status === 'cancelled' && !note) {
+      setCancelDraft({ id: appointment.id, note: '' });
+      setUpdateErrors((current) => ({ ...current, [appointment.id]: '' }));
+      return;
+    }
     setUpdating(appointment.id);
     setUpdateErrors((current) => ({ ...current, [appointment.id]: '' }));
     try {
-      await updateAppointmentStatus(businessId, appointment.id, status);
-      setAppointments((items) =>
-        items.map((item) => (item.id === appointment.id ? { ...item, status } : item)),
+      await updateAppointmentStatus(
+        businessId,
+        appointment.id,
+        status,
+        status === 'cancelled' ? note : undefined,
       );
+      setAppointments((items) =>
+        items.map((item) =>
+          item.id === appointment.id
+            ? {
+                ...item,
+                status,
+                ...(status === 'cancelled' ? { cancellationNote: note } : {}),
+              }
+            : item,
+        ),
+      );
+      setCancelDraft(null);
     } catch (cause) {
       console.error(cause);
       setUpdateErrors((current) => ({
         ...current,
-        [appointment.id]: 'No fue posible actualizar el estado. Inténtalo nuevamente.',
+        [appointment.id]: statusUpdateErrorMessage(cause, status === 'cancelled'),
       }));
     } finally {
       setUpdating(null);
@@ -345,9 +380,17 @@ export default function AgendaPanel({
                       appointment.bookingDate,
                       appointment.endTime,
                     );
+                    const canEarlyCancel =
+                      ['pending', 'confirmed'].includes(appointment.status) &&
+                      !hasAppointmentStarted(appointment.bookingDate, appointment.startTime) &&
+                      (staffId ? appointment.barberId === staffId : true);
                     const requestedProducts = appointment.requestedProducts || [];
                     const note =
                       typeof appointment.notes === 'string' ? appointment.notes.trim() : '';
+                    const cancellationNote =
+                      typeof appointment.cancellationNote === 'string'
+                        ? appointment.cancellationNote.trim()
+                        : '';
                     const serviceName =
                       typeof appointment.serviceName === 'string' && appointment.serviceName.trim()
                         ? appointment.serviceName.trim()
@@ -364,15 +407,26 @@ export default function AgendaPanel({
                     const address = appointment.clientAddress?.trim() || '';
                     const contactCount =
                       Number(Boolean(phone)) + Number(Boolean(email)) + Number(Boolean(address));
-                    const extraDetailCount = requestedProducts.length + (note ? 1 : 0);
+                    const extraDetailCount =
+                      requestedProducts.length + (note ? 1 : 0) + (cancellationNote ? 1 : 0);
                     const detailCount = contactCount + extraDetailCount;
+                    const showCancelForm = cancelDraft?.id === appointment.id;
                     const hasFinalStatusActions = appointmentEnded && !unassigned;
-                    const hasExpandableDetails = detailCount > 0 || hasFinalStatusActions;
-                    const detailsSummary = contactCount
-                      ? `Contacto${extraDetailCount ? ' y detalles' : ''}${hasFinalStatusActions ? ' y cierre' : ''}`
-                      : hasFinalStatusActions
-                        ? 'Acciones de cierre'
-                        : 'Detalles de la solicitud';
+                    const hasExpandableDetails =
+                      detailCount > 0 ||
+                      hasFinalStatusActions ||
+                      canEarlyCancel ||
+                      appointment.status === 'cancelled' ||
+                      showCancelForm;
+                    const detailsSummary = cancellationNote
+                      ? 'Motivo de cancelación'
+                      : contactCount
+                        ? `Contacto${extraDetailCount ? ' y detalles' : ''}${hasFinalStatusActions || canEarlyCancel ? ' y cierre' : ''}`
+                        : hasFinalStatusActions || canEarlyCancel
+                          ? 'Acciones de cierre'
+                          : showCancelForm
+                            ? 'Motivo de cancelación'
+                            : 'Detalles de la solicitud';
                     return (
                       <article
                         key={appointment.id}
@@ -417,7 +471,10 @@ export default function AgendaPanel({
                         </div>
 
                         {hasExpandableDetails && (
-                          <details className="group bg-[color-mix(in_srgb,var(--surface-soft)_58%,var(--surface))]">
+                          <details
+                            className="group bg-[color-mix(in_srgb,var(--surface-soft)_58%,var(--surface))]"
+                            open={showCancelForm || appointment.status === 'cancelled' || undefined}
+                          >
                             <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-2.5 text-xs font-semibold text-main marker:hidden hover:bg-[var(--surface-soft)]">
                               <span className="flex min-w-0 items-center gap-1.5">
                                 <span
@@ -537,34 +594,121 @@ export default function AgendaPanel({
                                   </p>
                                 </div>
                               )}
-                              {hasFinalStatusActions && (
+                              {appointment.status === 'cancelled' && (
+                                <div
+                                  className={
+                                    contactCount || requestedProducts.length || note
+                                      ? 'border-t border-[var(--border)] pt-2'
+                                      : ''
+                                  }
+                                >
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                                    Motivo de cancelación
+                                  </p>
+                                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-main">
+                                    {cancellationNote || 'Sin motivo registrado.'}
+                                  </p>
+                                </div>
+                              )}
+                              {showCancelForm && (
+                                <div
+                                  className={
+                                    detailCount || hasFinalStatusActions
+                                      ? 'border-t border-[var(--border)] pt-2'
+                                      : ''
+                                  }
+                                >
+                                  <label
+                                    className="block text-xs font-semibold uppercase tracking-wide text-subtle"
+                                    htmlFor={`agenda-cancel-${appointment.id}`}
+                                  >
+                                    Motivo de cancelación
+                                    <textarea
+                                      id={`agenda-cancel-${appointment.id}`}
+                                      className="field-input mt-1 w-full text-sm font-normal normal-case tracking-normal"
+                                      rows={3}
+                                      maxLength={CANCELLATION_NOTE_MAX_LENGTH}
+                                      value={cancelDraft.note}
+                                      disabled={updating === appointment.id}
+                                      onChange={(event) =>
+                                        setCancelDraft({
+                                          id: appointment.id,
+                                          note: event.target.value,
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      className="btn-primary min-h-11 rounded px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                                      disabled={updating === appointment.id}
+                                      onClick={() =>
+                                        void updateStatus(
+                                          appointment,
+                                          'cancelled',
+                                          cancelDraft.note,
+                                        )
+                                      }
+                                    >
+                                      {updating === appointment.id
+                                        ? 'Cancelando…'
+                                        : 'Confirmar cancelación'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn-outline min-h-11 rounded px-3 py-1.5 text-xs font-semibold"
+                                      disabled={updating === appointment.id}
+                                      onClick={() => setCancelDraft(null)}
+                                    >
+                                      No cancelar
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {(hasFinalStatusActions || canEarlyCancel) && (
                                 <div
                                   role="group"
                                   className={
-                                    detailCount ? 'border-t border-[var(--border)] pt-2' : ''
+                                    detailCount || showCancelForm
+                                      ? 'border-t border-[var(--border)] pt-2'
+                                      : ''
                                   }
                                   aria-label={`Actualizar estado de la solicitud de ${appointment.clientName}`}
                                 >
                                   <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
-                                    Cierre de la solicitud
+                                    {hasFinalStatusActions
+                                      ? 'Cierre de la solicitud'
+                                      : 'Cancelar solicitud'}
                                   </p>
                                   <div className="mt-2 flex gap-1.5 overflow-x-auto pb-px">
-                                    {FINAL_STATUSES.map((status) => (
+                                    {hasFinalStatusActions &&
+                                      FINAL_STATUSES.map((status) => (
+                                        <button
+                                          key={status}
+                                          type="button"
+                                          disabled={
+                                            updating === appointment.id ||
+                                            appointment.status === status
+                                          }
+                                          onClick={() => void updateStatus(appointment, status)}
+                                          className="btn-outline min-h-11 shrink-0 rounded px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                          {updating === appointment.id
+                                            ? 'Actualizando…'
+                                            : STATUS_LABEL[status]}
+                                        </button>
+                                      ))}
+                                    {canEarlyCancel && !showCancelForm && (
                                       <button
-                                        key={status}
                                         type="button"
-                                        disabled={
-                                          updating === appointment.id ||
-                                          appointment.status === status
-                                        }
-                                        onClick={() => void updateStatus(appointment, status)}
+                                        disabled={updating === appointment.id}
+                                        onClick={() => void updateStatus(appointment, 'cancelled')}
                                         className="btn-outline min-h-11 shrink-0 rounded px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
                                       >
-                                        {updating === appointment.id
-                                          ? 'Actualizando…'
-                                          : STATUS_LABEL[status]}
+                                        Cancelar
                                       </button>
-                                    ))}
+                                    )}
                                   </div>
                                 </div>
                               )}

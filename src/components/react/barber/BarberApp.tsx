@@ -13,12 +13,14 @@ import type {
 import PublicBusinessLocationMap from '../business/PublicBusinessLocationMap';
 import PublicBookingWidget from './PublicBookingWidget';
 import PublicFlipCard from './PublicFlipCard';
+import PublicAccountPanel from './PublicAccountPanel';
 import PublicAppointmentsPanel from './PublicAppointmentsPanel';
 import PublicBusinessAssistant from './PublicBusinessAssistant';
 import AccountMenu from '../AccountMenu';
 import LoginForm from '../LoginForm';
 
-type BarberTab = 'inicio' | 'agendar' | 'catalogo' | 'productos' | 'ubicacion' | 'cuenta';
+type BarberTab =
+  'inicio' | 'agendar' | 'catalogo' | 'productos' | 'ubicacion' | 'cuenta' | 'bookings';
 type DeferredResource<T> = {
   status: 'idle' | 'loading' | 'ready' | 'error';
   data: T[];
@@ -30,14 +32,31 @@ const emptyDeferredResource = <T,>(): DeferredResource<T> => ({
   data: [],
   error: '',
 });
-const TAB_LABELS: Record<BarberTab, string> = {
+const TAB_LABELS: Record<Exclude<BarberTab, 'cuenta' | 'bookings'>, string> = {
   inicio: 'Inicio',
   agendar: 'Agendar',
   catalogo: 'Galería',
   productos: 'Productos',
   ubicacion: 'Ubicación',
-  cuenta: 'Mis agendamientos',
 };
+
+function publicPanelFromSearch(search = window.location.search): 'cuenta' | 'bookings' | null {
+  const account = new URLSearchParams(search).get('account');
+  if (account === 'profile') return 'cuenta';
+  if (account === 'bookings') return 'bookings';
+  return null;
+}
+
+function writePublicAccountQuery(panel: 'cuenta' | 'bookings' | null) {
+  const url = new URL(window.location.href);
+  if (panel === 'cuenta') url.searchParams.set('account', 'profile');
+  else if (panel === 'bookings') url.searchParams.set('account', 'bookings');
+  else url.searchParams.delete('account');
+  if (url.searchParams.get('account') !== 'login') url.searchParams.delete('mode');
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (current !== next) window.history.pushState({}, '', next);
+}
 const DAYS: Record<number, string> = {
   0: 'Domingo',
   1: 'Lunes',
@@ -160,9 +179,7 @@ export default function BarberApp() {
     useState<DeferredResource<PublicBookingProduct>>(emptyDeferredResource);
   const [services, setServices] = useState<PublicBookingService[]>([]);
   const [staff, setStaff] = useState<PublicBookingStaff[]>([]);
-  const [tab, setTab] = useState<BarberTab>(() =>
-    new URLSearchParams(window.location.search).has('account') ? 'cuenta' : 'inicio',
-  );
+  const [tab, setTab] = useState<BarberTab>(() => publicPanelFromSearch() || 'inicio');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<PublicBusinessLoadFailure | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
@@ -226,6 +243,17 @@ export default function BarberApp() {
     if (!canBook && tab === 'agendar') setTab('inicio');
   }, [canBook, tab]);
   useEffect(() => {
+    const onPopState = () => {
+      setTab((current) => {
+        const panel = publicPanelFromSearch();
+        if (panel) return panel;
+        return current === 'cuenta' || current === 'bookings' ? 'inicio' : current;
+      });
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+  useEffect(() => {
     if (!barber) return;
     const favicon = document.querySelector<HTMLLinkElement>('#site-favicon');
     if (!favicon) return;
@@ -278,6 +306,7 @@ export default function BarberApp() {
   const openStreetMapUrl = getOpenStreetMapUrl(address);
   const hasMapMarker = Boolean(barber.config.location);
   const showTab = (next: BarberTab) => {
+    writePublicAccountQuery(next === 'cuenta' || next === 'bookings' ? next : null);
     setTab(next);
     window.requestAnimationFrame(() =>
       document.getElementById('public-business-content')?.focus({ preventScroll: true }),
@@ -295,147 +324,174 @@ export default function BarberApp() {
         business={barber}
         homeUrl={publicHome}
         onOpenAuth={(mode) => setAuthMode(mode)}
+        onGoHome={() => showTab('inicio')}
+        onOpenAccount={() => showTab('cuenta')}
+        onOpenBookings={() => showTab('bookings')}
       />
       <main className="public-business-shell">
-        <section
-          className={`public-business-hero ${barber.config.coverUrl && !coverFailed ? 'has-cover' : ''}`}
-        >
-          {barber.config.coverUrl && !coverFailed && (
-            <img
-              className="public-business-cover"
-              src={barber.config.coverUrl}
-              alt=""
-              fetchPriority="high"
-              onError={() => setCoverFailed(true)}
-            />
-          )}
-          <div className="public-business-hero-overlay" />
-          <div className="public-business-hero-content">
-            <div className="public-business-hero-identity">
-              <div className="public-business-identity">
-                {barber.config.logoUrl && !logoFailed ? (
-                  <img
-                    src={barber.config.logoUrl}
-                    alt={`Logo de ${barber.name}`}
-                    className="public-business-logo"
-                    onError={() => setLogoFailed(true)}
-                  />
-                ) : (
-                  <div
-                    className="public-business-logo public-business-logo-fallback"
-                    aria-hidden="true"
-                  >
-                    {barber.name.slice(0, 2).toUpperCase()}
+        {tab === 'cuenta' || tab === 'bookings' ? (
+          <section
+            id="public-business-content"
+            tabIndex={-1}
+            className="public-business-content public-personal-view"
+          >
+            {tab === 'cuenta' ? (
+              <PublicAccountPanel onBack={() => showTab('inicio')} />
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="public-account-back"
+                  onClick={() => showTab('inicio')}
+                >
+                  Volver al negocio
+                </button>
+                <PublicAppointmentsPanel businessId={barber.id} />
+              </>
+            )}
+          </section>
+        ) : (
+          <>
+            <section
+              className={`public-business-hero ${barber.config.coverUrl && !coverFailed ? 'has-cover' : ''}`}
+            >
+              {barber.config.coverUrl && !coverFailed && (
+                <img
+                  className="public-business-cover"
+                  src={barber.config.coverUrl}
+                  alt=""
+                  fetchPriority="high"
+                  onError={() => setCoverFailed(true)}
+                />
+              )}
+              <div className="public-business-hero-overlay" />
+              <div className="public-business-hero-content">
+                <div className="public-business-hero-identity">
+                  <div className="public-business-identity">
+                    {barber.config.logoUrl && !logoFailed ? (
+                      <img
+                        src={barber.config.logoUrl}
+                        alt={`Logo de ${barber.name}`}
+                        className="public-business-logo"
+                        onError={() => setLogoFailed(true)}
+                      />
+                    ) : (
+                      <div
+                        className="public-business-logo public-business-logo-fallback"
+                        aria-hidden="true"
+                      >
+                        {barber.name.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="public-business-kicker">
+                        {canBook ? 'Agendamiento en línea' : 'Información del negocio'}
+                      </p>
+                      <h1>{barber.name}</h1>
+                      {address && <p className="public-business-address">{address}</p>}
+                      {!canBook && (
+                        <p className="public-business-address" role="status">
+                          El agendamiento en línea no está disponible en este momento.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                )}
-                <div>
-                  <p className="public-business-kicker">
-                    {canBook ? 'Agendamiento en línea' : 'Información del negocio'}
-                  </p>
-                  <h1>{barber.name}</h1>
-                  {address && <p className="public-business-address">{address}</p>}
-                  {!canBook && (
-                    <p className="public-business-address" role="status">
-                      El agendamiento en línea no está disponible en este momento.
-                    </p>
+                </div>
+                <div className="public-business-hero-actions">
+                  {canBook && (
+                    <button
+                      type="button"
+                      className="btn-primary public-business-hero-cta"
+                      onClick={() => showTab('agendar')}
+                    >
+                      Agendar
+                    </button>
+                  )}
+                  {hasMapMarker && (
+                    <button
+                      type="button"
+                      className="public-business-location-cta"
+                      onClick={() => showTab('ubicacion')}
+                    >
+                      Ver ubicación
+                    </button>
+                  )}
+                  {!hasMapMarker && openStreetMapUrl && (
+                    <a
+                      className="public-business-location-cta"
+                      href={openStreetMapUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Buscar en OpenStreetMap
+                    </a>
                   )}
                 </div>
               </div>
-            </div>
-            <div className="public-business-hero-actions">
-              {canBook && (
-                <button
-                  type="button"
-                  className="btn-primary public-business-hero-cta"
-                  onClick={() => showTab('agendar')}
-                >
-                  Agendar
-                </button>
+            </section>
+            <nav className="public-business-tabs" aria-label="Secciones del negocio">
+              <ul>
+                {(Object.keys(TAB_LABELS) as Array<keyof typeof TAB_LABELS>)
+                  .filter(
+                    (key) =>
+                      ((canBook || key !== 'agendar') && products.status !== 'ready') ||
+                      products.data.length > 0 ||
+                      key !== 'productos',
+                  )
+                  .map((key) => (
+                    <li key={key}>
+                      <button
+                        type="button"
+                        className={tab === key ? 'is-active' : ''}
+                        aria-current={tab === key ? 'page' : undefined}
+                        onClick={() => showTab(key)}
+                      >
+                        {TAB_LABELS[key]}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            </nav>
+            <section id="public-business-content" tabIndex={-1} className="public-business-content">
+              {tab === 'inicio' && (
+                <BusinessOverview
+                  business={barber}
+                  address={address}
+                  telephoneUrl={telephoneUrl}
+                  whatsappUrl={whatsappUrl}
+                  openStreetMapUrl={openStreetMapUrl}
+                  hasMapMarker={hasMapMarker}
+                  canBook={canBook}
+                  onReserve={() => showTab('agendar')}
+                  onLocation={() => showTab('ubicacion')}
+                />
               )}
-              {hasMapMarker && (
-                <button
-                  type="button"
-                  className="public-business-location-cta"
-                  onClick={() => showTab('ubicacion')}
-                >
-                  Ver ubicación
-                </button>
+              {tab === 'agendar' && canBook && (
+                <PublicBookingWidget
+                  business={barber}
+                  products={products.data}
+                  services={services}
+                  staff={staff}
+                  whatsappUrl={whatsappUrl}
+                />
               )}
-              {!hasMapMarker && openStreetMapUrl && (
-                <a
-                  className="public-business-location-cta"
-                  href={openStreetMapUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Buscar en OpenStreetMap
-                </a>
+              {tab === 'catalogo' && <CatalogContent state={catalog} />}
+              {tab === 'productos' && (
+                <ProductsContent
+                  state={products}
+                  retry={() => setReloadVersion((value) => value + 1)}
+                />
               )}
-            </div>
-          </div>
-        </section>
-        <nav className="public-business-tabs" aria-label="Secciones del negocio">
-          <ul>
-            {(Object.keys(TAB_LABELS) as BarberTab[])
-              .filter(
-                (key) =>
-                  ((canBook || key !== 'agendar') && products.status !== 'ready') ||
-                  products.data.length > 0 ||
-                  key !== 'productos',
-              )
-              .map((key) => (
-                <li key={key}>
-                  <button
-                    type="button"
-                    className={tab === key ? 'is-active' : ''}
-                    aria-current={tab === key ? 'page' : undefined}
-                    onClick={() => showTab(key)}
-                  >
-                    {TAB_LABELS[key]}
-                  </button>
-                </li>
-              ))}
-          </ul>
-        </nav>
-        <section id="public-business-content" tabIndex={-1} className="public-business-content">
-          {tab === 'inicio' && (
-            <BusinessOverview
-              business={barber}
-              address={address}
-              telephoneUrl={telephoneUrl}
-              whatsappUrl={whatsappUrl}
-              openStreetMapUrl={openStreetMapUrl}
-              hasMapMarker={hasMapMarker}
-              canBook={canBook}
-              onReserve={() => showTab('agendar')}
-              onLocation={() => showTab('ubicacion')}
-            />
-          )}
-          {tab === 'agendar' && canBook && (
-            <PublicBookingWidget
-              business={barber}
-              products={products.data}
-              services={services}
-              staff={staff}
-              whatsappUrl={whatsappUrl}
-            />
-          )}
-          {tab === 'catalogo' && <CatalogContent state={catalog} />}
-          {tab === 'productos' && (
-            <ProductsContent
-              state={products}
-              retry={() => setReloadVersion((value) => value + 1)}
-            />
-          )}
-          {tab === 'ubicacion' && (
-            <PublicLocationContent
-              address={address}
-              coordinates={barber.config.location}
-              openStreetMapUrl={openStreetMapUrl}
-            />
-          )}
-          {tab === 'cuenta' && <PublicAppointmentsPanel businessId={barber.id} />}
-        </section>
+              {tab === 'ubicacion' && (
+                <PublicLocationContent
+                  address={address}
+                  coordinates={barber.config.location}
+                  openStreetMapUrl={openStreetMapUrl}
+                />
+              )}
+            </section>
+          </>
+        )}
       </main>
       {barber.config.publicAssistantEnabled === true && (
         <PublicBusinessAssistant businessName={barber.name} slug={barber.slug} />
@@ -478,10 +534,16 @@ function PublicBusinessHeader({
   business,
   homeUrl,
   onOpenAuth,
+  onGoHome,
+  onOpenAccount,
+  onOpenBookings,
 }: {
   business: PublicBusiness;
   homeUrl: string;
   onOpenAuth: (mode: 'login' | 'register') => void;
+  onGoHome: () => void;
+  onOpenAccount: () => void;
+  onOpenBookings: () => void;
 }) {
   const [brandLogoFailed, setBrandLogoFailed] = useState(false);
 
@@ -494,6 +556,10 @@ function PublicBusinessHeader({
           href={homeUrl}
           className="public-business-site-brand"
           aria-label={`Inicio de ${business.name}`}
+          onClick={(event) => {
+            event.preventDefault();
+            onGoHome();
+          }}
         >
           {business.config.logoUrl && !brandLogoFailed ? (
             <img src={business.config.logoUrl} alt="" onError={() => setBrandLogoFailed(true)} />
@@ -505,8 +571,11 @@ function PublicBusinessHeader({
         </a>
         <AccountMenu
           variant="public"
+          accountHref={`${homeUrl}?account=profile`}
           bookingsHref={`${homeUrl}?account=bookings`}
           onOpenAuth={onOpenAuth}
+          onAccountNavigate={onOpenAccount}
+          onBookingsNavigate={onOpenBookings}
         />
       </div>
     </header>

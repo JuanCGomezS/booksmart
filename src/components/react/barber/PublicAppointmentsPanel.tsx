@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { cancelCustomerAppointment } from '../../../lib/booking-transaction';
 import { auth, db } from '../../../lib/firebase';
+import { CANCELLATION_NOTE_MAX_LENGTH } from '../../../lib/types';
 
 type Item = {
   id: string;
@@ -10,6 +11,7 @@ type Item = {
   startTime?: string;
   serviceName?: string;
   status?: string;
+  cancellationNote?: string;
 };
 const labels: Record<string, string> = {
   pending: 'Pendiente',
@@ -41,6 +43,9 @@ export default function PublicAppointmentsPanel({ businessId }: { businessId: st
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [now, setNow] = useState(() => Date.now());
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancellationNote, setCancellationNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   useEffect(() => onAuthStateChanged(auth, (user) => setUid(user?.uid || null)), []);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -74,13 +79,26 @@ export default function PublicAppointmentsPanel({ businessId }: { businessId: st
     };
   }, [businessId, uid]);
   const cancel = async (id: string) => {
+    const note = cancellationNote.trim();
+    if (!note) {
+      setError('Escribe una nota de cancelación.');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
     try {
-      await cancelCustomerAppointment(businessId, id);
+      await cancelCustomerAppointment(businessId, id, note);
       setItems((current) =>
-        current.map((item) => (item.id === id ? { ...item, status: 'cancelled' } : item)),
+        current.map((item) =>
+          item.id === id ? { ...item, status: 'cancelled', cancellationNote: note } : item,
+        ),
       );
+      setCancellingId(null);
+      setCancellationNote('');
     } catch {
       setError('No fue posible cancelar el agendamiento.');
+    } finally {
+      setSubmitting(false);
     }
   };
   if (!uid)
@@ -106,24 +124,72 @@ export default function PublicAppointmentsPanel({ businessId }: { businessId: st
       ) : (
         <ul className="mt-4 space-y-3">
           {items.map((item) => (
-            <li
-              key={item.id}
-              className="surface-soft flex flex-wrap items-center justify-between gap-3 rounded-xl p-4"
-            >
-              <div>
-                <p className="font-semibold text-main">{item.serviceName || 'Servicio'}</p>
-                <p className="text-sm text-subtle">
-                  {item.bookingDate} · {item.startTime} · {labels[item.status || ''] || item.status}
-                </p>
+            <li key={item.id} className="surface-soft rounded-xl p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-main">{item.serviceName || 'Servicio'}</p>
+                  <p className="text-sm text-subtle">
+                    {item.bookingDate} · {item.startTime} ·{' '}
+                    {labels[item.status || ''] || item.status}
+                  </p>
+                  {item.status === 'cancelled' && item.cancellationNote?.trim() ? (
+                    <p className="mt-2 text-sm text-main">{item.cancellationNote.trim()}</p>
+                  ) : null}
+                </div>
+                {canCancel(item, now) && cancellingId !== item.id && (
+                  <button
+                    type="button"
+                    className="btn-outline rounded px-3 py-2 text-sm"
+                    onClick={() => {
+                      setError('');
+                      setCancellingId(item.id);
+                      setCancellationNote('');
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                )}
               </div>
-              {canCancel(item, now) && (
-                <button
-                  type="button"
-                  className="btn-outline rounded px-3 py-2 text-sm"
-                  onClick={() => void cancel(item.id)}
-                >
-                  Cancelar
-                </button>
+              {cancellingId === item.id && (
+                <div className="mt-3 grid gap-2">
+                  <label
+                    className="block text-sm font-semibold text-main"
+                    htmlFor={`cancel-${item.id}`}
+                  >
+                    Motivo de cancelación
+                    <textarea
+                      id={`cancel-${item.id}`}
+                      className="field-input mt-2 w-full"
+                      rows={3}
+                      maxLength={CANCELLATION_NOTE_MAX_LENGTH}
+                      value={cancellationNote}
+                      onChange={(event) => setCancellationNote(event.target.value)}
+                      disabled={submitting}
+                      required
+                    />
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn-primary rounded px-3 py-2 text-sm"
+                      disabled={submitting}
+                      onClick={() => void cancel(item.id)}
+                    >
+                      {submitting ? 'Cancelando…' : 'Confirmar cancelación'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-outline rounded px-3 py-2 text-sm"
+                      disabled={submitting}
+                      onClick={() => {
+                        setCancellingId(null);
+                        setCancellationNote('');
+                      }}
+                    >
+                      No cancelar
+                    </button>
+                  </div>
+                </div>
               )}
             </li>
           ))}

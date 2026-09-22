@@ -8,9 +8,9 @@ const publicBusinessRouteFallback = {
   apply: 'serve',
   configureServer(server) {
     server.middlewares.use((request, _response, next) => {
-      const pathname = request.url?.split('?')[0];
+      const [pathname, query] = (request.url || '').split('?');
       if (request.method === 'GET' && pathname?.startsWith('/b/') && pathname !== '/b/') {
-        request.url = '/b/';
+        request.url = query ? `/b/?${query}` : '/b/';
       }
       next();
     });

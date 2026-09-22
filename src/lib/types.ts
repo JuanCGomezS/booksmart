@@ -35,6 +35,8 @@ export type BusinessCreationErrorCode =
 
 // Estado de una cita
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'done' | 'no_show';
+export type AppointmentCancelledBy = 'customer' | 'staff' | 'storeadmin' | 'system';
+export const CANCELLATION_NOTE_MAX_LENGTH = 500;
 
 /** A booking can either name its professional or reserve compatible capacity pending assignment. */
 export type AppointmentAssignmentState = 'assigned' | 'unassigned';
@@ -357,6 +359,10 @@ export interface Appointment {
   status: AppointmentStatus;
   /** Optional private booking note visible only in authorized operational views. */
   notes?: string;
+  /** Set only when status becomes cancelled. */
+  cancellationNote?: string;
+  cancelledBy?: AppointmentCancelledBy;
+  cancelledAt?: Timestamp;
   /** Optional, informational product request; it never reserves inventory or price. */
   requestedProducts?: AppointmentProductRequest[];
   /** Present only when an authenticated customer made the booking. */
