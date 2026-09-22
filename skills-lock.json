@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "skills": {
+    "vertech-api": {
+      "source": "git@github-personal:grupo-ilao/skills.git",
+      "sourceUrl": "git@github-personal:grupo-ilao/skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/integrations/vertech-api/SKILL.md",
+      "computedHash": "e65bb7e333fbc5261b2e74c4f9825946d5310ef53395ded69a5be9698c1d842d"
+    }
+  }
+}

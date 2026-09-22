@@ -696,14 +696,39 @@ export async function claimAppointment(
   }
 }
 
+export async function cancelCustomerAppointment(
+  businessId: string,
+  appointmentId: string,
+  cancellationNote: string,
+): Promise<void> {
+  const cancel = httpsCallable<
+    { businessId: string; appointmentId: string; cancellationNote: string },
+    void
+  >(getFunctions(app), 'cancelCustomerAppointment');
+  await cancel({ businessId, appointmentId, cancellationNote });
+}
+
 export async function updateAppointmentStatus(
   businessId: string,
   appointmentId: string,
   status: 'confirmed' | 'done' | 'no_show' | 'cancelled',
+  cancellationNote?: string,
 ): Promise<void> {
-  const update = httpsCallable<{ businessId: string; appointmentId: string; status: string }, void>(
-    getFunctions(app),
-    'updateAppointmentStatus',
-  );
-  await update({ businessId, appointmentId, status });
+  const update = httpsCallable<
+    {
+      businessId: string;
+      appointmentId: string;
+      status: string;
+      cancellationNote?: string;
+    },
+    void
+  >(getFunctions(app), 'updateAppointmentStatus');
+  const payload: {
+    businessId: string;
+    appointmentId: string;
+    status: string;
+    cancellationNote?: string;
+  } = { businessId, appointmentId, status };
+  if (status === 'cancelled') payload.cancellationNote = cancellationNote?.trim() ?? '';
+  await update(payload);
 }

@@ -327,6 +327,7 @@ export default function BusinessAdminPage({
         {tab === 'agenda' && (
           <AgendaPanel
             businessId={business.id}
+            businessName={business.name}
             staffId={isStaff ? staffId : undefined}
             claimStaffId={staffId}
             profileName={profileName}

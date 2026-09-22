@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { getUserRecord, signOut } from '../../lib/auth';
@@ -29,7 +29,10 @@ type Props = {
   loginTarget?: string;
   preserveLoginReturnPath?: boolean;
   onOpenAuth?: (mode: AuthMode) => void;
+  onAccountNavigate?: () => void;
+  onBookingsNavigate?: () => void;
   logoutTarget?: string;
+  accountHref?: string;
   bookingsHref?: string;
   roleLinks?: AccountMenuRoleLinks;
   guestNavigation?: GuestNavigation;
@@ -85,6 +88,28 @@ function roleLink(
 ): RoleLink | undefined {
   const configured = links?.[role];
   return configured === undefined ? defaultRoleLinks[role] || undefined : configured || undefined;
+}
+
+function publicPageRoleLinks(
+  accountHref: string | undefined,
+  roleLinks: AccountMenuRoleLinks | undefined,
+): AccountMenuRoleLinks | undefined {
+  if (!accountHref) return roleLinks;
+  const stay = { label: 'Mi cuenta', href: accountHref };
+  return {
+    ...roleLinks,
+    inactiveStaff: roleLinks?.inactiveStaff === undefined ? stay : roleLinks.inactiveStaff,
+    customer: roleLinks?.customer === undefined ? stay : roleLinks.customer,
+  };
+}
+
+function samePublicAccountHref(href: string, target: string) {
+  const left = new URL(href, window.location.href);
+  const right = new URL(target, window.location.href);
+  return (
+    left.pathname === right.pathname &&
+    left.searchParams.get('account') === right.searchParams.get('account')
+  );
 }
 
 async function resolveAccount(
@@ -206,7 +231,10 @@ export default function AccountMenu({
   loginTarget,
   preserveLoginReturnPath = false,
   onOpenAuth,
+  onAccountNavigate,
+  onBookingsNavigate,
   logoutTarget,
+  accountHref,
   bookingsHref,
   roleLinks,
   guestNavigation,
@@ -231,7 +259,10 @@ export default function AccountMenu({
       }
       if (mountedRef.current)
         setAccount((current) => (current?.uid === user.uid ? current : fallbackAccount(user)));
-      const resolved = await resolveAccount(user, roleLinks);
+      const resolved = await resolveAccount(
+        user,
+        variant === 'public' ? publicPageRoleLinks(accountHref, roleLinks) : roleLinks,
+      );
       if (
         mountedRef.current &&
         resolution === resolutionRef.current &&
@@ -239,7 +270,7 @@ export default function AccountMenu({
       )
         setAccount(resolved);
     },
-    [roleLinks],
+    [accountHref, roleLinks, variant],
   );
 
   useEffect(() => {
@@ -276,6 +307,18 @@ export default function AccountMenu({
   }, [menuOpen]);
 
   const closeMenu = () => setMenuOpen(false);
+  const stayOnPublicPage = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+    closeMenu();
+    if (accountHref && onAccountNavigate && samePublicAccountHref(href, accountHref)) {
+      event.preventDefault();
+      onAccountNavigate();
+      return;
+    }
+    if (bookingsHref && onBookingsNavigate && samePublicAccountHref(href, bookingsHref)) {
+      event.preventDefault();
+      onBookingsNavigate();
+    }
+  };
   const loginHref =
     loginTarget && preserveLoginReturnPath && currentPath
       ? appendQuery(loginTarget, 'returnTo', currentPath)
@@ -350,12 +393,18 @@ export default function AccountMenu({
                 <div className="account-menu-role public-business-account-role">
                   <span>{account.roleLabel}</span>
                   {bookingsHref && (
-                    <a href={bookingsHref} onClick={closeMenu}>
+                    <a
+                      href={bookingsHref}
+                      onClick={(event) => stayOnPublicPage(event, bookingsHref)}
+                    >
                       Mis agendamientos
                     </a>
                   )}
                   {account.roleLink && (
-                    <a href={account.roleLink.href} onClick={closeMenu}>
+                    <a
+                      href={account.roleLink.href}
+                      onClick={(event) => stayOnPublicPage(event, account.roleLink!.href)}
+                    >
                       {account.roleLink.label}
                     </a>
                   )}

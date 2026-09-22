@@ -1,8 +1,11 @@
 import {
   arrayRemove,
+  collection,
+  deleteDoc,
   deleteField,
   doc,
   getDoc,
+  getDocs,
   runTransaction,
   serverTimestamp,
   updateDoc,
@@ -133,19 +136,93 @@ export async function setEnrollmentStaffStatus(
   });
 }
 
-/** Retires a profile without deleting booking, schedule, lock, or service references. */
+const staffRetirementCancellationNote =
+  'Lamentamos informar que por motivos urgentes tuvimos que cancelar tu reserva, sin embargo te invitamos a sacar una nueva en los horarios disponibles';
+
+function staffIdsForRetirement(staffId: string, profile?: Record<string, unknown>) {
+  const ids = new Set<string>([staffId]);
+  if (typeof profile?.accountUid === 'string') ids.add(profile.accountUid);
+  if (typeof profile?.userId === 'string') ids.add(profile.userId);
+  return ids;
+}
+
+function appointmentBelongsToStaff(data: Record<string, unknown>, staffIds: Set<string>) {
+  if (!['pending', 'confirmed'].includes(data.status as string)) return false;
+  if (typeof data.barberId === 'string' && staffIds.has(data.barberId)) return true;
+  return data.assignmentState === 'unassigned' && typeof data.capacityStaffId === 'string'
+    ? staffIds.has(data.capacityStaffId)
+    : false;
+}
+
+export async function cancelAppointmentsForRetiredStaff(
+  businessId: string,
+  staffId: string,
+  profile?: Record<string, unknown>,
+): Promise<number> {
+  const staffIds = staffIdsForRetirement(staffId, profile);
+  const snapshot = await getDocs(collection(db, 'barbers', businessId, 'appointments'));
+  const toCancel = snapshot.docs.filter((entry) =>
+    appointmentBelongsToStaff(entry.data(), staffIds),
+  );
+  for (const entry of toCancel) {
+    const appointment = entry.data();
+    await updateDoc(doc(db, 'barbers', businessId, 'appointments', entry.id), {
+      status: 'cancelled',
+      cancellationNote: staffRetirementCancellationNote,
+      cancelledBy: 'system',
+      cancelledAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    const lockOwnerId =
+      typeof appointment.barberId === 'string'
+        ? appointment.barberId
+        : typeof appointment.capacityStaffId === 'string'
+          ? appointment.capacityStaffId
+          : '';
+    const intervalIds = Array.isArray(appointment.occupiedIntervalIds)
+      ? appointment.occupiedIntervalIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    if (!lockOwnerId || typeof appointment.bookingDate !== 'string') continue;
+    await Promise.all(
+      intervalIds.map((intervalId) =>
+        deleteDoc(
+          doc(
+            db,
+            'barbers',
+            businessId,
+            'bookingLocks',
+            appointment.bookingDate,
+            'staff',
+            lockOwnerId,
+            'intervals',
+            intervalId,
+          ),
+        ).catch(() => undefined),
+      ),
+    );
+  }
+  return toCancel.length;
+}
+
 export async function retireProfessional(businessId: string, staffId: string): Promise<void> {
   const user = auth.currentUser;
   if (!user) throw new Error('Tu sesión expiró. Ingresa nuevamente para retirar el perfil.');
 
   const profileRef = doc(db, 'barbers', businessId, 'barbers', staffId);
+  const profileSnapshot = await getDoc(profileRef);
+  if (!profileSnapshot.exists())
+    throw new Error(
+      'El perfil profesional ya no existe. Actualiza la lista e inténtalo nuevamente.',
+    );
+  await cancelAppointmentsForRetiredStaff(businessId, staffId, profileSnapshot.data());
+
   const cleanupPaths = await runTransaction(db, async (transaction) => {
-    const profileSnapshot = await transaction.get(profileRef);
-    if (!profileSnapshot.exists())
+    const latest = await transaction.get(profileRef);
+    if (!latest.exists())
       throw new Error(
         'El perfil profesional ya no existe. Actualiza la lista e inténtalo nuevamente.',
       );
-    const profile = profileSnapshot.data();
+    const profile = latest.data();
     const legacyPhotoPaths =
       typeof profile.photoUrl === 'string'
         ? ['jpg', 'png', 'webp'].map(

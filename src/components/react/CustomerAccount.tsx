@@ -1,19 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { getCurrentUser, signOut } from '../../lib/auth';
 import { DATA } from '../../lib/data';
 import { db } from '../../lib/firebase';
 import { normalizeUserRole } from '../../lib/roles';
-import { joinBusinessWithCode } from '../../lib/staff-enrollment';
-import { notifyError } from './FloatingNotifications';
+import JoinBusinessForm from './JoinBusinessForm';
 
 export default function CustomerAccount() {
   const baseUrl = import.meta.env.BASE_URL;
   const [state, setState] = useState<'loading' | 'overview' | 'join' | 'inactive' | 'error'>(
     'loading',
   );
-  const [code, setCode] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [staffBinding, setStaffBinding] = useState<{ businessId: string; staffId: string } | null>(
     null,
   );
@@ -100,24 +97,6 @@ export default function CustomerAccount() {
       },
     );
   }, [baseUrl, staffBinding]);
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSubmitting(true);
-    try {
-      await joinBusinessWithCode(code);
-      setCode('');
-      setState('inactive');
-    } catch (cause) {
-      notifyError(
-        cause instanceof Error
-          ? cause.message
-          : 'No fue posible unirte al negocio. Revisa el código e inténtalo nuevamente.',
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const closeSession = async () => {
     await signOut();
@@ -216,29 +195,7 @@ export default function CustomerAccount() {
                 Ingresa el código del negocio que te proporcionó el administrador. Te unirás como
                 personal inactivo hasta que active tu acceso.
               </p>
-              <form className="mt-7 space-y-4" onSubmit={submit}>
-                <label className="block text-sm font-semibold text-main" htmlFor="business-code">
-                  Código del negocio
-                  <input
-                    id="business-code"
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={code}
-                    onChange={(event) => setCode(event.target.value.toUpperCase())}
-                    placeholder="ABCDE-FGHIJ-KLMNO-PQRST-UVWXY-Z"
-                    className="field-input mt-2 w-full uppercase"
-                    disabled={submitting}
-                    required
-                  />
-                </label>
-                <button
-                  type="submit"
-                  className="btn-primary w-full rounded-lg px-4 py-3 font-semibold disabled:opacity-50"
-                  disabled={submitting}
-                >
-                  {submitting ? 'Uniéndote al negocio…' : 'Unirme al negocio'}
-                </button>
-              </form>
+              <JoinBusinessForm onJoined={() => setState('inactive')} />
             </>
           ) : state === 'error' ? (
             <>
