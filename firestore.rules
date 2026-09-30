@@ -61,6 +61,11 @@ service cloud.firestore {
           (resource.data.barberId == request.auth.uid ||
             resource.data.assignmentState == 'unassigned')) ||
           (signedIn() && resource.data.customerUid == request.auth.uid);
+        allow update: if isStaffInBusiness(businessId) &&
+          (resource.data.barberId == request.auth.uid ||
+            resource.data.assignmentState == 'unassigned') &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['whatsappNotifiedAt', 'updatedAt']);
       }
 
       // Availability contains no customer data and is readable by the public agenda.

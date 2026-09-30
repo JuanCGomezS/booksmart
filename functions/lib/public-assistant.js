@@ -7,14 +7,19 @@ const params_1 = require("firebase-functions/params");
 const https_1 = require("firebase-functions/v2/https");
 const openRouterApiKey = (0, params_1.defineSecret)('OPENROUTER_API_KEY');
 const defaultAssistantModels = [
-    'inclusionai/ling-3.0-flash-fin:free',
-    'nvidia/nemotron-3.5-lightning:free',
-    'thinkingmachines/inkling-small:free',
+    'openrouter/free',
+    'inclusionai/ling-3.0-flash-sante:free',
+    'dots-studio/dots-3-note-preview:free',
 ];
-const assistantModels = [
-    ...(process.env.OPENROUTER_MODEL ? [process.env.OPENROUTER_MODEL] : []),
-    ...defaultAssistantModels,
-].filter((model, index, models) => models.indexOf(model) === index);
+function configuredAssistantModels() {
+    const configured = process.env.OPENROUTER_MODELS ?? process.env.OPENROUTER_MODEL ?? '';
+    const models = configured
+        .split(',')
+        .map((model) => model.trim())
+        .filter((model) => model === 'openrouter/free' || model.endsWith(':free'));
+    return models.length ? models : defaultAssistantModels;
+}
+const assistantModels = configuredAssistantModels().filter((model, index, models) => models.indexOf(model) === index);
 const assistantDailyLimit = 20;
 const assistantBusinessDailyLimit = 500;
 const providerFailureLimit = 3;

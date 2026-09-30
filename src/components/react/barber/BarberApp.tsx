@@ -48,7 +48,12 @@ function publicPanelFromSearch(search = window.location.search): 'cuenta' | 'boo
 }
 
 function writePublicAccountQuery(panel: 'cuenta' | 'bookings' | null) {
-  const url = new URL(window.location.href);
+  let url: URL;
+  try {
+    url = new URL(window.location.href);
+  } catch {
+    return;
+  }
   if (panel === 'cuenta') url.searchParams.set('account', 'profile');
   else if (panel === 'bookings') url.searchParams.set('account', 'bookings');
   else url.searchParams.delete('account');
@@ -940,6 +945,13 @@ function ErrorMessage({ message, retry }: { message: string; retry: () => void }
   );
 }
 
+function mapsDirectionsUrl({
+  latitude,
+  longitude,
+}: NonNullable<PublicBusiness['config']['location']>) {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${latitude},${longitude}`)}`;
+}
+
 function PublicLocationContent({
   address,
   coordinates,
@@ -961,9 +973,19 @@ function PublicLocationContent({
               : 'La dirección estará disponible próximamente.')}
         </p>
         {coordinates && (
-          <p className="public-business-location-status">
-            El marcador señala el punto exacto seleccionado por el negocio.
-          </p>
+          <>
+            <p className="public-business-location-status">
+              El marcador señala el punto exacto seleccionado por el negocio.
+            </p>
+            <a
+              className="btn-outline mt-4 px-4 py-2 text-sm"
+              href={mapsDirectionsUrl(coordinates)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Abrir indicaciones en Maps
+            </a>
+          </>
         )}
       </header>
       {coordinates ? (
