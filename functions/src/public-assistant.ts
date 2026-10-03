@@ -47,6 +47,10 @@ function text(value: unknown, maximum: number): string | null {
   return result && result.length <= maximum ? result : null;
 }
 
+function isProviderSafetyLabel(value: string) {
+  return /^(?:user|content) safety\s*:\s*(?:safe|unsafe)\s*[.!]?$/i.test(value);
+}
+
 function hash(value: string) {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -230,11 +234,12 @@ async function complete(
       };
       const choice = body.choices?.[0];
       const answer = text(choice?.message?.content, maximumResponseLength);
-      if (answer) return answer;
-      console.error('OpenRouter returned no assistant text', {
+      if (answer && !isProviderSafetyLabel(answer)) return answer;
+      console.error('OpenRouter returned no usable assistant text', {
         model,
         choiceCount: body.choices?.length ?? 0,
         finishReason: choice?.finish_reason,
+        safetyLabel: answer ? isProviderSafetyLabel(answer) : false,
       });
     } catch (cause) {
       console.error('OpenRouter request failed', {

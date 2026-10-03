@@ -11,16 +11,12 @@ import type {
   PublicBusiness,
 } from './types';
 import { toPublicBookingSettings } from './booking';
+import {
+  requestPublicBusinessData,
+  type PublicBusinessCallableResponse,
+} from './public-business-request.ts';
 
 export const PUBLIC_BUSINESSES_COLLECTION = 'publicBusinesses';
-
-type PublicBusinessCallableResponse = {
-  business: Record<string, unknown> & { id: string; bookingEnabledUntil?: string };
-  products: PublicBookingProduct[];
-  catalog?: PublicCatalogItem[];
-  services: PublicBookingService[];
-  staff: PublicBookingStaff[];
-};
 
 export type PublicBusinessPageData = {
   business: PublicBusiness;
@@ -239,7 +235,17 @@ export async function loadPublicBusinessBySlug(slug: string): Promise<PublicBusi
     'getPublicBusinessBySlug',
   );
   const response = await request({ slug });
-  const payload = response.data;
+  return normalizePublicBusinessPage(response.data);
+}
+
+export async function loadPublicBusinessPageBySlug(slug: string): Promise<PublicBusinessPageData> {
+  const payload = await requestPublicBusinessData(getFunctions(app), slug);
+  return normalizePublicBusinessPage(payload);
+}
+
+function normalizePublicBusinessPage(
+  payload: PublicBusinessCallableResponse,
+): PublicBusinessPageData {
   const expiresAt =
     typeof payload.business.bookingEnabledUntil === 'string'
       ? new Date(payload.business.bookingEnabledUntil)
