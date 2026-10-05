@@ -99,7 +99,13 @@ Antes del primer despliegue del backend, configura la clave exclusivamente como 
 npx firebase-tools functions:secrets:set OPENROUTER_API_KEY --project barberflow-7ccac
 ```
 
-El modelo predeterminado es `inclusionai/ling-3.0-flash-fin:free`. Se puede cambiar con `OPENROUTER_MODEL` en el entorno de Functions. El asistente limita las preguntas a 20 por visitante y día, y a 500 por negocio y día.
+El asistente usa, en orden, `openrouter/free`, `inclusionai/ling-3.0-flash-sante:free` y `dots-studio/dots-3-note-preview:free`. Para actualizar los fallbacks gratuitos sin cambiar código, configura `OPENROUTER_MODELS` en el entorno de Functions con IDs separados por comas, por ejemplo:
+
+```bash
+OPENROUTER_MODELS=openrouter/free,inclusionai/ling-3.0-flash-sante:free,dots-studio/dots-3-note-preview:free
+```
+
+Solo se aceptan `openrouter/free` y variantes con el sufijo `:free`; los valores vacíos, duplicados o no gratuitos se descartan. `OPENROUTER_MODEL` se conserva como compatibilidad para una sola opción. Cualquier cambio de entorno crea una revisión nueva de la Function y requiere redeploy. El asistente limita las preguntas a 20 por visitante y día, y a 500 por negocio y día.
 
 El chat público exige Firebase App Check. Registra el sitio con reCAPTCHA Enterprise en Firebase y configura su clave pública como `PUBLIC_FIREBASE_APP_CHECK_SITE_KEY` antes de construir y desplegar el frontend. Sin esa configuración, el asistente rechaza solicitudes públicas. App Check reduce abuso, pero no sustituye la autenticación cuando se necesita identificar contractual o legalmente a una persona.
 

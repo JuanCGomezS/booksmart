@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import '../../../styles/public-auth-modal.css';
 import { customThemeCssVariables, resolvePublicTheme } from '../../../lib/public-theme';
 import { isPublicBookingAvailable } from '../../../lib/booking';
-import { loadPublicBusinessBySlug } from '../../../lib/public-business';
+import { loadPublicBusinessPageBySlug } from '../../../lib/public-business';
 import type {
   PublicCatalogItem,
   PublicBookingProduct,
@@ -48,7 +48,12 @@ function publicPanelFromSearch(search = window.location.search): 'cuenta' | 'boo
 }
 
 function writePublicAccountQuery(panel: 'cuenta' | 'bookings' | null) {
-  const url = new URL(window.location.href);
+  let url: URL;
+  try {
+    url = new URL(window.location.href);
+  } catch {
+    return;
+  }
   if (panel === 'cuenta') url.searchParams.set('account', 'profile');
   else if (panel === 'bookings') url.searchParams.set('account', 'bookings');
   else url.searchParams.delete('account');
@@ -113,21 +118,23 @@ function publicBusinessLoadFailure(cause: unknown): PublicBusinessLoadFailure {
       ? (cause as { code?: unknown }).code
       : undefined;
 
-  if (code === 'permission-denied') {
+  const normalizedCode = typeof code === 'string' ? code.replace(/^functions\//, '') : '';
+
+  if (normalizedCode === 'permission-denied') {
     return {
       title: 'Negocio no disponible',
       description: 'Este negocio no está disponible para visitas públicas en este momento.',
       retry: false,
     };
   }
-  if (code === 'not-found') {
+  if (normalizedCode === 'not-found') {
     return {
       title: 'Negocio no encontrado',
       description: 'No encontramos un negocio disponible para esta URL.',
       retry: false,
     };
   }
-  if (code === 'unavailable' || code === 'deadline-exceeded') {
+  if (normalizedCode === 'unavailable' || normalizedCode === 'deadline-exceeded') {
     return {
       title: 'Servicio no disponible',
       description:
@@ -182,7 +189,6 @@ export default function BarberApp() {
   const [tab, setTab] = useState<BarberTab>(() => publicPanelFromSearch() || 'inicio');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<PublicBusinessLoadFailure | null>(null);
-  const [logoFailed, setLogoFailed] = useState(false);
   const [coverFailed, setCoverFailed] = useState(false);
   const [reloadVersion, setReloadVersion] = useState(0);
   const [authMode, setAuthMode] = useState<'login' | 'register' | null>(() => {
@@ -203,7 +209,7 @@ export default function BarberApp() {
       setError(null);
       setBarber(null);
       try {
-        const data = await loadPublicBusinessBySlug(barberSlug);
+        const data = await loadPublicBusinessPageBySlug(barberSlug);
         setBarber(data.business);
         setCatalog({ status: 'ready', data: data.catalog, error: '' });
         setProducts({ status: 'ready', data: data.products, error: '' });
@@ -218,9 +224,8 @@ export default function BarberApp() {
     })();
   }, [barberSlug, reloadVersion]);
   useEffect(() => {
-    setLogoFailed(false);
     setCoverFailed(false);
-  }, [barber?.config?.logoUrl, barber?.config?.coverUrl]);
+  }, [barber?.config?.coverUrl]);
   useEffect(() => {
     if (!barber) return;
     const address = barber.config.address?.trim();
@@ -305,12 +310,16 @@ export default function BarberApp() {
   const whatsappUrl = getWhatsappUrl(barber.config.socialLinks?.whatsapp || barber.config.phone);
   const openStreetMapUrl = getOpenStreetMapUrl(address);
   const hasMapMarker = Boolean(barber.config.location);
-  const showTab = (next: BarberTab) => {
+  const showTab = (next: BarberTab, scrollToContent = true) => {
     writePublicAccountQuery(next === 'cuenta' || next === 'bookings' ? next : null);
     setTab(next);
-    window.requestAnimationFrame(() =>
-      document.getElementById('public-business-content')?.focus({ preventScroll: true }),
-    );
+    window.requestAnimationFrame(() => {
+      const content = document.getElementById('public-business-content');
+      content?.focus({ preventScroll: true });
+      if (!scrollToContent) return;
+      if (next === 'inicio') window.scrollTo({ top: 0 });
+      else content?.scrollIntoView({ block: 'start' });
+    });
   };
   const publicHome = `${import.meta.env.BASE_URL}b/${encodeURIComponent(barberSlug)}`;
 
@@ -328,7 +337,13 @@ export default function BarberApp() {
         onOpenAccount={() => showTab('cuenta')}
         onOpenBookings={() => showTab('bookings')}
       />
-      <main className="public-business-shell">
+      <main
+        className={
+          tab === 'cuenta' || tab === 'bookings'
+            ? 'public-business-shell'
+            : 'public-business-storefront'
+        }
+      >
         {tab === 'cuenta' || tab === 'bookings' ? (
           <section
             id="public-business-content"
@@ -364,31 +379,16 @@ export default function BarberApp() {
                   onError={() => setCoverFailed(true)}
                 />
               )}
-              <div className="public-business-hero-overlay" />
               <div className="public-business-hero-content">
                 <div className="public-business-hero-identity">
                   <div className="public-business-identity">
-                    {barber.config.logoUrl && !logoFailed ? (
-                      <img
-                        src={barber.config.logoUrl}
-                        alt={`Logo de ${barber.name}`}
-                        className="public-business-logo"
-                        onError={() => setLogoFailed(true)}
-                      />
-                    ) : (
-                      <div
-                        className="public-business-logo public-business-logo-fallback"
-                        aria-hidden="true"
-                      >
-                        {barber.name.slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
                     <div>
-                      <p className="public-business-kicker">
-                        {canBook ? 'Agendamiento en línea' : 'Información del negocio'}
-                      </p>
                       <h1>{barber.name}</h1>
-                      {address && <p className="public-business-address">{address}</p>}
+                      {canBook && (
+                        <p className="public-business-hero-description">
+                          Consulta la disponibilidad y elige el momento para tu próxima visita.
+                        </p>
+                      )}
                       {!canBook && (
                         <p className="public-business-address" role="status">
                           El agendamiento en línea no está disponible en este momento.
@@ -405,6 +405,17 @@ export default function BarberApp() {
                       onClick={() => showTab('agendar')}
                     >
                       Agendar
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="20"
+                        height="20"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        aria-hidden="true"
+                      >
+                        <path d="M5 12h14m-6-6 6 6-6 6" />
+                      </svg>
                     </button>
                   )}
                   {hasMapMarker && (
@@ -427,6 +438,7 @@ export default function BarberApp() {
                     </a>
                   )}
                 </div>
+                {address && <p className="public-business-address">{address}</p>}
               </div>
             </section>
             <nav className="public-business-tabs" aria-label="Secciones del negocio">
@@ -434,9 +446,10 @@ export default function BarberApp() {
                 {(Object.keys(TAB_LABELS) as Array<keyof typeof TAB_LABELS>)
                   .filter(
                     (key) =>
-                      ((canBook || key !== 'agendar') && products.status !== 'ready') ||
-                      products.data.length > 0 ||
-                      key !== 'productos',
+                      (canBook || key !== 'agendar') &&
+                      (key !== 'productos' ||
+                        products.status !== 'ready' ||
+                        products.data.length > 0),
                   )
                   .map((key) => (
                     <li key={key}>
@@ -444,7 +457,7 @@ export default function BarberApp() {
                         type="button"
                         className={tab === key ? 'is-active' : ''}
                         aria-current={tab === key ? 'page' : undefined}
-                        onClick={() => showTab(key)}
+                        onClick={() => showTab(key, false)}
                       >
                         {TAB_LABELS[key]}
                       </button>
@@ -462,7 +475,6 @@ export default function BarberApp() {
                   openStreetMapUrl={openStreetMapUrl}
                   hasMapMarker={hasMapMarker}
                   canBook={canBook}
-                  onReserve={() => showTab('agendar')}
                   onLocation={() => showTab('ubicacion')}
                 />
               )}
@@ -568,6 +580,7 @@ function PublicBusinessHeader({
               {initialsFor(business.name)}
             </span>
           )}
+          <span className="public-business-site-name">{business.name}</span>
         </a>
         <AccountMenu
           variant="public"
@@ -617,7 +630,6 @@ function BusinessOverview({
   openStreetMapUrl,
   hasMapMarker,
   canBook,
-  onReserve,
   onLocation,
 }: {
   business: PublicBusiness;
@@ -627,91 +639,80 @@ function BusinessOverview({
   openStreetMapUrl: string | null;
   hasMapMarker: boolean;
   canBook: boolean;
-  onReserve: () => void;
   onLocation: () => void;
 }) {
   return (
     <div className="public-business-overview">
-      <section className="public-business-intro-copy">
-        <p className="public-business-kicker">
-          {canBook ? 'Planifica tu visita' : 'Conoce el negocio'}
-        </p>
-        <h2>{canBook ? 'Agenda con claridad.' : 'Información para tu visita.'}</h2>
+      <header className="public-business-intro-copy">
+        <h2>Tu próxima visita</h2>
         <p>
           {canBook
             ? 'Consulta horarios, datos de contacto y disponibilidad antes de enviar tu solicitud.'
             : 'Consulta horarios, ubicación y datos de contacto.'}
         </p>
-        {canBook && (
-          <button
-            type="button"
-            className="btn-primary public-business-overview-cta"
-            onClick={onReserve}
-          >
-            Agendar
-          </button>
-        )}
-      </section>
-      <aside className="public-business-details" aria-label="Información del negocio">
-        <section className="public-business-detail-row">
-          <div>
-            <p className="public-business-detail-label">Ubicación</p>
-            <h3>{address || 'Ubicación'}</h3>
-            {business.config.location && (
-              <p className="public-business-location-status">Punto exacto disponible.</p>
-            )}
-          </div>
-          {hasMapMarker && (
-            <button type="button" className="public-business-text-action" onClick={onLocation}>
-              Ver mapa<span aria-hidden="true">→</span>
-            </button>
-          )}
-          {!hasMapMarker && openStreetMapUrl && (
-            <a
-              className="public-business-text-action"
-              href={openStreetMapUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Buscar en OpenStreetMap<span aria-hidden="true">↗</span>
-            </a>
-          )}
-        </section>
-        <section className="public-business-detail-row">
-          <div>
-            <p className="public-business-detail-label">Contacto</p>
-            <h3>{business.config.phone || 'Teléfono no disponible'}</h3>
-            {business.config.socialLinks?.whatsapp && (
-              <p>WhatsApp: {business.config.socialLinks.whatsapp}</p>
-            )}
-          </div>
-          {(telephoneUrl || whatsappUrl) && (
-            <div className="public-business-contact-actions">
-              {telephoneUrl && (
-                <a
-                  className="public-business-text-action"
-                  href={telephoneUrl}
-                  aria-label={`Llamar a ${business.config.phone}`}
-                >
-                  Llamar<span aria-hidden="true">↗</span>
-                </a>
-              )}
-              {whatsappUrl && (
-                <a
-                  className="public-business-text-action"
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={`Abrir WhatsApp de ${business.name}`}
-                >
-                  WhatsApp<span aria-hidden="true">↗</span>
-                </a>
+      </header>
+      <div className="public-business-details" aria-label="Información del negocio">
+        <div className="public-business-contact-information">
+          <section className="public-business-detail-row">
+            <div>
+              <p className="public-business-detail-label">Ubicación</p>
+              <h3>{address || 'Ubicación'}</h3>
+              {business.config.location && (
+                <p className="public-business-location-status">Punto exacto disponible.</p>
               )}
             </div>
-          )}
-        </section>
+            {hasMapMarker && (
+              <button type="button" className="public-business-text-action" onClick={onLocation}>
+                Ver mapa<span aria-hidden="true">→</span>
+              </button>
+            )}
+            {!hasMapMarker && openStreetMapUrl && (
+              <a
+                className="public-business-text-action"
+                href={openStreetMapUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Buscar en OpenStreetMap<span aria-hidden="true">↗</span>
+              </a>
+            )}
+          </section>
+          <section className="public-business-detail-row">
+            <div>
+              <p className="public-business-detail-label">Contacto</p>
+              <h3>{business.config.phone || 'Teléfono no disponible'}</h3>
+              {business.config.socialLinks?.whatsapp && (
+                <p>WhatsApp: {business.config.socialLinks.whatsapp}</p>
+              )}
+            </div>
+            {(telephoneUrl || whatsappUrl) && (
+              <div className="public-business-contact-actions">
+                {telephoneUrl && (
+                  <a
+                    className="public-business-text-action"
+                    href={telephoneUrl}
+                    aria-label={`Llamar a ${business.config.phone}`}
+                  >
+                    Llamar<span aria-hidden="true">↗</span>
+                  </a>
+                )}
+                {whatsappUrl && (
+                  <a
+                    className="public-business-text-action"
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Abrir WhatsApp de ${business.name}`}
+                  >
+                    WhatsApp<span aria-hidden="true">↗</span>
+                  </a>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
         <section className="public-business-hours">
-          <p className="public-business-detail-label">Horario</p>
+          <h3>Horario de atención</h3>
           <ul>
             {Object.entries(business.workingHours || {}).map(([day, config]) => (
               <li key={day}>
@@ -721,7 +722,7 @@ function BusinessOverview({
             ))}
           </ul>
         </section>
-      </aside>
+      </div>
     </div>
   );
 }
@@ -734,7 +735,6 @@ function CatalogContent({ state }: { state: DeferredResource<PublicCatalogItem> 
   return (
     <div>
       <header className="public-business-section-heading">
-        <p className="public-business-kicker">Inspiración</p>
         <h2>Galería</h2>
       </header>
       <div className="public-business-catalog-grid">
@@ -940,6 +940,13 @@ function ErrorMessage({ message, retry }: { message: string; retry: () => void }
   );
 }
 
+function mapsDirectionsUrl({
+  latitude,
+  longitude,
+}: NonNullable<PublicBusiness['config']['location']>) {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${latitude},${longitude}`)}`;
+}
+
 function PublicLocationContent({
   address,
   coordinates,
@@ -952,7 +959,6 @@ function PublicLocationContent({
   return (
     <div className="public-business-location">
       <header className="public-business-section-heading">
-        <p className="public-business-kicker">Visítanos</p>
         <h2>Ubicación</h2>
         <p>
           {address ||
@@ -961,9 +967,19 @@ function PublicLocationContent({
               : 'La dirección estará disponible próximamente.')}
         </p>
         {coordinates && (
-          <p className="public-business-location-status">
-            El marcador señala el punto exacto seleccionado por el negocio.
-          </p>
+          <>
+            <p className="public-business-location-status">
+              El marcador señala el punto exacto seleccionado por el negocio.
+            </p>
+            <a
+              className="btn-outline mt-4 px-4 py-2 text-sm"
+              href={mapsDirectionsUrl(coordinates)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Abrir indicaciones en Maps
+            </a>
+          </>
         )}
       </header>
       {coordinates ? (

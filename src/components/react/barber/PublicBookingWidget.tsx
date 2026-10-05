@@ -436,7 +436,7 @@ export default function PublicBookingWidget({
   }, [loadingSlots, recoverTime]);
 
   useEffect(() => {
-    bookingHeadingRef.current?.focus();
+    bookingHeadingRef.current?.focus({ preventScroll: true });
     setContextAnnouncement('Sección de agendamiento. Envía tu solicitud.');
   }, []);
 
