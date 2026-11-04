@@ -7,6 +7,7 @@ import {
 } from 'firebase-admin/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
+import { publicAssistantImprovementMessages } from './public-assistant-improvement-prompt.js';
 
 const openRouterApiKey = defineSecret('OPENROUTER_API_KEY');
 const defaultAssistantModels = [
@@ -384,17 +385,7 @@ export const improvePublicAssistantContext = onCall(
     const { businessId: _businessId, ...publicSource } = source;
     return {
       context: await complete(
-        [
-          {
-            role: 'system',
-            content:
-              'Eres un editor para la página pública de un negocio de servicios. Crea un perfil público compacto en español claro y ordenado, de máximo 5.000 caracteres. Conserva únicamente los hechos proporcionados; no inventes precios, horarios, servicios, políticas ni promesas. Devuelve solo el texto final, sin títulos, notas ni markdown.',
-          },
-          {
-            role: 'user',
-            content: `TEXTO DEL ADMINISTRADOR:\n${context}\n\nDATOS CANÓNICOS DEL NEGOCIO:\n${JSON.stringify(publicSource)}`,
-          },
-        ],
+        publicAssistantImprovementMessages(context, publicSource),
         2_048,
         6_000,
       ),
