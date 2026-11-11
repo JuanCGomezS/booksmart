@@ -65,7 +65,9 @@ type PublicBusinessResponse = {
   services: Array<{
     id: string;
     name: string;
+    description?: string;
     price: number;
+    imageUrl?: string;
     active: true;
     duration: number;
     bufferMinutes?: number;
@@ -510,6 +512,10 @@ function publicServiceDto(
     price: service.price,
     active: true,
     duration: service.duration,
+    ...(publicString(service.description, 1_000)
+      ? { description: publicString(service.description, 1_000) }
+      : {}),
+    ...(publicString(service.imageUrl) ? { imageUrl: publicString(service.imageUrl) } : {}),
     bufferMinutes: serviceBufferMinutes(service.bufferMinutes),
     ...(staffIds ? { staffIds } : {}),
   };

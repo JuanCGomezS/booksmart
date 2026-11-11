@@ -148,6 +148,32 @@ function BookingProductThumbnail({ product }: { product: PublicBookingProduct })
   );
 }
 
+function BookingServiceVisual({ service }: { service: PublicBookingService }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [service.imageUrl]);
+
+  if (service.imageUrl && !failed) {
+    return (
+      <span className="booking-service-media" aria-hidden="true">
+        <img className="booking-service-image-backdrop" src={service.imageUrl} alt="" />
+        <img
+          className="booking-service-image"
+          src={service.imageUrl}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span className="booking-service-media booking-service-media-placeholder" aria-hidden="true">
+      {service.name.slice(0, 1).toLocaleUpperCase('es-CO')}
+    </span>
+  );
+}
+
 function BookingStaffAvatar({ member }: { member: PublicBookingStaff }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [member.photoUrl]);
@@ -877,8 +903,15 @@ export default function PublicBookingWidget({
                     aria-pressed={service.id === serviceId}
                     className={`booking-choice min-h-11 rounded border p-3 text-left ${service.id === serviceId ? 'is-selected' : ''}`}
                   >
-                    <span className="block font-semibold text-main">{service.name}</span>
-                    <span className="text-sm text-subtle">{service.duration} min</span>
+                    <BookingServiceVisual service={service} />
+                    <span className="booking-service-copy">
+                      <span className="booking-service-heading">
+                        <span className="font-semibold text-main">{service.name}</span>
+                        <strong>{formatPrice(service.price)}</strong>
+                      </span>
+                      {service.description && <small>{service.description}</small>}
+                      <span className="booking-service-duration">{service.duration} min</span>
+                    </span>
                   </button>
                 ))}
               </div>

@@ -378,6 +378,10 @@ function publicServiceDto(id, service) {
     price: service.price,
     active: true,
     duration: service.duration,
+    ...(publicString(service.description, 1_000)
+      ? { description: publicString(service.description, 1_000) }
+      : {}),
+    ...(publicString(service.imageUrl) ? { imageUrl: publicString(service.imageUrl) } : {}),
     bufferMinutes: serviceBufferMinutes(service.bufferMinutes),
     ...(staffIds ? { staffIds } : {}),
   };

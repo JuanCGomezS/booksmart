@@ -407,6 +407,8 @@ export type PublicBookingService = Pick<
   Service,
   'id' | 'name' | 'price' | 'duration' | 'bufferMinutes' | 'staffIds'
 > & {
+  description?: string;
+  imageUrl?: string;
   active: true;
 };
 

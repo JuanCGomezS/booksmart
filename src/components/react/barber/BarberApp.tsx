@@ -867,13 +867,16 @@ function CatalogVisual({ item }: { item: PublicCatalogItem }) {
   useEffect(() => setFailed(false), [item.imageUrl]);
   if (!failed)
     return (
-      <img
-        className="public-business-card-image"
-        src={item.imageUrl}
-        alt={item.title}
-        loading="lazy"
-        onError={() => setFailed(true)}
-      />
+      <div className="public-business-card-media">
+        <img className="public-business-card-image-backdrop" src={item.imageUrl} alt="" />
+        <img
+          className="public-business-card-image"
+          src={item.imageUrl}
+          alt={item.title}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      </div>
     );
   return (
     <div
@@ -891,13 +894,16 @@ function ProductVisual({ product }: { product: PublicBookingProduct }) {
   useEffect(() => setFailed(false), [product.imageUrl]);
   if (product.imageUrl && !failed)
     return (
-      <img
-        className="public-business-card-image"
-        src={product.imageUrl}
-        alt={product.name}
-        loading="lazy"
-        onError={() => setFailed(true)}
-      />
+      <div className="public-business-card-media">
+        <img className="public-business-card-image-backdrop" src={product.imageUrl} alt="" />
+        <img
+          className="public-business-card-image"
+          src={product.imageUrl}
+          alt={product.name}
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      </div>
     );
   return (
     <div

@@ -288,6 +288,8 @@ function normalizePublicBusinessPage(
         service.active === true &&
         Number.isInteger(service.duration) &&
         service.duration > 0 &&
+        (service.description === undefined || typeof service.description === 'string') &&
+        (service.imageUrl === undefined || typeof service.imageUrl === 'string') &&
         (service.bufferMinutes === undefined ||
           (Number.isInteger(service.bufferMinutes) && service.bufferMinutes >= 0)) &&
         (service.staffIds === undefined ||
